@@ -1,10 +1,10 @@
 ########## LFAST Controller Utilities Unit Tests##############
 
 # set our include directories to look for header files
+
 include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
-
 
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -20,19 +20,21 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+aux_source_directory( ../ LFAST_UTILS_SOURCES)
+LIST(APPEND LFAST_UTILS_SOURCES lfast_utils_tests.cpp)
 
-
-## Karbon PC CAN Bus tests
+## Utils tests
 add_executable(
-  karbon_can_bus_test
-  karbon_can_bus_test.cpp
+  lfast_utils_tests
+  ${LFAST_UTILS_SOURCES}
 )
 
 target_link_libraries(
-  karbon_can_bus_test
+  lfast_utils_tests
   GTest::gtest_main
 )
 
+
 include(GoogleTest)
-gtest_discover_tests(karbon_can_bus_test)
+gtest_discover_tests(lfast_utils_tests)
 

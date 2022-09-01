@@ -19,23 +19,25 @@ configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/config.h
 )
-
+message("Generated config.h")
 
 # add our cmake_modules folder
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 #set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules/)
 
-
+message("Enabling testing")
 enable_testing()
 include(CTest)
 
-
+add_subdirectory(00_LFAST_Utils)
+   
+message("Checking for INDI Library")
 #Require INDI 1.4 or later
 find_package(INDI 1.4 REQUIRED)
 if(INDI_FOUND)
    include_directories(${INDI_INCLUDE_DIR})
    add_subdirectory(01_Mount_Driver)
-   add_subdirectory(00_LFAST_Utils)
+
 endif(INDI_FOUND)
 
 #find_package(Nova REQUIRED)
