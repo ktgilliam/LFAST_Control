@@ -1,22 +1,6 @@
-/*
-   INDI Developers Manual
-   Tutorial #2
-
-   "Simple Telescope Driver"
-
-   We develop a simple telescope simulator.
-
-   Refer to README, which contains instruction on how to build this driver, and use it
-   with an INDI-compatible client.
-
-*/
-
-/** \file simplescope.h
-    \brief Construct a basic INDI telescope device that simulates GOTO commands.
-    \author Jasem Mutlaq
-
-    \example simplescope.h
-    A simple GOTO telescope that simulator slewing operation.
+/** \file lfast_mount_driver.h
+    \brief LFAST Az/El Pedestal INDI Driver
+    \author Kevin Gilliam
 */
 
 #pragma once

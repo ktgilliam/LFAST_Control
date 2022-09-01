@@ -16,10 +16,12 @@
 
 #include "lfast_mount_driver.h"
 
-#include "indicom.h"
-
 #include <cmath>
 #include <memory>
+
+#include "config.h"
+#include "indicom.h"
+
 
 static std::unique_ptr<LFASTMount> lfastMount(new LFASTMount());
 
