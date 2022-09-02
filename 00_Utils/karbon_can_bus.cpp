@@ -2,11 +2,10 @@
 #include "karbon_can_bus.h"
 
 
-
-
-void KarbonCANBus::PrintHelloWorld()
+int KarbonCANBus::OpenTerminal()
 {
     std::cout << "Hello World!\n";
+    return 1;
 }
 
 

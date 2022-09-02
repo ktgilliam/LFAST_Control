@@ -6,9 +6,10 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
-# GoogleTest requires at least C++14
-set(CMAKE_CXX_STANDARD 14)
 
+#=================================================================================================#
+#========================================= gtest  ================================================#
+#=================================================================================================#
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -20,20 +21,20 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-aux_source_directory( ../ LFAST_UTILS_SOURCES)
-LIST(APPEND LFAST_UTILS_SOURCES lfast_utils_tests.cpp)
-
-## Utils tests
+#=================================================================================================#
+#========================================= project test executables ==============================#
+#=================================================================================================#
 add_executable(
   lfast_utils_tests
-  ${LFAST_UTILS_SOURCES}
+  lfast_utils_tests.cpp
 )
 
 target_link_libraries(
   lfast_utils_tests
   GTest::gtest_main
+  karbon_can_bus
+  bash_wrapper
 )
-
 
 include(GoogleTest)
 gtest_discover_tests(lfast_utils_tests)
