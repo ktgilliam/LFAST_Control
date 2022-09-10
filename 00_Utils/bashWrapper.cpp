@@ -1,5 +1,6 @@
 #include "bashWrapper.h"
 #include <array>
+#include <vector>
 #include <cstring>
 #include <cstdio>
 #include <cerrno>
@@ -10,7 +11,7 @@
 #include <string>
 #include <thread>
 
-void BashWrapper::execBashCommandWithPipes()
+void BashCommandWrapper::execBashCommandWithPipes()
 {
     // This class based on example from: https://dev.to/aggsol/calling-shell-commands-from-c-8ej
 
@@ -30,7 +31,7 @@ void BashWrapper::execBashCommandWithPipes()
     cleanUp();
 }
 
-void BashWrapper::execBashCommandWithPipes()
+int BashCommandWrapper::execBashCommandWithPipes_LBL()
 {
     // This class based on example from: https://dev.to/aggsol/calling-shell-commands-from-c-8ej
 
@@ -39,8 +40,8 @@ void BashWrapper::execBashCommandWithPipes()
     // Have the system create a second process for the child, and we will pass it the data from the parent
     int status = this->createFork();
 
-    copyPipeContents(stdOutPipe, StdOut);
-    copyPipeContents(stdErrPipe, StdErr);
+
+    int linesCopied = delimittedCopyPipeContents(stdOutPipe, this->delimittedData);
 
     if (WIFEXITED(status))
     {
@@ -48,16 +49,17 @@ void BashWrapper::execBashCommandWithPipes()
     }
 
     cleanUp();
+    return (linesCopied);
 }
 
-void BashWrapper::cleanUp()
+void BashCommandWrapper::cleanUp()
 {
     stdInPipe.close();
     stdOutPipe.close();
     stdErrPipe.close();
 }
 
-void BashWrapper::createPipes()
+void BashCommandWrapper::createPipes()
 {
     // Create pipes for stdin, stdout, and stderr. pipe() returns -1 if there was an error creating the pipe.
 
@@ -91,7 +93,7 @@ void BashWrapper::createPipes()
     }
 }
 
-int BashWrapper::createFork()
+int BashCommandWrapper::createFork()
 {
     auto pid = ::fork(); // Create a fork and get the process ID.
     // Note that the child process is initially a duplicate of this process, so this code
@@ -145,12 +147,28 @@ int BashWrapper::createFork()
     return status;
 }
 
-ssize_t BashWrapper::readLineFromPipe(BashWrapper::PipeWrapper roPipe, std::string &dest)
+int BashCommandWrapper::delimittedCopyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::vector<std::string> _delimittedData)
+{
+    bool doneFlag = false;
+    int cnt = 0;
+    do
+    {
+        std::string line;
+        doneFlag = BashCommandWrapper::readLineFromPipe(roPipe, line);
+        _delimittedData.push_back(line);
+        cnt++;
+    } while (!doneFlag);
+
+    return (cnt);    
+}
+
+ bool BashCommandWrapper::readLineFromPipe(BashCommandWrapper::PipeWrapper roPipe, std::string &dest)
 {
     // Create a temporary buffer for storing data read from the pipe's read-only file descriptor
     std::array<char, 256> buffer;
     char readChar;
     bool newlineFound = false;
+    bool pipeIsEmpty = false;
     ssize_t bytes = 0;
     do
     {
@@ -160,12 +178,18 @@ ssize_t BashWrapper::readLineFromPipe(BashWrapper::PipeWrapper roPipe, std::stri
         {
             newlineFound = true;
         }
-    } while (!newlineFound);
+        if (bytes == 0)
+        {
+            pipeIsEmpty = true;
+        }
+    } while (!newlineFound && !pipeIsEmpty);
 
     dest.append(buffer.data(), bytes-1);
+    return (pipeIsEmpty);
 }
 
-void BashWrapper::copyPipeContents(BashWrapper::PipeWrapper roPipe, std::string &dest)
+
+void BashCommandWrapper::copyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::string &dest)
 {
     // Create a temporary buffer for storing data read from the pipe's read-only file descriptor
     std::array<char, 256> buffer;
@@ -178,13 +202,13 @@ void BashWrapper::copyPipeContents(BashWrapper::PipeWrapper roPipe, std::string 
     } while (bytes > 0);
 }
 
-void BashWrapper::PipeWrapper::close()
+void BashCommandWrapper::PipeWrapper::close()
 {
     ::close(fileDescriptors[READ_ONLY_FD]);
     ::close(fileDescriptors[WRITE_ONLY_FD]);
 }
 
-void BashWrapper::PipeWrapper::close(int rw)
+void BashCommandWrapper::PipeWrapper::close(int rw)
 {
     ::close(fileDescriptors[rw]);
 }
