@@ -5,6 +5,8 @@
 #include <cstring>
 #include <sstream>
 #include <thread>
+#include <stdlib.h> 
+#include <iostream>
 
 // To execute tests:
 // cd build && ctest --output-on-failure .
@@ -51,48 +53,39 @@ TEST(karbon_can_bus_tests, kcb_cnstrctr1)
 
 //     std::string receivedResponseStr;
 //     int bashExitCode;
-//     BashWrapper bw;
+//     BashCommandWrapper bw;
 //     receivedResponseStr = bw.execBashCommand(bashCommandStr, bashExitCode);
 
 //     EXPECT_STREQ(expectedResponseStr.c_str(), receivedResponseStr.c_str());
 // }
 
-
 TEST(bash_wrapper_tests, testBashCommandWithPipes)
 {
-    BashWrapper bw;
-    bw.Command = "grep wacky - ";
-    bw.StdIn = R"(This is a wacky test.)";;
-    bw.execBashCommandWithPipes();
+    BashCommandWrapper bw;
+    bw.StdIn = "This is a wacky test.";
+    bw.Command = "grep -c 'wacky'";
 
-    std::cout << "RECEIVED REPLY: " << bw.StdOut << std::endl;
-    std::stringstream ss;
-    ss << bw.StdOut;
-    std::string outString = ss.str();
-    removeNewlines(outString);
-    ss.str(""); // clear the stringstream
-    EXPECT_STREQ(outString.c_str(), bw.StdIn.c_str());
+    bw.execBashCommandWithPipes();
+    int found = std::atoi(bw.StdOut.c_str());
+
+    EXPECT_EQ(1, found);
 }
 
-TEST(bash_wrapper_tests, testBashWrapperSingleLineRead)
-{
-    BashWrapper bw;
-    bw.Command = "grep wacky - ";
-    bw.StdIn = R"(This is a wacky test.)";;
-    bw.execBashCommandWithPipes();
+// TEST(bash_wrapper_tests, testBashWrapperSingleLineRead)
+// {
+//     // BashCommandWrapper bw;
+//     // bw.StdIn = "seq 0 255";
+//     // bw.Command = R"(while read n; do printf "%04X;" $n; done)";
 
-    std::cout << "RECEIVED REPLY: " << bw.StdOut << std::endl;
-    std::stringstream ss;
-    ss << bw.StdOut;
-    std::string outString = ss.str();
-    removeNewlines(outString);
-    ss.str(""); // clear the stringstream
-    EXPECT_STREQ(outString.c_str(), bw.StdIn.c_str());
-}
+//     // int lines = bw.execBashCommandWithPipes_LBL();
+
+//     // std::cout << "#####  RECEIVED " << std::dec << lines << " LINES ######" << std::endl;
+
+//     FAIL();
+// }
 
 // TEST(bash_wrapper_tests, testExecMultiLineStdOut)
 // {
-
 
 //     std::string bwStr = "seq 0 255";
 
@@ -106,17 +99,13 @@ TEST(bash_wrapper_tests, testBashWrapperSingleLineRead)
 //     // std::cout << "REPLY LENGTH: " << bw.StdOut.length() <<std::endl;
 //     // std::cout << "RECEIVED REPLY: " << bw.StdOut << std::endl;
 
-
 //     // std::string receivedResponseStr;
 //     // int bashExitCode;
-//     // BashWrapper bw;
+//     // BashCommandWrapper bw;
 //     // receivedResponseStr = bw.execBashCommand(bwStr, bashExitCode);
 //     // std::cout << receivedResponseStr << "################" << std::endl;
 
-//     BashWrapper::CommandWithPipes bw;
+//     BashCommandWrapper::CommandWithPipes bw;
 
 //     FAIL();
 // }
-
-
-
