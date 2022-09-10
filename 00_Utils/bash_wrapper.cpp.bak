@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 // For reference: 
 // https://dev.to/aggsol/calling-shell-commands-from-c-8ej
@@ -45,6 +46,7 @@ std::string BashWrapper::execBashCommand(const std::string cmd, int &out_exitSta
 
 void BashWrapper::CommandWithPipes::execBashCommandWithPipes()
 {
+    // This function stolen from: https://dev.to/aggsol/calling-shell-commands-from-c-8ej
     const int READ_END = 0;
     const int WRITE_END = 1;
 
@@ -147,4 +149,21 @@ void BashWrapper::CommandWithPipes::execBashCommandWithPipes()
     }
 
     cleanup();
+}
+
+
+
+
+
+BashWrapper::BashWrapper(bool activateBm)
+{
+    
+    std::thread busManagerThread(BashWrapper::BusManager());
+}
+
+
+
+bool BashWrapper::BusManager::waitForCanBusMessage()
+{
+
 }

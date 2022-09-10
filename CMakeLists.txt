@@ -34,6 +34,9 @@ message("Generated config.h")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 #set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules/)
 
+set(BUILD_TESTS true)
+
+
 message("Checking for INDI Library")
 #Require INDI 1.4 or later
 find_package(INDI 1.4 REQUIRED)

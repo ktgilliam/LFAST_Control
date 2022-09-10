@@ -1,9 +1,9 @@
-// /** 
+// /**
 //     \file lfast_mount_driver.h
 //     \brief LFAST Az/El Pedestal INDI Driver
 //     \author Kevin Gilliam
 //
-//     \details Code adapted from published example here: 
+//     \details Code adapted from published example here:
 //              https://dev.to/aggsol/calling-shell-commands-from-c-8ej
 // */
 
@@ -13,8 +13,10 @@
 
 class BashWrapper
 {
+
 public:
     BashWrapper(){};
+    BashWrapper(bool activateBm);
     std::string execBashCommand(const std::string cmd, int &out_exitStatus);
 
     class CommandWithPipes
@@ -27,5 +29,18 @@ public:
         std::string StdErr;
 
         void execBashCommandWithPipes();
+
+        void startBashListenerThread();
+    };
+
+    class BusManager
+    {
+    private:
+        bool busManagerActive;
+        bool waitForCanBusMessage();
+    public:
+        BusManager() {busManagerActive = true;};
+        uint32_t ReceivedCommandCount;
+
     };
 };
