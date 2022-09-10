@@ -6,6 +6,7 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
+# cmake -DBUILD_TESTS=true -GNinja ..
 
 #=================================================================================================#
 #========================================= gtest  ================================================#
@@ -33,7 +34,7 @@ target_link_libraries(
   lfast_utils_tests
   GTest::gtest_main
   karbon_can_bus
-  bash_wrapper
+  bashWrapper
 )
 
 include(GoogleTest)
