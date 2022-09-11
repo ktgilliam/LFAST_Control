@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <iostream>
 
 void BashCommandWrapper::execBashCommandWithPipes()
 {
@@ -29,27 +30,6 @@ void BashCommandWrapper::execBashCommandWithPipes()
     }
 
     cleanUp();
-}
-
-int BashCommandWrapper::execBashCommandWithPipes_LBL()
-{
-    // This class based on example from: https://dev.to/aggsol/calling-shell-commands-from-c-8ej
-
-    // To hijack the stdin/stdout pipes of our commands, we implement our own and overwrite them
-    this->createPipes();
-    // Have the system create a second process for the child, and we will pass it the data from the parent
-    int status = this->createFork();
-
-
-    int linesCopied = delimittedCopyPipeContents(stdOutPipe, this->delimittedData);
-
-    if (WIFEXITED(status))
-    {
-        ExitStatus = WEXITSTATUS(status);
-    }
-
-    cleanUp();
-    return (linesCopied);
 }
 
 void BashCommandWrapper::cleanUp()
@@ -146,48 +126,6 @@ int BashCommandWrapper::createFork()
     ::waitpid(pid, &status, 0);
     return status;
 }
-
-int BashCommandWrapper::delimittedCopyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::vector<std::string> _delimittedData)
-{
-    bool doneFlag = false;
-    int cnt = 0;
-    do
-    {
-        std::string line;
-        doneFlag = BashCommandWrapper::readLineFromPipe(roPipe, line);
-        _delimittedData.push_back(line);
-        cnt++;
-    } while (!doneFlag);
-
-    return (cnt);    
-}
-
- bool BashCommandWrapper::readLineFromPipe(BashCommandWrapper::PipeWrapper roPipe, std::string &dest)
-{
-    // Create a temporary buffer for storing data read from the pipe's read-only file descriptor
-    std::array<char, 256> buffer;
-    char readChar;
-    bool newlineFound = false;
-    bool pipeIsEmpty = false;
-    ssize_t bytes = 0;
-    do
-    {
-        bytes += ::read(roPipe.fileDescriptors[READ_ONLY_FD], &readChar, 1);
-        buffer[bytes] = readChar;
-        if(readChar == '\n')
-        {
-            newlineFound = true;
-        }
-        if (bytes == 0)
-        {
-            pipeIsEmpty = true;
-        }
-    } while (!newlineFound && !pipeIsEmpty);
-
-    dest.append(buffer.data(), bytes-1);
-    return (pipeIsEmpty);
-}
-
 
 void BashCommandWrapper::copyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::string &dest)
 {

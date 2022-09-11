@@ -15,7 +15,7 @@ public:
     std::string StdIn;
     std::string StdOut;
     std::string StdErr;
-
+    std::vector<std::string> delimittedData;
     struct PipeWrapper
     {
         int fileDescriptors[2];
@@ -41,7 +41,7 @@ private:
     PipeWrapper stdOutPipe;
     PipeWrapper stdErrPipe;
 
-    std::vector<std::string> delimittedData;
+
     static bool readLineFromPipe(PipeWrapper roPipe, std::string &dest);
     void createPipes();
     int createFork();
