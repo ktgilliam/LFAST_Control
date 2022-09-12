@@ -2,12 +2,14 @@
 //     \file lfast_mount_driver.h
 //     \brief LFAST Az/El Pedestal INDI Driver
 //     \author Kevin Gilliam
+//
+//     \details Code adapted from published example here: 
+//              https://dev.to/aggsol/calling-shell-commands-from-c-8ej
 // */
 
 #pragma once
 
 #include <string>
-// #include <iostream>
 
 class BashWrapper
 {
