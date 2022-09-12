@@ -5,7 +5,7 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(lfast_mount_driver lfast_mount_driver.cpp)
+add_executable(lfast_mount_driver lfast_mount_driver.cc)
 
 target_link_libraries(lfast_mount_driver indidriver)
 
