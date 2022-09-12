@@ -11,8 +11,7 @@ class KarbonCANBus
 {
     public:
         KarbonCANBus(int arg) : testVar(arg) {}
-        void PrintHelloWorld();
-        int getTestVar(){return testVar;}
+        int OpenTerminal();
     private:
         int testVar;
 };

@@ -5,8 +5,19 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
-#SET(LFAST_UTILS_SOURCES bash_wrapper.cpp karbon_can_bus.cpp)
+#=================================================================================================#
+#========================================= can-utils =============================================#
+#=================================================================================================#
+# include(FetchContent)
+# FetchContent_Declare(
+#   can-utils
+#   GIT_REPOSITORY https://github.com/linux-can/can-utils.git
+#   GIT_TAG        e602e391a56e681b03506c2f0890eb128192ec3d
+# )
+# FetchContent_MakeAvailable(can-utils)
 
-#if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
-add_subdirectory(test)
-#endif (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+#=================================================================================================#
+#========================================= project libraries =====================================#
+#=================================================================================================#
+add_library(karbon_can_bus SHARED karbon_can_bus.cc)
+add_library(bashWrapper SHARED bash_wrapper.cc)
