@@ -34,7 +34,7 @@ target_link_libraries(
   lfast_utils_tests
   GTest::gtest_main
   karbon_can_bus
-  bashWrapper
+  bash_wrapper
 )
 
 include(GoogleTest)

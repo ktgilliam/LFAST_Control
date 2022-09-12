@@ -20,4 +20,4 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 #========================================= project libraries =====================================#
 #=================================================================================================#
 add_library(karbon_can_bus SHARED karbon_can_bus.cc)
-add_library(bashWrapper SHARED bash_wrapper.cc)
+add_library(bash_wrapper SHARED bash_wrapper.cc)
