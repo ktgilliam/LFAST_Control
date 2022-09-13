@@ -25,18 +25,32 @@ FetchContent_MakeAvailable(googletest)
 #=================================================================================================#
 #========================================= project test executables ==============================#
 #=================================================================================================#
+
+#### Bash Wrapper tests
 add_executable(
-  lfast_utils_tests
-  lfast_utils_tests.cpp
+  bash_wrapper_tests
+  bash_wrapper_tests.cc
 )
 
 target_link_libraries(
-  lfast_utils_tests
-  GTest::gtest_main
-  karbon_can_bus
+  bash_wrapper_tests
   bash_wrapper
+  GTest::gtest_main
 )
 
-include(GoogleTest)
-gtest_discover_tests(lfast_utils_tests)
+#### CANBUS tests
+add_executable(
+  can_bus_interface_tests
+  can_bus_interface_tests.cc
+)
 
+target_link_libraries(
+  can_bus_interface_tests
+  can_bus_interface
+  GTest::gtest_main
+)
+
+#### Bringing it all together
+include(GoogleTest)
+gtest_discover_tests(bash_wrapper_tests)
+gtest_discover_tests(can_bus_interface_tests)

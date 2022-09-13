@@ -7,7 +7,7 @@
 #define READ_ONLY_FD 0
 #define WRITE_ONLY_FD 1
 
-class BashCommandWrapper
+class BashCommand
 {
 public:
     int ExitStatus = 0;
@@ -23,18 +23,12 @@ public:
         void close(int rw);
     };
 
-    BashCommandWrapper() {}
+    BashCommand() {}
 
     void execBashCommandWithPipes();
-    int execBashCommandWithPipes_LBL();
-    // void operator()(std::string _stdin, std::string _cmd)
-    // {
-    //     this->StdIn = _stdin;
-    //     this->Command = _cmd;
-    //     this->execBashCommandWithPipes();
-    // }
+    static std::vector<std::string> splitByDelimeter(std::string s, std::string delimeter);
 
-    int delimittedCopyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::vector<std::string> _delimittedData);
+    int delimittedCopyPipeContents(BashCommand::PipeWrapper roPipe, std::vector<std::string> _delimittedData);
 
 private:
     PipeWrapper stdInPipe;

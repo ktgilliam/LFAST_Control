@@ -11,8 +11,9 @@
 #include <string>
 #include <thread>
 #include <iostream>
+#include <bits/stdc++.h>
 
-void BashCommandWrapper::execBashCommandWithPipes()
+void BashCommand::execBashCommandWithPipes()
 {
     // This class based on example from: https://dev.to/aggsol/calling-shell-commands-from-c-8ej
 
@@ -32,14 +33,14 @@ void BashCommandWrapper::execBashCommandWithPipes()
     cleanUp();
 }
 
-void BashCommandWrapper::cleanUp()
+void BashCommand::cleanUp()
 {
     stdInPipe.close();
     stdOutPipe.close();
     stdErrPipe.close();
 }
 
-void BashCommandWrapper::createPipes()
+void BashCommand::createPipes()
 {
     // Create pipes for stdin, stdout, and stderr. pipe() returns -1 if there was an error creating the pipe.
 
@@ -73,7 +74,7 @@ void BashCommandWrapper::createPipes()
     }
 }
 
-int BashCommandWrapper::createFork()
+int BashCommand::createFork()
 {
     auto pid = ::fork(); // Create a fork and get the process ID.
     // Note that the child process is initially a duplicate of this process, so this code
@@ -127,7 +128,7 @@ int BashCommandWrapper::createFork()
     return status;
 }
 
-void BashCommandWrapper::copyPipeContents(BashCommandWrapper::PipeWrapper roPipe, std::string &dest)
+void BashCommand::copyPipeContents(BashCommand::PipeWrapper roPipe, std::string &dest)
 {
     // Create a temporary buffer for storing data read from the pipe's read-only file descriptor
     std::array<char, 256> buffer;
@@ -140,13 +141,39 @@ void BashCommandWrapper::copyPipeContents(BashCommandWrapper::PipeWrapper roPipe
     } while (bytes > 0);
 }
 
-void BashCommandWrapper::PipeWrapper::close()
+void BashCommand::PipeWrapper::close()
 {
     ::close(fileDescriptors[READ_ONLY_FD]);
     ::close(fileDescriptors[WRITE_ONLY_FD]);
 }
 
-void BashCommandWrapper::PipeWrapper::close(int rw)
+void BashCommand::PipeWrapper::close(int rw)
 {
     ::close(fileDescriptors[rw]);
+}
+
+std::vector<std::string> BashCommand::splitByDelimeter(std::string s, std::string delimeter)
+{
+    size_t pos = 0;
+    std::string token;
+    std::vector<std::string>  tokens;
+    while ((pos = s.find(delimeter)) != std::string::npos)
+    {
+        token = s.substr(0, pos);
+        // std::cout << token << std::endl;
+        tokens.push_back(token);
+        s.erase(0, pos + delimeter.length());
+    }
+    tokens.push_back(s);
+
+    // std::stringstream check(s);  
+    // std::string intermediate;
+     
+    // // Tokenizing w.r.t. space ' '
+    // while(getline(check, intermediate, ' '))
+    // {
+    //     tokens.push_back(intermediate);
+    // }
+
+    return tokens;
 }
