@@ -22,7 +22,7 @@ class LFASTMount : public INDI::Telescope
         bool ReadScopeStatus() override;
         bool Goto(double, double) override;
         bool Abort() override;
-
+        void TimerHit() override;
     private:
         double currentRA {0};
         double currentDEC {90};

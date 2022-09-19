@@ -21,7 +21,8 @@
 
 #include "config.h"
 #include "indicom.h"
-
+#include "libindi/connectionplugins/connectiontcp.h"
+// #include "libindi/connectionplugins/connectionserial.h"
 
 static std::unique_ptr<LFASTMount> lfastMount(new LFASTMount());
 
@@ -49,6 +50,15 @@ bool LFASTMount::initProperties()
     // Set telescope capabilities. 0 is for the the number of slew rates that we support. We have none for this simple driver.
     SetTelescopeCapability(TELESCOPE_CAN_GOTO | TELESCOPE_CAN_ABORT, 0);
 
+    // Add debug/simulation/etc controls to the driver.
+    addAuxControls();
+
+    tcpConnection = new Connection::TCP(this);
+
+    tcpConnection->registerHandshake([&]() { return Handshake(); });
+    tcpConnection->setConnectionType(Connection::TCP::TYPE_UDP);
+    registerConnection(tcpConnection);
+
     return true;
 }
 
@@ -59,6 +69,13 @@ bool LFASTMount::Handshake()
 {
     // When communicating with a real mount, we check here if commands are receieved
     // and acknolowedged by the mount. For SimpleScope, we simply return true.
+    if (isSimulation())
+    {
+        LOGF_INFO("Connected successfuly to simulated %s.", getDeviceName());
+        return true;
+    }
+
+    // TODO: Implement the actual handshake.
     return true;
 }
 
@@ -194,3 +211,17 @@ bool LFASTMount::ReadScopeStatus()
     NewRaDec(currentRA, currentDEC);
     return true;
 }
+
+
+void LFASTMount::TimerHit()
+{
+    // if (!isConnected())
+    //     return;
+
+    // LOG_INFO("timer hit");
+
+    // // If you don't call SetTimer, we'll never get called again, until we disconnect
+    // // and reconnect.
+    // SetTimer(POLLMS);
+}
+
