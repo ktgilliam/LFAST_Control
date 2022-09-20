@@ -30,6 +30,7 @@ LFASTMount::LFASTMount()
 {
     // We add an additional debug level so we can log verbose scope status
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
+    this->setTelescopeConnection(CONNECTION_TCP);
 }
 
 /**************************************************************************************
@@ -54,11 +55,14 @@ bool LFASTMount::initProperties()
     addAuxControls();
 
     tcpConnection = new Connection::TCP(this);
+    tcpConnection->setLANSearchEnabled(true);
 
-    tcpConnection->registerHandshake([&]() { return Handshake(); });
     tcpConnection->setConnectionType(Connection::TCP::TYPE_UDP);
+    tcpConnection->registerHandshake([&]()
+                                     { return Handshake(); });
     registerConnection(tcpConnection);
 
+    tcpConnection->Connect();
     return true;
 }
 
@@ -72,10 +76,28 @@ bool LFASTMount::Handshake()
     if (isSimulation())
     {
         LOGF_INFO("Connected successfuly to simulated %s.", getDeviceName());
-        return true;
+        // return true;
     }
 
-    // TODO: Implement the actual handshake.
+    int rc = 0, nbytes_written = 0, nbytes_read = 0;
+
+    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+
+   if(tty_read(tcpConnection->getPortFD(), pRES, '#', 10, &nbytes_read) != TTY_OK)
+   {
+    LOG_ERROR("HANDSHAKE FAILED.");
+   }
+   else
+   {
+    pRES[nbytes_read] = '\n';
+    LOGF_INFO("RECEIVED: %s\n", pRES);
+   }
+
+
+    // TODO: Any initial communciation needed with our device; we have an active
+    // connection with a valid file descriptor called PortFD. This file descriptor
+    // can be used with the tty_* functions in indicom.h
+
     return true;
 }
 
@@ -92,7 +114,7 @@ const char *LFASTMount::getDefaultName()
 ***************************************************************************************/
 bool LFASTMount::Goto(double ra, double dec)
 {
-    targetRA  = ra;
+    targetRA = ra;
     targetDEC = dec;
     char RAStr[64] = {0}, DecStr[64] = {0};
 
@@ -140,64 +162,64 @@ bool LFASTMount::ReadScopeStatus()
     if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
         ltv = tv;
 
-    dt  = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
+    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
     ltv = tv;
 
     // Calculate how much we moved since last time
-    da_ra  = SLEW_RATE * dt;
+    da_ra = SLEW_RATE * dt;
     da_dec = SLEW_RATE * dt;
 
     /* Process per current state. We check the state of EQUATORIAL_EOD_COORDS_REQUEST and act acoordingly */
     switch (TrackState)
     {
-        case SCOPE_SLEWING:
-            // Wait until we are "locked" into positon for both RA & DEC axis
-            nlocked = 0;
+    case SCOPE_SLEWING:
+        // Wait until we are "locked" into positon for both RA & DEC axis
+        nlocked = 0;
 
-            // Calculate diff in RA
-            dx = targetRA - currentRA;
+        // Calculate diff in RA
+        dx = targetRA - currentRA;
 
-            // If diff is very small, i.e. smaller than how much we changed since last time, then we reached target RA.
-            if (fabs(dx) * 15. <= da_ra)
-            {
-                currentRA = targetRA;
-                nlocked++;
-            }
-            // Otherwise, increase RA
-            else if (dx > 0)
-                currentRA += da_ra / 15.;
-            // Otherwise, decrease RA
-            else
-                currentRA -= da_ra / 15.;
+        // If diff is very small, i.e. smaller than how much we changed since last time, then we reached target RA.
+        if (fabs(dx) * 15. <= da_ra)
+        {
+            currentRA = targetRA;
+            nlocked++;
+        }
+        // Otherwise, increase RA
+        else if (dx > 0)
+            currentRA += da_ra / 15.;
+        // Otherwise, decrease RA
+        else
+            currentRA -= da_ra / 15.;
 
-            // Calculate diff in DEC
-            dy = targetDEC - currentDEC;
+        // Calculate diff in DEC
+        dy = targetDEC - currentDEC;
 
-            // If diff is very small, i.e. smaller than how much we changed since last time, then we reached target DEC.
-            if (fabs(dy) <= da_dec)
-            {
-                currentDEC = targetDEC;
-                nlocked++;
-            }
-            // Otherwise, increase DEC
-            else if (dy > 0)
-                currentDEC += da_dec;
-            // Otherwise, decrease DEC
-            else
-                currentDEC -= da_dec;
+        // If diff is very small, i.e. smaller than how much we changed since last time, then we reached target DEC.
+        if (fabs(dy) <= da_dec)
+        {
+            currentDEC = targetDEC;
+            nlocked++;
+        }
+        // Otherwise, increase DEC
+        else if (dy > 0)
+            currentDEC += da_dec;
+        // Otherwise, decrease DEC
+        else
+            currentDEC -= da_dec;
 
-            // Let's check if we recahed position for both RA/DEC
-            if (nlocked == 2)
-            {
-                // Let's set state to TRACKING
-                TrackState = SCOPE_TRACKING;
+        // Let's check if we recahed position for both RA/DEC
+        if (nlocked == 2)
+        {
+            // Let's set state to TRACKING
+            TrackState = SCOPE_TRACKING;
 
-                LOG_INFO("Telescope slew is complete. Tracking...");
-            }
-            break;
+            LOG_INFO("Telescope slew is complete. Tracking...");
+        }
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     char RAStr[64] = {0}, DecStr[64] = {0};
@@ -212,16 +234,14 @@ bool LFASTMount::ReadScopeStatus()
     return true;
 }
 
-
 void LFASTMount::TimerHit()
 {
-    // if (!isConnected())
-    //     return;
+    if (!isConnected())
+        return;
 
-    // LOG_INFO("timer hit");
+    LOG_INFO("timer hit");
 
-    // // If you don't call SetTimer, we'll never get called again, until we disconnect
-    // // and reconnect.
-    // SetTimer(POLLMS);
+    // If you don't call SetTimer, we'll never get called again, until we disconnect
+    // and reconnect.
+    SetTimer(POLLMS);
 }
-
