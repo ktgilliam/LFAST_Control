@@ -212,9 +212,7 @@ bool LFAST_Mount::updateProperties()
     {
         //deleteProperty(TrackModeSP.name);
         //deleteProperty(TrackRateNP.name);
-
         deleteProperty(JogRateNP.name);
-
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
         deleteProperty(GuideRateNP.name);
@@ -244,30 +242,33 @@ bool LFAST_Mount::Handshake()
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
+    // strncpy(pCMD,
+    //         "/* Java Script */"
+    //         "var Out;"
+    //         "sky6RASCOMTele.ConnectAndDoNotUnpark();"
+    //         "Out = sky6RASCOMTele.IsConnected + '#';",
+    //         MAXRBUF);
     strncpy(pCMD,
-            "/* Java Script */"
-            "var Out;"
-            "sky6RASCOMTele.ConnectAndDoNotUnpark();"
-            "Out = sky6RASCOMTele.IsConnected + '#';",
+            "Hello World!",
             MAXRBUF);
 
     LOGF_DEBUG("CMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing Handshake to TheSkyX TCP server. Result: %d", rc);
+        LOGF_ERROR("Error writing Handshake to TCP server. Result: %d", rc);
         return false;
     }
 
     if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading Handshake from TheSkyX TCP server. Result: %d", rc);
+        LOGF_ERROR("Error reading Handshake from TCP server. Result: %d", rc);
         return false;
     }
 
     if (strcmp(pRES, "1#") != 0)
     {
-        LOGF_ERROR("Error connecting to TheSky. Result: %s", pRES);
+        LOGF_ERROR("Error connecting. Result: %s", pRES);
         return false;
     }
 
