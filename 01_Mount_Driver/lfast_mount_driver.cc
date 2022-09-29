@@ -55,11 +55,11 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define GOTO_LIMIT 5.5 /* Move at GOTO_RATE until distance from target is GOTO_LIMIT degrees */
 #define SLEW_LIMIT 1   /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 
-#define PARAMOUNT_TIMEOUT 3 /* Timeout in seconds */
-#define PARAMOUNT_NORTH 0
-#define PARAMOUNT_SOUTH 1
-#define PARAMOUNT_EAST 2
-#define PARAMOUNT_WEST 3
+#define LFAST_TIMEOUT 3 /* Timeout in seconds */
+#define LFAST_NORTH 0
+#define LFAST_SOUTH 1
+#define LFAST_EAST 2
+#define LFAST_WEST 3
 
 #define RA_AXIS 0
 #define DEC_AXIS 1
@@ -68,6 +68,9 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 uint8_t scopeCapabilities;
+
+std::string convertToString(double dblVal);
+std::string getMessageIdString(int id);
 
 LFAST_Mount::LFAST_Mount()
 {
@@ -92,9 +95,9 @@ LFAST_Mount::LFAST_Mount()
 
     setTelescopeConnection(CONNECTION_TCP);
 
+#if MOUNT_GUIDER_ENABLED
     m_NSTimer.setSingleShot(true);
     m_WETimer.setSingleShot(true);
-#if MOUNT_GUIDER_ENABLED
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
                             {
@@ -168,8 +171,10 @@ bool LFAST_Mount::initProperties()
 
     currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
+    
     return true;
 }
+
 
 bool LFAST_Mount::updateProperties()
 {
@@ -230,6 +235,7 @@ bool LFAST_Mount::updateProperties()
         deleteProperty(GuideRateNP.name);
 #endif
         deleteProperty(HomeSP.name);
+
     }
 
     return true;
@@ -261,8 +267,12 @@ bool LFAST_Mount::Handshake()
     //         "sky6RASCOMTele.ConnectAndDoNotUnpark();"
     //         "Out = sky6RASCOMTele.IsConnected + '#';",
     //         MAXRBUF);
+
+    // std::stringstream ss;
+    // ss << convertToString(1.2345) << getMessageIdString << std::endl;
+ 
     strncpy(pCMD,
-            "Handshake$1#",
+            "1.234;2.345;3.456;4.567#99\r\n",
             MAXRBUF);
 
     LOGF_DEBUG("CMD: %s", pCMD);
@@ -273,7 +283,7 @@ bool LFAST_Mount::Handshake()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading Handshake from TCP server. Result: %d", rc);
         return false;
@@ -292,30 +302,48 @@ bool LFAST_Mount::Handshake()
     return true;
 }
 
+std::string convertToString(double dblVal)
+{
+    ByteConverter converter;
+    converter.DOUBLE = dblVal;
+    return (std::string((char*)converter.BYTES, 8));
+}
+// typedef union 
+// {
+//     int i;
+//     char c;
+// } int2char;
+
+std::string getMessageIdString(int id)
+{
+    // int2char i2c;
+    // i2c.i = id;
+    char idStr[] = {'#', '#', (char)id};
+    return (std::string(idStr));
+}
+
 bool LFAST_Mount::getMountRADE()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
     double SkyXRA = 0., SkyXDEC = 0.;
-
+    LOG_DEBUG("Requesting Mount RA/DEC");
+     
     strncpy(pCMD,
-            "/* Java Script */"
-            "var Out;"
-            "sky6RASCOMTele.GetRaDec();"
-            "Out = String(sky6RASCOMTele.dRa) + ',' + String(sky6RASCOMTele.dDec) + '#';",
+            "getRaDec#2\n",
             MAXRBUF);
 
     LOGF_DEBUG("CMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing GetRaDec to TheSkyX TCP server. Response: %d", rc);
+        LOGF_ERROR("Error writing GetRaDec to mount TCP server. Response: %d", rc);
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading GetRaDec from TheSkyX TCP server. Result: %d", rc);
+        LOGF_ERROR("Error reading GetRaDec from mount TCP server. Result: %d", rc);
         return false;
     }
 
@@ -340,23 +368,20 @@ INDI::Telescope::TelescopePierSide LFAST_Mount::getPierSide()
     int SkyXPierSide = -1;
 
     strncpy(pCMD,
-            "/* Java Script */"
-            "var Out;"
-            "sky6RASCOMTele.DoCommand(11, \"Pier Side\");"
-            "Out = sky6RASCOMTele.DoCommandOutput + '#';",
+            "getPierSide#2\n",
             MAXRBUF);
 
     LOGF_DEBUG("CMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing DoCommand(Pier Side) to TheSkyX TCP server. Result: %d", rc);
+        LOGF_ERROR("Error writing DoCommand(Pier Side) to mount TCP server. Result: %d", rc);
         return PIER_UNKNOWN;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading Pier Side from TheSkyX TCP server. Result: %d", rc);
+        LOGF_ERROR("Error reading Pier Side from mount TCP server. Result: %d", rc);
         return PIER_UNKNOWN;
     }
 
@@ -464,7 +489,7 @@ bool LFAST_Mount::isSlewComplete()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading IsSlewComplete from TheSkyX TCP server. Result: %d", rc);
         return false;
@@ -481,6 +506,7 @@ bool LFAST_Mount::isSlewComplete()
     LOGF_ERROR("Error reading isSlewComplete. Result: %s", pRES);
     return false;
 }
+
 #if MOUNT_PARKING_ENABLED
 bool LFAST_Mount::isTheSkyParked()
 {
@@ -501,7 +527,7 @@ bool LFAST_Mount::isTheSkyParked()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading sky6RASCOMTele.IsParked() from TheSkyX TCP server. Result: %d", rc);
         return false;
@@ -525,9 +551,7 @@ bool LFAST_Mount::isTheSkyTracking()
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
     strncpy(pCMD,
-            "/* Java Script */"
-            "var Out;"
-            "Out = sky6RASCOMTele.IsTracking + '#';",
+            "getTrackingStatus#3",
             MAXRBUF);
 
     LOGF_DEBUG("CMD: %s", pCMD);
@@ -538,7 +562,7 @@ bool LFAST_Mount::isTheSkyTracking()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '#', PARAMOUNT_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading sky6RASCOMTele.IsTracking from TheSkyX TCP server. Result: %d", rc);
         return false;
@@ -706,7 +730,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
         return false;
     }
 
-    int motion = (dir == DIRECTION_NORTH) ? PARAMOUNT_NORTH : PARAMOUNT_SOUTH;
+    int motion = (dir == DIRECTION_NORTH) ? LFAST_NORTH : LFAST_SOUTH;
     // int rate   = IUFindOnSwitchIndex(&SlewRateSP);
     int rate = slewspeeds[IUFindOnSwitchIndex(&SlewRateSP)];
 
@@ -719,7 +743,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
             return false;
         }
         else
-            LOGF_INFO("Moving toward %s.", (motion == PARAMOUNT_NORTH) ? "North" : "South");
+            LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
         break;
 
     case MOTION_STOP:
@@ -730,7 +754,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
         }
         else
             LOGF_INFO("Moving toward %s halted.",
-                      (motion == PARAMOUNT_NORTH) ? "North" : "South");
+                      (motion == LFAST_NORTH) ? "North" : "South");
         break;
     }
 
@@ -745,7 +769,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         return false;
     }
 
-    int motion = (dir == DIRECTION_WEST) ? PARAMOUNT_WEST : PARAMOUNT_EAST;
+    int motion = (dir == DIRECTION_WEST) ? LFAST_WEST : LFAST_EAST;
     int rate = IUFindOnSwitchIndex(&SlewRateSP);
 
     switch (command)
@@ -757,7 +781,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
             return false;
         }
         else
-            LOGF_INFO("Moving toward %s.", (motion == PARAMOUNT_WEST) ? "West" : "East");
+            LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
         break;
 
     case MOTION_STOP:
@@ -768,7 +792,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         }
         else
             LOGF_INFO("Movement toward %s halted.",
-                      (motion == PARAMOUNT_WEST) ? "West" : "East");
+                      (motion == LFAST_WEST) ? "West" : "East");
         break;
     }
 

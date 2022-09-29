@@ -26,6 +26,13 @@
 #include "inditelescope.h"
 #include "inditimer.h"
 
+union  ByteConverter
+{
+    unsigned long INT;
+    double DOUBLE;
+    unsigned char BYTES[8];
+} ;
+
 #define MOUNT_PARKING_ENABLED 0
 #define MOUNT_GUIDER_ENABLED 0
 
