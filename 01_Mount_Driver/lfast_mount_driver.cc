@@ -68,7 +68,7 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
-uint8_t scopeCapabilities;
+int scopeCapabilities;
 
 std::string convertToString(double dblVal);
 std::string getMessageIdString(int id);
@@ -78,15 +78,15 @@ LFAST_Mount::LFAST_Mount()
     setVersion(1, 4);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_CAN_GOTO
+    scopeCapabilities = TELESCOPE_CAN_GOTO 
                         // | TELESCOPE_CAN_SYNC
 #if MOUNT_PARKING_ENABLED
                         | TELESCOPE_CAN_PARK
 #endif
-                        // | TELESCOPE_CAN_ABORT
-                        // | TELESCOPE_HAS_TIME
-                        // | TELESCOPE_HAS_LOCATION
-                        // | TELESCOPE_HAS_TRACK_MODE
+                        | TELESCOPE_CAN_ABORT
+                        | TELESCOPE_HAS_TIME
+                        | TELESCOPE_HAS_LOCATION
+                        | TELESCOPE_HAS_TRACK_MODE
                         // | TELESCOPE_HAS_TRACK_RATE
                         // | TELESCOPE_CAN_CONTROL_TRACK
                         // | TELESCOPE_HAS_PIER_SIDE
@@ -208,7 +208,7 @@ bool LFAST_Mount::updateProperties()
             TrackState = SCOPE_IDLE;
         }
 
-        // defineProperty(&TrackModeSP);
+        defineProperty(&TrackModeSP);
         // defineProperty(&TrackRateNP);
 
         defineProperty(&JogRateNP);
@@ -275,18 +275,7 @@ bool LFAST_Mount::Handshake()
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
-    // strncpy(pCMD,
-    //         "/* Java Script */"
-    //         "var Out;"
-    //         "LFAST_Mount.ConnectAndDoNotUnpark();"
-    //         "Out = LFAST_Mount.IsConnected + '#';",
-    //         MAXRBUF);
-
-    // std::stringstream ss;
-    // ss << convertToString(1.2345) << getMessageIdString << std::endl;
-
     strncpy(pCMD,
-            // "99#1.234;2.345;3.456;4.567",
             "99#Handshake",
             MAXRBUF);
 
@@ -540,14 +529,6 @@ bool LFAST_Mount::isTheSkyTracking()
         return false;
     }
 
-    // char pIdStr[MAXRBUF] = {0};
-    // if ((rc = tty_read_section(PortFD, pRES, '#', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
-    // {
-    //     LOGF_ERROR("Error reading LFAST_Mount.IsTracking from TCP server. Result: %d", rc);
-    //     return false;
-    // }
-    // LOGF_DEBUG("ID: %s", pIdStr);
-
     if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading LFAST_Mount.IsTracking from TCP server. Result: %d", rc);
@@ -557,7 +538,7 @@ bool LFAST_Mount::isTheSkyTracking()
     LOGF_DEBUG("RES: %s", pRES);
 
     double SkyXTrackRate = 0.;
-    if (sscanf(pRES, "3#%lf^", &SkyXTrackRate) == 1)
+    if (sscanf(pRES, "3q#%lf^", &SkyXTrackRate) == 1)
     {
         if (SkyXTrackRate == 0)
             return false;
