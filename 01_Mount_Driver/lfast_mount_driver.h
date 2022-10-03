@@ -26,15 +26,49 @@
 #include "inditelescope.h"
 #include "inditimer.h"
 
-union  ByteConverter
+union ByteConverter
 {
     unsigned long INT;
     double DOUBLE;
     unsigned char BYTES[8];
-} ;
+};
 
-#define MOUNT_PARKING_ENABLED 0
+#define MOUNT_PARKING_ENABLED 1
 #define MOUNT_GUIDER_ENABLED 0
+
+// #define MOUNT_GOTO_ENABLED
+#define TRACK_SOLAR_ENABLED 0
+#define TRACK_LUNAR_ENABLED 0
+#define TRACK_CUSTOM_ENABLED 0
+#define TRACK_ALT_AZ_ENABLED 0
+#define NUM_TRACK_MODES (1 + TRACK_SOLAR_ENABLED + TRACK_LUNAR_ENABLED + TRACK_ALT_AZ_ENABLED + TRACK_CUSTOM_ENABLED)
+
+#define AZ_EL_JOG_ENABLED 1
+#define NUM_JOG_MODES (1 + AZ_EL_JOG_ENABLED)
+
+enum
+{
+    RA_AXIS,
+    DEC_AXIS,
+    ALT_AXIS,
+    AZ_AXIS,
+    NUM_AXES
+};
+
+enum
+{
+    LFAST_NORTH,
+    LFAST_SOUTH,
+    LFAST_EAST,
+    LFAST_WEST,
+    // LFAST_ALT,
+    // LFAST_AZ
+};
+
+#define JOG_RATE_MIN 0
+#define JOG_RATE_MAX 600
+#define JOG_RATE_STEP 60
+#define JOG_RATE_VALUE 30
 
 #if MOUNT_GUIDER_ENABLED
 class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
@@ -58,6 +92,8 @@ public:
 protected:
     virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
     virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
+    // bool MoveAltAz(INDI_HO_AXIS dir, TelescopeMotionCommand command);
+
     virtual bool Abort() override;
 
     virtual bool updateTime(ln_date *utc, double utc_offset) override;
@@ -90,48 +126,84 @@ protected:
 #endif
 private:
     void mountSim();
-    bool getMountRADE();
+    bool getMountAltAz();
     bool isSlewComplete();
 
     bool sendTheSkyOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
 #if MOUNT_PARKING_ENABLED
-    bool isTheSkyParked();
+    bool isMountParked();
 #endif
-    bool isTheSkyTracking();
+    bool isMountTracking();
     bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
     bool stopOpenLoopMotion();
     bool setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate);
-    INDI::Telescope::TelescopePierSide getPierSide();
 
+    double getCurrentRa();
+    double getCurrentDec();
+    double getTargetRa();
+    double getTargetDec();
+    double getDeltaRa();
+    double getDeltaDec();
+
+    void setTargetRaDec(double ra, double dec);
+
+    void AltAzToRaDec(double alt, double az, double *ra, double *dec);
+    void RaDecToAltAz(double ra, double dec, double *alt, double *az);
+    void altAzToHADec(double alt, double az, double *ha, double *dec);
     // Homing
     bool findHome();
 
-    double currentRA{0};
-    double currentDEC{90};
-    double targetRA{0};
-    double targetDEC{0};
+    // double currentRA{0};
+    // double currentDEC{90};
+    // double targetRA{0};
+    // double targetDEC{0};
+
+    double currentALT{0};
+    double currentAZ{90};
+    double targetALT{0};
+    double targetAZ{0};
 
     unsigned int DBG_SCOPE{0};
 
     // Jog Rate
-    INumber JogRateN[2];
+    enum
+    {
+        JOG_MODE_RA_DEC,
+        JOG_MODE_ALT_AZ,
+    };
+    INumber JogRateN[NUM_AXES];
     INumberVectorProperty JogRateNP;
+
+    ISwitch JogModeS[NUM_JOG_MODES];
+    ISwitchVectorProperty JogModeSP;
+
 #if MOUNT_GUIDER_ENABLED
     // Guide Rate
     INumber GuideRateN[2];
     INumberVectorProperty GuideRateNP;
 #endif
+    // Jogging Mode
+
+    // A switch for Alt motion
+    ISwitch MovementAltS[2];
+    ISwitchVectorProperty MovementAltSP;
+    // A switch for Az motion
+    ISwitch MovementAzS[2];
+    ISwitchVectorProperty MovementAzSP;
+
     // Tracking Mode
-    ISwitch TrackModeS[4];
+    ISwitch TrackModeS[NUM_TRACK_MODES];
     ISwitchVectorProperty TrackModeSP;
 
     // Homing
     ISwitchVectorProperty HomeSP;
     ISwitch HomeS[1];
 
+
     // Timers
     INDI::Timer m_NSTimer;
     INDI::Timer m_WETimer;
+
     // Tracking Rate
     //    INumber TrackRateN[2];
     //    INumberVectorProperty TrackRateNP;
