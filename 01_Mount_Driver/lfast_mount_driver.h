@@ -1,40 +1,138 @@
-/** \file lfast_mount_driver.h
-    \brief LFAST Az/El Pedestal INDI Driver
-    \author Kevin Gilliam
-*/
+/*******************************************************************************
+ Copyright(c) 2017 Jasem Mutlaq. All rights reserved.
+
+ Driver for using TheSky6 Pro Scripted operations for mounts via the TCP server.
+ While this technically can operate any mount connected to the TheSky6 Pro, it is
+ intended for LFAST_Mount mounts control.
+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Library General Public
+ License version 2 as published by the Free Software Foundation.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Library General Public License for more details.
+ .
+ You should have received a copy of the GNU Library General Public License
+ along with this library; see the file COPYING.LIB.  If not, write to
+ the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ Boston, MA 02110-1301, USA.
+*******************************************************************************/
 
 #pragma once
 
+#include "indiguiderinterface.h"
 #include "inditelescope.h"
+#include "inditimer.h"
 
-class LFASTMount : public INDI::Telescope
+union  ByteConverter
 {
-    public:
-        LFASTMount();
+    unsigned long INT;
+    double DOUBLE;
+    unsigned char BYTES[8];
+} ;
 
-    protected:
-        bool Handshake() override;
+#define MOUNT_PARKING_ENABLED 0
+#define MOUNT_GUIDER_ENABLED 0
 
-        const char *getDefaultName() override;
-        bool initProperties() override;
+#if MOUNT_GUIDER_ENABLED
+class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
+#else
+class LFAST_Mount : public INDI::Telescope
+#endif
+{
+public:
+    LFAST_Mount();
+    virtual ~LFAST_Mount() = default;
 
-        // Telescope specific functions
-        bool ReadScopeStatus() override;
-        bool Goto(double, double) override;
-        bool Abort() override;
+    virtual const char *getDefaultName() override;
+    virtual bool Handshake() override;
+    virtual bool ReadScopeStatus() override;
+    virtual bool initProperties() override;
+    virtual bool updateProperties() override;
 
-    private:
-        double currentRA {0};
-        double currentDEC {90};
-        double targetRA {0};
-        double targetDEC {0};
+    virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+    virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
 
-        // Debug channel to write mount logs to
-        // Default INDI::Logger debugging/logging channel are Message, Warn, Error, and Debug
-        // Since scope information can be _very_ verbose, we create another channel SCOPE specifically
-        // for extra debug logs. This way the user can turn it on/off as desired.
-        uint8_t DBG_SCOPE { INDI::Logger::DBG_IGNORE };
+protected:
+    virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
+    virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
+    virtual bool Abort() override;
 
-        // slew rate, degrees/s
-        static const uint8_t SLEW_RATE = 3;
+    virtual bool updateTime(ln_date *utc, double utc_offset) override;
+
+#if MOUNT_PARKING_ENABLED
+    // Parking
+    virtual bool SetCurrentPark() override;
+    virtual bool SetDefaultPark() override;
+    virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
+    virtual bool Park() override;
+    virtual bool UnPark() override;
+#endif
+    virtual bool Goto(double, double) override;
+    virtual bool Sync(double ra, double dec) override;
+
+    // Tracking
+    virtual bool SetTrackMode(uint8_t mode) override;
+    virtual bool SetTrackRate(double raRate, double deRate) override;
+    virtual bool SetTrackEnabled(bool enabled) override;
+
+#if MOUNT_GUIDER_ENABLED
+    // Guiding
+    virtual IPState GuideNorth(uint32_t ms) override;
+    virtual IPState GuideSouth(uint32_t ms) override;
+    virtual IPState GuideEast(uint32_t ms) override;
+    virtual IPState GuideWest(uint32_t ms) override;
+    // these all call these two functions
+    IPState GuideNS(int32_t ms);
+    IPState GuideWE(int32_t ms);
+#endif
+private:
+    void mountSim();
+    bool getMountRADE();
+    bool isSlewComplete();
+
+    bool sendTheSkyOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+#if MOUNT_PARKING_ENABLED
+    bool isTheSkyParked();
+#endif
+    bool isTheSkyTracking();
+    bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
+    bool stopOpenLoopMotion();
+    bool setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate);
+    INDI::Telescope::TelescopePierSide getPierSide();
+
+    // Homing
+    bool findHome();
+
+    double currentRA{0};
+    double currentDEC{90};
+    double targetRA{0};
+    double targetDEC{0};
+
+    unsigned int DBG_SCOPE{0};
+
+    // Jog Rate
+    INumber JogRateN[2];
+    INumberVectorProperty JogRateNP;
+#if MOUNT_GUIDER_ENABLED
+    // Guide Rate
+    INumber GuideRateN[2];
+    INumberVectorProperty GuideRateNP;
+#endif
+    // Tracking Mode
+    ISwitch TrackModeS[4];
+    ISwitchVectorProperty TrackModeSP;
+
+    // Homing
+    ISwitchVectorProperty HomeSP;
+    ISwitch HomeS[1];
+
+    // Timers
+    INDI::Timer m_NSTimer;
+    INDI::Timer m_WETimer;
+    // Tracking Rate
+    //    INumber TrackRateN[2];
+    //    INumberVectorProperty TrackRateNP;
 };
