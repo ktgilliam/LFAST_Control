@@ -15,14 +15,14 @@ TEST(lfast_comms_tests, oneIntArgPos)
     LFAST::Message msg("TestMessage");
     msg.addArgument("TestArg", 1137);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"1137"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":1137}})");
 }
 TEST(lfast_comms_tests, oneIntArgNeg)
 {
     LFAST::Message msg("TestMessage");
     msg.addArgument("TestArg", -1137);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"-1137"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":-1137}})");
 }
 TEST(lfast_comms_tests, oneUintArg)
 {
@@ -37,7 +37,7 @@ TEST(lfast_comms_tests, oneBoolArgTrue)
     LFAST::Message msg("TestMessage");
     bool testVal = true;
     msg.addArgument("TestArg", testVal);
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"true"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":true}})");
 }
 
 TEST(lfast_comms_tests, oneBoolArgFalse)
@@ -45,7 +45,7 @@ TEST(lfast_comms_tests, oneBoolArgFalse)
     LFAST::Message msg("TestMessage");
     bool testVal = false;
     msg.addArgument("TestArg", testVal);
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"false"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":false}})");
 }
 
 TEST(lfast_comms_tests, oneStringArg)
@@ -68,7 +68,7 @@ TEST(lfast_comms_tests, oneDoubleArg)
     LFAST::Message msg("TestMessage");
     msg.addArgument("TestArg", 77.1234567);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"77.1234567"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":77.1234567}})");
 }
 
 TEST(lfast_comms_tests, twoDoubleArgs)
@@ -77,7 +77,7 @@ TEST(lfast_comms_tests, twoDoubleArgs)
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", -99.7654321);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":"77.1234567","TestArg2":"-99.7654321"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":77.1234567,"TestArg2":-99.7654321}})");
 }
 
 TEST(lfast_comms_tests, oneDoubleOneBool)
@@ -86,7 +86,7 @@ TEST(lfast_comms_tests, oneDoubleOneBool)
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", true);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":"77.1234567","TestArg2":"true"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":77.1234567,"TestArg2":true}})");
 }
 
 TEST(lfast_comms_tests, oneDoubleOneBoolOneInt)
@@ -95,5 +95,31 @@ TEST(lfast_comms_tests, oneDoubleOneBoolOneInt)
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", true);
     msg.addArgument("TestArg3", 17);
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":"77.1234567","TestArg2":"true","TestArg3":"17"}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg1":77.1234567,"TestArg2":true,"TestArg3":17}})");
+}
+
+TEST(lfast_comms_tests, nestedCommand0)
+{
+    LFAST::Message msgParent("ParentMessage");
+    msgParent.addArgument("ParentArg1", 77.1234567);
+
+    LFAST::Message msgChild("ChildMessageOutside");
+    msgChild.addArgument("ChildArg1", true);
+    msgChild.addArgument("ChildArg2", 17);
+
+    msgParent.addArgument("ChildMessageInside", msgChild);
+    EXPECT_STREQ(msgParent.getMessageStr().c_str(), R"({"ParentMessage":{"ParentArg1":77.1234567,"ChildMessageInside":{"ChildMessageOutside":{"ChildArg1":true,"ChildArg2":17}}}})");
+}
+
+TEST(lfast_comms_tests, nestedCommand1)
+{
+    LFAST::Message msgParent("ParentMessage");
+    msgParent.addArgument("ParentArg1", 77.1234567);
+
+    LFAST::Message msgChild;
+    msgChild.addArgument("ChildArg1", true);
+    msgChild.addArgument("ChildArg2", 17);
+
+    msgParent.addArgument("ChildMessage", msgChild);
+    EXPECT_STREQ(msgParent.getMessageStr().c_str(), R"({"ParentMessage":{"ParentArg1":77.1234567,"ChildMessage":{"ChildArg1":true,"ChildArg2":17}}})");
 }

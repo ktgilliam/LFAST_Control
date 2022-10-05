@@ -46,6 +46,8 @@
 
 #include <termios.h>
 
+#include "../00_Utils/lfast_comms.h"
+
 // We declare an auto pointer to LFAST_Mount.
 std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 
@@ -286,10 +288,10 @@ bool LFAST_Mount::Handshake()
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
-    strncpy(pCMD,
-            "99#Handshake",
-            MAXRBUF);
-
+    LFAST::Message hsMsg("MountMessage");
+    hsMsg.addArgument("Handshake", (unsigned int)0xDEADBEEF);
+    hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    strncpy(pCMD, hsMsg.getMessageStr().c_str(), MAXRBUF);
     LOGF_DEBUG("CMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)

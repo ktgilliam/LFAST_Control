@@ -15,32 +15,34 @@
 //     this->argStrings.push_back(std::string(pMSG));
 // }
 
-
-
-
 std::string LFAST::Message::getMessageStr()
 {
+    bool objFlag = false;
     std::stringstream ss;
     ss << "{";
+
     if (this->DestIdStr != "")
     {
+        objFlag = true;
         ss << std::quoted(DestIdStr) << ":";
     }
 
     if (this->argStrings.size() > 0)
     {
-        ss << "{";
+        if (objFlag)
+            ss << "{";
         auto itr = this->argStrings.begin();
         while (itr != this->argStrings.end())
         {
             ss << *itr;
-            if (itr++ < this->argStrings.end()-1)
+            if (itr++ < this->argStrings.end() - 1)
             {
                 ss << ",";
             }
         }
-        ss << "}";
-    }   
+        if (objFlag)
+            ss << "}";
+    }
     else
     {
         ss << std::quoted("");
