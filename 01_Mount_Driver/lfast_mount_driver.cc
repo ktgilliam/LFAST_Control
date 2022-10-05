@@ -288,8 +288,8 @@ bool LFAST_Mount::Handshake()
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
-    LFAST::Message hsMsg("MountMessage");
-    hsMsg.addArgument("Handshake", (unsigned int)0xDEADBEEF);
+    LFAST::TxMessage hsMsg("MountMessage");
+    hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     strncpy(pCMD, hsMsg.getMessageStr().c_str(), MAXRBUF);
     LOGF_DEBUG("CMD: %s", pCMD);

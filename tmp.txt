@@ -2,3 +2,10 @@
 
 
 {"ParentMessage":{"ParentArg1":77.1234567,"ChildMessage":{"ChildArg1":true,"ChildArg2":17}}}
+
+
+""TestMessage":{"TestArg":1137}"
+
+[{](\w+)\":(.*)
+
+^{\"(\w+)\":(.+)}$
