@@ -13,16 +13,16 @@ TEST(lfast_comms_tests, test_No_arg)
 TEST(lfast_comms_tests, oneIntArgPos)
 {
     LFAST::TxMessage msg("TestMessage");
-    msg.addArgument("TestArg", 1137);
+    msg.addArgument("TestArg", 1234);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":1137}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":1234}})");
 }
 TEST(lfast_comms_tests, oneIntArgNeg)
 {
     LFAST::TxMessage msg("TestMessage");
-    msg.addArgument("TestArg", -1137);
+    msg.addArgument("TestArg", -1234);
 
-    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":-1137}})");
+    EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":-1234}})");
 }
 TEST(lfast_comms_tests, oneUintArg)
 {
@@ -138,22 +138,22 @@ TEST(lfast_comms_tests, isNumeric_doubleTests)
 
 TEST(lfast_comms_tests, isObjTest)
 {
-    EXPECT_TRUE(LFAST::isObject(R"({"ObjLabel":{"ObjKey1":1137}})"));
-    EXPECT_FALSE(LFAST::isObject(R"("ObjLabel":{"ObjKey1":1137})"));
+    EXPECT_TRUE(LFAST::isObject(R"({"ObjLabel":{"ObjKey1":1234}})"));
+    EXPECT_FALSE(LFAST::isObject(R"("ObjLabel":{"ObjKey1":1234})"));
 }
 
 TEST(lfast_comms_tests, simpleRxParserTest)
 {
-    auto rxMsg = new LFAST::RxMessage(R"({"ObjKey":1137})");
-    EXPECT_STREQ(rxMsg->data["ObjKey"].c_str(), "1137");
+    auto rxMsg = new LFAST::RxMessage(R"({"ObjKey":1234})");
+    EXPECT_STREQ(rxMsg->data["ObjKey"].c_str(), "1234");
     EXPECT_FALSE(rxMsg->child);
 }
 
-TEST(lfast_comms_tests, nestedRxParserTest_oneDeep)
+TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 {
-    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey":1137}})");
+    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey":1234}})");
     std::string childStr = rxMsgParent->data["ParentKey"];
-    EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1137})");
+    EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1234})");
 
     std::string childVal;
     auto rxMsgChild = rxMsgParent->child;
@@ -161,16 +161,39 @@ TEST(lfast_comms_tests, nestedRxParserTest_oneDeep)
     {
         childVal = rxMsgChild->data["ChildKey"];
     }
-    EXPECT_STREQ(childVal.c_str(), "1137");
+    EXPECT_STREQ(childVal.c_str(), "1234");
+}
+
+TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
+{
+    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345}})");
+    std::string childStr = rxMsgParent->data["ParentKey"];
+    EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345})");
+
+    std::string childVal1, childVal2;
+    auto rxMsgChild = rxMsgParent->child;
+    if (rxMsgChild)
+    {
+        childVal1 = rxMsgChild->data["ChildKey1"];
+        childVal2 = rxMsgChild->data["ChildKey2"]; 
+    }
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+
+    }
+
+    EXPECT_STREQ(childVal1.c_str(), "1234");
+    EXPECT_STREQ(childVal2.c_str(), "2345");
 }
 
 // TEST(lfast_comms_tests, objParse)
 // {
 //     std::map<std::string, std::string> kvMap;
-//     if (LFAST::tryGetObjectContents(R"({"ObjLabel":{"ObjKey1":1137}})", kvMap))
+//     if (LFAST::tryGetObjectContents(R"({"ObjLabel":{"ObjKey1":1234}})", kvMap))
 //     {
 //         auto keyStr = kvMap["ObjLabel"];
-//         EXPECT_STREQ(keyStr.c_str(), R"({"ObjKey1":1137})");
+//         EXPECT_STREQ(keyStr.c_str(), R"({"ObjKey1":1234})");
 //     }
 //     else
 //     {
