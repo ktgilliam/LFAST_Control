@@ -9,3 +9,22 @@
 [{](\w+)\":(.*)
 
 ^{\"(\w+)\":(.+)}$
+
+{"ObjKey1":1137}
+
+{"ObjKey1":1137,"ObjKey2":1137}
+
+{"ParentKey":{"ChildKey1":1137, "ChildKey2":2248}}
+
+
+        // size_t pos = 0;
+        // std::string delim = ",";
+        // unsigned count = 0;
+        // while ((pos = guts.find(",")) != std::string::npos)
+        // {
+        //     count++;
+        //     std::string token = guts.substr(0, pos);
+        //     // std::cout << "###" << token << std::endl;
+        //     // this->parseValueStr(token);
+        //     guts.erase(0, pos + delim.length());
+        // }

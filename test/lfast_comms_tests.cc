@@ -145,25 +145,35 @@ TEST(lfast_comms_tests, isObjTest)
 TEST(lfast_comms_tests, simpleRxParserTest)
 {
     auto rxMsg = new LFAST::RxMessage(R"({"ObjKey":1234})");
+    LFAST::print_map(rxMsg->data);
+    std::cout << rxMsg->data["ObjKey"].c_str() << std::endl;
     EXPECT_STREQ(rxMsg->data["ObjKey"].c_str(), "1234");
+
     EXPECT_FALSE(rxMsg->child);
 }
 
+#if 0 // one child
 TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 {
     auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey":1234}})");
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1234})");
 
-    std::string childVal;
     auto rxMsgChild = rxMsgParent->child;
     if (rxMsgChild)
     {
+        std::string childVal;
         childVal = rxMsgChild->data["ChildKey"];
+        EXPECT_STREQ(childVal.c_str(), "1234");
     }
-    EXPECT_STREQ(childVal.c_str(), "1234");
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+    }
 }
+#endif
 
+#if 0 // two children
 TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 {
     auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345}})");
@@ -175,17 +185,43 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
     if (rxMsgChild)
     {
         childVal1 = rxMsgChild->data["ChildKey1"];
-        childVal2 = rxMsgChild->data["ChildKey2"]; 
+        childVal2 = rxMsgChild->data["ChildKey2"];
     }
     else
     {
         GTEST_FATAL_FAILURE_("child pointer null");
-
     }
 
     EXPECT_STREQ(childVal1.c_str(), "1234");
     EXPECT_STREQ(childVal2.c_str(), "2345");
 }
+#endif
+
+#if 1 // three children
+TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
+{
+    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456}})");
+    std::string childStr = rxMsgParent->data["ParentKey"];
+    EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456})");
+
+    std::string childVal1, childVal2, childVal3;
+    auto rxMsgChild = rxMsgParent->child;
+    if (rxMsgChild)
+    {
+        childVal1 = rxMsgChild->data["ChildKey1"];
+        childVal2 = rxMsgChild->data["ChildKey2"];
+        childVal3 = rxMsgChild->data["ChildKey3"];
+    }
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+    }
+
+    EXPECT_STREQ(childVal1.c_str(), "1234");
+    EXPECT_STREQ(childVal2.c_str(), "2345");
+    EXPECT_STREQ(childVal3.c_str(), "3456");
+}
+#endif
 
 // TEST(lfast_comms_tests, objParse)
 // {

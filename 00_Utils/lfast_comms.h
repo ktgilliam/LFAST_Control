@@ -3,13 +3,17 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <iostream>
 
 #pragma once
 
-#define MAX_RX_DEPTH 3
+#define MAX_RX_DEPTH 5
 
 namespace LFAST
 {
+    void print_map(std::map<std::string, std::string> const &m);
+    bool isKey(std::string const &);
+    std::string cleanupKey(std::string const &);
     class TxMessage
     {
     public:
@@ -25,8 +29,8 @@ namespace LFAST
         inline void addArgument(std::string, TxMessage &);
         inline void addArgument(std::string);
         std::string getMessageStr();
+        // bool parseMessageStr(std::string const &, unsigned int);
         bool parseMessageStr(std::string const &, unsigned int);
-
         // typedef std::map<std::string, RxMessageArg> RxMessageNode;
         // typedef std::map<std::string, RxMessageArg> RxMessage;
 
@@ -43,12 +47,35 @@ namespace LFAST
 
     struct RxMessage
     {
-        RxMessage(std::string s) {parseMessage(s);}
+        enum class ParseStatus
+        {
+            NEW_MESSAGE,
+            NEW_OBJECT,
+            PARENT_IS_KEY,
+            SOMETHING_ELSE
+        };
+
+        RxMessage(std::string s)
+        {
+            std::cout << std::endl
+                      << std::endl;
+            parseMessage(s, ParseStatus::NEW_MESSAGE);
+            std::cout << std::endl
+                      << std::endl;
+        }
         typedef std::map<std::string, std::string> RxMessageArg;
         RxMessageArg data;
         RxMessage *child;
         bool isNode() { return child == nullptr; }
-        bool parseMessage(std::string const &);
+        // std::string parseMessage(std::string const &);
+        // bool parseMessage(std::string const &);
+        bool parseKeyValuePair(std::string const &, std::string &, std::string &);
+        int parseMultipleArgs(std::string const &);
+
+        void printMessage();
+
+    protected:
+        std::string parseMessage(std::string &, ParseStatus);
     };
 
     template <typename T>
@@ -134,6 +161,6 @@ namespace LFAST
 
     // template <typename K, typename V>
     // void print_map(std::map<K, V> const &m);
-    void print_map(std::map<std::string, std::string> const &m);
+
     bool isObject(std::string str);
 }
