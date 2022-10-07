@@ -1,7 +1,7 @@
 #include "../00_Utils/lfast_comms.h"
 #include <gtest/gtest.h>
 #include <map>
-// cd build && clear && ctest --output-on-failure .
+// cd build && clear && ctest --output-on-failure --timeout 5 .
 
 TEST(lfast_comms_tests, test_No_arg)
 {
@@ -152,7 +152,7 @@ TEST(lfast_comms_tests, simpleRxParserTest)
     std::cout << rxMsg->data["ObjKey"].c_str() << std::endl;
     EXPECT_STREQ(rxMsg->data["ObjKey"].c_str(), "1234");
 
-    EXPECT_FALSE(rxMsg->child);
+    EXPECT_FALSE(rxMsg->childNode);
 }
 
 #if 1 // one child
@@ -163,7 +163,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1234})");
 
-    auto rxMsgChild = rxMsgParent->child;
+    auto rxMsgChild = rxMsgParent->childNode;
     if (rxMsgChild)
     {
         std::string childVal;
@@ -186,7 +186,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345})");
 
     std::string childVal1, childVal2;
-    auto rxMsgChild = rxMsgParent->child;
+    auto rxMsgChild = rxMsgParent->childNode;
     if (rxMsgChild)
     {
         childVal1 = rxMsgChild->data["ChildKey1"];
@@ -211,7 +211,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456})");
 
     std::string childVal1, childVal2, childVal3;
-    auto rxMsgChild = rxMsgParent->child;
+    auto rxMsgChild = rxMsgParent->childNode;
     if (rxMsgChild)
     {
         childVal1 = rxMsgChild->data["ChildKey1"];
@@ -229,10 +229,57 @@ TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
 }
 #endif
 
+
+#if 1 // 3 deep
+TEST(lfast_comms_tests, nestedRxParserTest_threeDeep)
+{
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"Child1Key":{"Child2Key1":1234,"Child2Key2":2345}}})");
+    EXPECT_TRUE(rxMsgParent->succeeded());
+    std::string childStr = rxMsgParent->data["ParentKey"];
+    // EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345})");
+
+    std::string child2Val1, child2Val2;
+    auto child2 = (rxMsgParent->childNode)->childNode;
+
+    if (child2)
+    {
+        child2Val1 = child2->data["Child2Key1"];
+        child2Val2 = child2->data["Child2Key2"];
+    }
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+    }
+
+    EXPECT_STREQ(child2Val1.c_str(), "1234");
+    EXPECT_STREQ(child2Val2.c_str(), "2345");
+}
+#endif
+
+#if 1 // 4 deep (max depth currently set to 3)
+TEST(lfast_comms_tests, nestedRxParserTest_fourDeep)
+{
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"Child1Key":{"Child2Key1":{"Child2Key2":2345}}}})");
+    EXPECT_FALSE(rxMsgParent->succeeded());
+}
+#endif
+
+
 TEST(lfast_comms_tests, badParse1)
 {
     // unbalanced brackets
     auto rxMsg = new LFAST::MessageParser(R"({"ObjKey":1234)");
     // LFAST::print_map(rxMsg->data);
     EXPECT_FALSE(rxMsg->succeeded());
+}
+
+TEST(lfast_comms_tests, findGood)
+{
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456}})");
+    EXPECT_TRUE(rxMsgParent->succeeded());
+
+    auto result = rxMsgParent->find("ChildKey2");
+
+    // FAIL();
+    SUCCEED();
 }

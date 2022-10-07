@@ -7,8 +7,8 @@
 
 #pragma once
 
-#define MAX_RX_DEPTH 5
-#define OUTPUT_DEBUG_INFO 1
+#define MAX_DEPTH 3
+#define OUTPUT_DEBUG_INFO 0
 
 namespace LFAST
 {
@@ -44,65 +44,74 @@ class MessageGenerator
 
 struct MessageParser
 {
-    MessageParser() : parsingStatus(ParsingStatus::PARSING_INACTIVE) {}
+    MessageParser() : parsingStatus(ParsingStatus::PARSING_INACTIVE), childNode(nullptr), parentNode(nullptr) {}
     MessageParser(std::string s)
+        : MessageParser()
     {
+        this->depth = 1;
         this->parseMessageBuffer(&s);
     }
-
+    MessageParser(std::string s, MessageParser* parentPtr)
+        : MessageParser()
+    {
+        this->parentNode = parentPtr;
+        this->depth = parentNode->depth + 1;
+        if(this->depth > MAX_DEPTH )
+        {
+            std::cout << __LINE__ << ": MAX DEPTH EXCEEDED(" << this->depth << ")\n";
+            this->parsingStatus = ParsingStatus::MAX_DEPTH_EXCEEDED;
+        }
+        else
+        {
+            std::cout << __LINE__ << ": " << "Child Depth: " << this->depth << std::endl;
+            this->parseMessageBuffer(&s);
+        }
+        print_map(this->data);
+    }
+    ~MessageParser();
     enum class ParsingStatus
     {
         PARSING_INACTIVE,
         PARSING_IN_PROGRESS,
         PARSING_SUCCESS,
-        PARSING_FAILURE
+        PARSING_FAILURE,
+        MAX_DEPTH_EXCEEDED
     };
 
-    typedef std::map<std::string, std::string> RxMessageArg;
-    RxMessageArg data;
-    MessageParser *child;
+    std::map<std::string, std::string>  data;
+    MessageParser *childNode;
+    MessageParser *parentNode;
     ParsingStatus parsingStatus;
 
     void parseMessageBuffer(std::string *inBuff);
     void parseKeyValuePair(std::string *);
-    // bool parseKeyValuePair(std::string *, std::string *, std::string *);
+    void printParsingStatusInfo();
     void printMessage();
+
+    template <typename T>
+    inline T lookup(std::string const &);
+
     bool isNode()
     {
-        return child == nullptr;
+        return childNode == nullptr;
     }
-    void printParsingStatusInfo()
+    bool isRoot()
     {
-#if OUTPUT_DEBUG_INFO
-        switch(this->parsingStatus)
-        {
-            case ParsingStatus::PARSING_INACTIVE:
-                std::cout << "PARSING_INACTIVE" << std::endl;
-                break;
-            case ParsingStatus::PARSING_IN_PROGRESS:
-                std::cout << "PARSING_IN_PROGRESS" << std::endl;
-                break;
-            case ParsingStatus::PARSING_SUCCESS:
-                std::cout << "PARSING_SUCCESS" << std::endl;
-                break;
-            case ParsingStatus::PARSING_FAILURE:
-                std::cout << "PARSING_FAILURE" << std::endl;
-                break;
-            default:
-                std::cout << "Something weird." << std::endl;
-                break;
-        }
-#endif
+        return parentNode == nullptr;
     }
     bool succeeded()
     {
-        std::cout << "Final: ";
         printParsingStatusInfo();
         return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
     }
 
+    // protected:
+    unsigned int depth;
+
+    std::string find(std::string const &);
 };
 
+// Generator template specializations
 template <typename T>
 inline void MessageGenerator::addArgument(std::string label, const T &value)
 {
@@ -166,11 +175,31 @@ inline void MessageGenerator::addArgument(std::string label)
     this->argStrings.push_back(ss.str());
 }
 
+// Parser template specializations:
+
+template <typename T>
+inline T lookup(std::string const &)
+{
+
+}
+
+
+
+
+
+
+
+
+
 bool isNumeric(std::string const &str)
 {
     long double ld;
     return ((std::istringstream(str) >> ld >> std::ws).eof());
 }
+
+
+
+
 
 // bool isHex(std::string const &str)
 // {
@@ -188,4 +217,7 @@ bool isNumeric(std::string const &str)
 // void print_map(std::map<K, V> const &m);
 
 bool isObject(std::string str);
+
+
+
 }

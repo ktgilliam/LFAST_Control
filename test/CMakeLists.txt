@@ -8,6 +8,7 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
 # cmake -DBUILD_TESTS=true -GNinja ..
 
+
 #=================================================================================================#
 #========================================= gtest  ================================================#
 #=================================================================================================#
@@ -61,6 +62,7 @@ target_link_libraries(
   lfast_comms
   GTest::gtest_main
 )
+
 #### Bringing it all together
 include(GoogleTest)
 gtest_discover_tests(bash_wrapper_tests)
