@@ -152,7 +152,7 @@ TEST(lfast_comms_tests, simpleRxParserTest)
     EXPECT_FALSE(rxMsg->child);
 }
 
-#if 0 // one child
+#if 1 // one child
 TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 {
     auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey":1234}})");
@@ -173,7 +173,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 }
 #endif
 
-#if 0 // two children
+#if 2 // two children
 TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 {
     auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345}})");

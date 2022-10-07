@@ -28,3 +28,11 @@
         //     // this->parseValueStr(token);
         //     guts.erase(0, pos + delim.length());
         // }
+
+
+        // Still just matches the last colon:
+        ^\{((.*):(.*))\}$
+
+        // Gets the parent key and the entire child
+{\"(\w+)\":(.*)\}
+

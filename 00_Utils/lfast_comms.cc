@@ -74,46 +74,23 @@ bool LFAST::isObject(std::string str)
     std::smatch m;
     return (std::regex_search(str, m, rgx));
 }
-// std::string splitMulti(std::string &inStr)
-// {
-//     std::regex r1(R"(^(\w+),(.*))");
-//     std::smatch m1;
-//     std::string outStr;
-//     if (std::regex_search(inStr, m1, r1))
-//     {
-// #if 1
-//         std::cout << "### ";
-//         for (unsigned ii = 0; ii < m1.size(); ii++)
-//             std::cout << "<<"
-//                       << "(" << ii << ":" << m1[ii].str().size() << ")" << m1[ii] << ">>";
-//         std::cout << std::endl;
-// #endif
-//         inStr = m1[2].str();
-//         outStr = m1[1].str();
-//     }
-//     else
-//     {
-//         outStr = inStr;
-//     }
-//     std::cout << "*****" << m1[1].str() << "*****" << std::endl;
-//     std::cout << "******" << m1[2].str() << "******" << std::endl;
-//     return outStr;
-// }
-bool LFAST::RxMessage::parseKeyValuePair(std::string const &kvStr, std::string &keybuff, std::string &valbuff)
+
+bool LFAST::RxMessage::parseKeyValuePair(std::string *kvStr, std::string *keybuff, std::string *valbuff)
 {
     std::pair<std::string, std::string> result;
     std::regex r(R"(^\"(\w+)\":(.+)$)");
     std::smatch m;
-    std::cout << "!!!" << kvStr << "!!!" << std::endl;
-    if (std::regex_search(kvStr, m, r))
+    // std::cout << "!!!" << *kvStr << "!!!" << std::endl;
+    if (std::regex_search(*kvStr, m, r))
     {
         while (!m.ready())
         {
         }
         if (m.size() == 3)
         {
-            keybuff = m[1].str();
-            valbuff = m[2].str();
+            *keybuff = m[1].str();
+            *valbuff = m[2].str();
+            *kvStr = "";
             return true;
         }
     }
@@ -135,187 +112,142 @@ std::string LFAST::cleanupKey(std::string const &inStr)
     // outStr.erase(std::remove(outStr.begin(), outStr.end(), ':'), outStr.end());
     return outStr;
 }
-int LFAST::RxMessage::parseMultipleArgs(std::string const &valStr)
+
+std::string extractLeadingValString(std::string *inBuff)
 {
-    std::smatch m2;
-    std::regex rComma(",");
-    // std::vector<std::string> argStrs;
-
-    std::regex_search(valStr, m2, rComma);
-    while (!m2.ready())
+    std::smatch m;
+    std::regex re;
+    re = (R"((\w+),(.*))");
+    if (std::regex_search(*inBuff, m, re))
     {
-    }
-    if ((m2.size() > 0))
-    {
+        while (!m.ready())
+            ;
+        auto retVal = m[1].str();
+        *inBuff = m[2].str();
 
-        std::cout << "###(" << m2.size() << ")";
-        std::cout << "prefix: [" << m2.prefix() << "]\n";
-        std::cout << "suffix: [" << m2.suffix() << "]\n";
-
-        return m2.size();
+        std::cout << "\t Extracted: " << retVal << std::endl;
+        std::cout << "\t Remaining: " << *inBuff << std::endl;
+        return retVal;
     }
     else
     {
-        return 1;
+        auto inBuffCopy = *inBuff;
+        *inBuff = "";
+        return inBuffCopy;
     }
 }
-// std::ostream &
-std::string LFAST::RxMessage::parseMessage(std::string &buff, ParseStatus parentStatus)
+
+void LFAST::RxMessage::parseObject(std::string *inBuff)
+{
+    static int count = 0;
+    std::string keyStr = {0}, valStr = {0};
+    std::smatch m;
+    std::regex re;
+    re = (R"(^\{\"(\w+)\":(.*)\}$)");
+    if (std::regex_search(*inBuff, m, re))
+    {
+
+        while (!m.ready())
+            ;
+        std::cout << "Parsing: ";
+        for (unsigned ii = 1; ii < m.size(); ii++)
+            std::cout << "<" << m[ii] << ">";
+        std::cout << std::endl;
+
+        auto preColonBuff = m[1].str();
+        auto postColonBuff = m[2].str();
+        keyStr = preColonBuff;
+
+        if (isObject(postColonBuff))
+        {
+            std::cout << "Found an object for parent " << keyStr << std::quoted(postColonBuff) << std::endl;
+            valStr = postColonBuff;
+            this->data[keyStr] = valStr;
+            this->child = new RxMessage(postColonBuff);
+        }
+        else
+        {
+
+            if (postColonBuff.size() > 0)
+            {
+                do
+                {
+                    std::cout << "Found a non object for parent " << keyStr << ": " << std::quoted(postColonBuff) << std::endl;
+                    std::string newValStr1 = extractLeadingValString(&postColonBuff);
+                    if (postColonBuff.size() <= 0)
+                        std::cout << "Buffer empty" << std::endl;
+                    // keyStr = {0};/
+                    this->data[keyStr] = newValStr1;
+                    // valStr = {0};
+
+                    std::cout << "Added <" << keyStr << ":" << newValStr1 << ">"
+                              << "to key/value pair(s) [" << count++ << "]" << std::endl;
+                    if (postColonBuff.size() > 0)
+                    {
+                        this->parseObject(&postColonBuff);
+                        // std::cout << "\tParsing additional kv pair: " << std::endl;
+                        // std::string newKeyStr = {0}, newValStr2 = {0};
+                        // auto tmp = parseKeyValuePair(&postColonBuff, &newKeyStr, &newValStr2);
+                        // this->data[keyStr] = valStr;
+                        // std::cout << "Added <" << newKeyStr << ":" << newValStr2 << ">"
+                        //           << "to key/value pair(s) [" << count++ << "]" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "We're done here.\n";
+                        this->child = nullptr;
+                    }
+                    // std::cout << keyStr << "::" << valStr << std::endl;
+                } while (postColonBuff.size() > 0);
+            }
+        }
+    }
+    else
+    {
+        std::cout << "\t\t" << *inBuff << "...might be kv pairs?" << std::endl;
+
+        bool multiFlag = false;
+        std::string delimiter = ",";
+        size_t pos = 0;
+        std::string token;
+        unsigned count = 0;
+        while ((pos = inBuff->find(delimiter)) != std::string::npos)
+        {
+            multiFlag = true;
+            token = inBuff->substr(0, pos);
+            std::cout << "\t\t\t TOKEN (" << ++count << ")" << token << std::endl;
+            inBuff->erase(0, pos + delimiter.length());
+            auto tmp = parseKeyValuePair(&token, &keyStr, &valStr);
+            std::cout << "\t\t\tParsed kv pair: " << keyStr << ":::::" << valStr << std::endl;
+            this->data[keyStr] = valStr;
+            std::cout << "\t\t\tRemaining in buffer: " << *inBuff << std::endl;
+        }
+
+        // if (!multiFlag)
+        // {
+            auto tmp = parseKeyValuePair(inBuff, &keyStr, &valStr);
+            std::cout << "\t\t\tParsed kv pair: " << keyStr << ":::::" << valStr << std::endl;
+            this->data[keyStr] = valStr;
+        // }
+        // auto tmpStr = extractLeadingValString(inBuff);
+        // std::cout << "tmpStr::::: " << tmpStr << std::endl;
+    }
+}
+
+std::string LFAST::RxMessage::parseMessage(std::string *buff)
 {
     static int depth = 0;
     depth++;
 
     if (depth == 1)
-        std::cout << buff << std::endl;
+        std::cout << "About to parse: " << *buff << std::endl
+                  << std::endl;
 
-    std::smatch m;
-    std::regex d;
-    d = (R"([\{|,|:|\}])");
-
-    // std::regex d(R"([,|:])");
-    // std::vector<std::string> argStrs;
-    std::string keyBuff = {0}, valBuff = {0};
-
-    std::regex_search(buff, m, d);
-    while (!m.ready())
-    {
-    }
-    std::string returnString;
-    if ((m.size() > 0))
-    {
-        auto delim = *(m[0].str().c_str());
-        std::cout << "Delim(" << delim << ") ";
-
-        auto firstPart = m.prefix().str();
-        auto secondPart = m.suffix().str();
-
-        // bool firstPartIsKey = false;
-        bool secondPartIsValue = false;
-        bool keepGoing = true;
-
-        // std::string keyStr = {0}, valStr = {0};
-
-        auto pad = std::string(depth, '\t');
-        std::pair<std::string, std::string> kvPair;
-
-        switch (parentStatus)
-        {
-        case ParseStatus::NEW_MESSAGE:
-            std::cout << "# NewMsg:" << std::endl;
-            std::cout << "(" << depth << ":" << m.size() << ")";
-            std::cout << pad << "prefix: [" << m.prefix() << "]\n";
-            std::cout << pad << "suffix: [" << m.suffix() << "]\n";
-            parseMessage(secondPart, ParseStatus::NEW_OBJECT);
-            // print_map(this->data);
-            break;
-        case ParseStatus::NEW_OBJECT:
-            std::cout << "## NewObj:" << std::endl;
-            std::cout << "(" << depth << ":" << m.size() << ")";
-            std::cout << pad << "prefix: [" << m.prefix() << "]\n";
-            std::cout << pad << "suffix: [" << m.suffix() << "]\n";
-
-            // keyStr = firstPart;
-            // valStr = parseMessage(secondPart, ParseStatus::PARENT_IS_KEY);
-            // this->data[keyStr] = valStr;
-            // if (isKey(firstPart))
-            // {
-            //     keyBuff = cleanupKey(firstPart);
-            //     std::cout << "Keybuff: " << keyBuff << std::endl;
-            // }
-            if (parseKeyValuePair(firstPart, keyBuff, valBuff))
-            {
-                this->data[keyBuff] = valBuff;
-                if (!isObject(valBuff))
-                {
-                    this->child = nullptr;
-                }
-            }
-            else
-            {
-                std::cout << "fail" << std::endl;
-            }
-            break;
-        case ParseStatus::PARENT_IS_KEY:
-            std::cout << "### ParentIsKey:" << std::endl;
-            std::cout << "(" << depth << ":" << m.size() << ")";
-            std::cout << pad << "prefix: [" << m.prefix() << "]\n";
-            std::cout << pad << "suffix: [" << m.suffix() << "]\n";
-            if ((firstPart.size() > 0) && (secondPart.size() == 0))
-            {
-                returnString = firstPart;
-                buff = "";
-                this->child = nullptr;
-            }
-            else if ((firstPart.size() == 0) && (secondPart.size() > 0))
-            {
-                if (delim == '{')
-                {
-                    std::cout << "Child Object" << std::endl;
-                    auto tmp = parseMessage(secondPart, ParseStatus::NEW_OBJECT);
-                    std::cout << "childObj Returned: " << tmp << std::endl;
-                }
-                else if (delim == ',')
-                {
-                    std::cout << "Multi-Arg" << std::endl;
-                    auto tmp = parseMessage(secondPart, ParseStatus::NEW_OBJECT);
-                    std::cout << "multi-arg Returned: " << tmp << std::endl;
-                }
-                else
-                {
-                }
-                // std::stringstream ss;
-                // while (buff.size() > 0)
-                // {
-                //     std::cout << "(Inside a list)" << std::endl;
-                //     if (depth < MAX_RX_DEPTH)
-                //     {
-                //         ss << parseMessage(buff, ParseStatus::PARENT_IS_KEY);
-                //     }
-                // }
-                // returnString = ss.str();
-            }
-
-            break;
-        default:
-            // currentStatus = ParseStatus::SOMETHING_ELSE;
-            break;
-        }
-        // if (firstPart.size() == 0)
-        // {
-        //     std::cout << "root.\n";
-        // }
-        // else
-        // {
-
-        // switch (*delim)
-        // {
-        // case '{':
-        //     // std::cout << pad << "New object.\n";
-        //     firstPartIsKey = true;
-        //     break;
-
-        // case ':':
-        //     // std::cout << pad << "New value.\n";
-        //     secondPartIsValue = true;
-        //     break;
-        //     // case ',':
-        //     // case '}':
-        // }
-        // }
-        // auto suf = m.suffix().str();
-        // if (suf.size() > 0)
-        // {
-        //     auto notsureYet = parseMessage(suf, currentStatus);
-        //     // std::cout << pad << "Result(" << suf.size() << "): " << retStr << std::endl;
-        // }
-        // else
-        // {
-        // }
-        // return secondPartIsValue;
-    }
-    // else
-    // {
-    return returnString;
+    this->parseObject(buff);
+    // std::cout << std::endl
+    //           << "Printing Object " << depth << " MAP: ";
+    // print_map(this->data);
+    return "returnString";
     // }
 }
 

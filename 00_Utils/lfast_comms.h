@@ -47,35 +47,41 @@ namespace LFAST
 
     struct RxMessage
     {
-        enum class ParseStatus
-        {
-            NEW_MESSAGE,
-            NEW_OBJECT,
-            PARENT_IS_KEY,
-            SOMETHING_ELSE
-        };
+        // enum class ParseStatus
+        // {
+        //     NEW_MESSAGE,
+        //     NEW_OBJECT,
+        //     PARENT_IS_KEY,
+        //     SOMETHING_ELSE
+        // };
 
         RxMessage(std::string s)
         {
             std::cout << std::endl
                       << std::endl;
-            parseMessage(s, ParseStatus::NEW_MESSAGE);
+            parseMessage(&s);
             std::cout << std::endl
                       << std::endl;
         }
         typedef std::map<std::string, std::string> RxMessageArg;
         RxMessageArg data;
         RxMessage *child;
-        bool isNode() { return child == nullptr; }
+
+        void parseObject(std::string *inBuff);
+
+        bool isNode()
+        {
+            return child == nullptr;
+        }
         // std::string parseMessage(std::string const &);
         // bool parseMessage(std::string const &);
-        bool parseKeyValuePair(std::string const &, std::string &, std::string &);
-        int parseMultipleArgs(std::string const &);
+        bool parseKeyValuePair(std::string *, std::string *, std::string *);
+        // int parseMultipleArgs(std::string const &);
 
         void printMessage();
 
     protected:
-        std::string parseMessage(std::string &, ParseStatus);
+        std::string parseMessage(std::string *);
     };
 
     template <typename T>
