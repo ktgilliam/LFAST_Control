@@ -5,28 +5,28 @@
 
 TEST(lfast_comms_tests, test_No_arg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
 
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":""})");
 }
 
 TEST(lfast_comms_tests, oneIntArgPos)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg", 1234);
 
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":1234}})");
 }
 TEST(lfast_comms_tests, oneIntArgNeg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg", -1234);
 
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":-1234}})");
 }
 TEST(lfast_comms_tests, oneUintArg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg", 0x1234ABCDU);
 
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"0x1234abcd"}})");
@@ -34,7 +34,7 @@ TEST(lfast_comms_tests, oneUintArg)
 
 TEST(lfast_comms_tests, oneBoolArgTrue)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     bool testVal = true;
     msg.addArgument("TestArg", testVal);
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":true}})");
@@ -42,7 +42,7 @@ TEST(lfast_comms_tests, oneBoolArgTrue)
 
 TEST(lfast_comms_tests, oneBoolArgFalse)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     bool testVal = false;
     msg.addArgument("TestArg", testVal);
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":false}})");
@@ -50,7 +50,7 @@ TEST(lfast_comms_tests, oneBoolArgFalse)
 
 TEST(lfast_comms_tests, oneStringArg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     std::string argStr("Hello World.");
     msg.addArgument("TestArg", argStr);
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"Hello World."}})");
@@ -58,14 +58,14 @@ TEST(lfast_comms_tests, oneStringArg)
 
 TEST(lfast_comms_tests, oneCharStringArg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg", "Hello World.");
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":"Hello World."}})");
 }
 
 TEST(lfast_comms_tests, oneDoubleArg)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg", 77.1234567);
 
     EXPECT_STREQ(msg.getMessageStr().c_str(), R"({"TestMessage":{"TestArg":77.1234567}})");
@@ -73,7 +73,7 @@ TEST(lfast_comms_tests, oneDoubleArg)
 
 TEST(lfast_comms_tests, twoDoubleArgs)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", -99.7654321);
 
@@ -82,7 +82,7 @@ TEST(lfast_comms_tests, twoDoubleArgs)
 
 TEST(lfast_comms_tests, oneDoubleOneBool)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", true);
 
@@ -91,7 +91,7 @@ TEST(lfast_comms_tests, oneDoubleOneBool)
 
 TEST(lfast_comms_tests, oneDoubleOneBoolOneInt)
 {
-    LFAST::TxMessage msg("TestMessage");
+    LFAST::MessageGenerator msg("TestMessage");
     msg.addArgument("TestArg1", 77.1234567);
     msg.addArgument("TestArg2", true);
     msg.addArgument("TestArg3", 17);
@@ -100,10 +100,10 @@ TEST(lfast_comms_tests, oneDoubleOneBoolOneInt)
 
 TEST(lfast_comms_tests, nestedCommand0)
 {
-    LFAST::TxMessage msgParent("ParentMessage");
+    LFAST::MessageGenerator msgParent("ParentMessage");
     msgParent.addArgument("ParentArg1", 77.1234567);
 
-    LFAST::TxMessage msgChild("ChildMessageOutside");
+    LFAST::MessageGenerator msgChild("ChildMessageOutside");
     msgChild.addArgument("ChildArg1", true);
     msgChild.addArgument("ChildArg2", 17);
 
@@ -113,10 +113,10 @@ TEST(lfast_comms_tests, nestedCommand0)
 
 TEST(lfast_comms_tests, nestedCommand1)
 {
-    LFAST::TxMessage msgParent("ParentMessage");
+    LFAST::MessageGenerator msgParent("ParentMessage");
     msgParent.addArgument("ParentArg1", 77.1234567);
 
-    LFAST::TxMessage msgChild;
+    LFAST::MessageGenerator msgChild;
     msgChild.addArgument("ChildArg1", true);
     msgChild.addArgument("ChildArg2", 17);
 
@@ -144,7 +144,7 @@ TEST(lfast_comms_tests, isObjTest)
 
 TEST(lfast_comms_tests, simpleRxParserTest)
 {
-    auto rxMsg = new LFAST::RxMessage(R"({"ObjKey":1234})");
+    auto rxMsg = new LFAST::MessageParser(R"({"ObjKey":1234})");
     LFAST::print_map(rxMsg->data);
     std::cout << rxMsg->data["ObjKey"].c_str() << std::endl;
     EXPECT_STREQ(rxMsg->data["ObjKey"].c_str(), "1234");
@@ -155,7 +155,7 @@ TEST(lfast_comms_tests, simpleRxParserTest)
 #if 1 // one child
 TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 {
-    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey":1234}})");
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey":1234}})");
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1234})");
 
@@ -176,7 +176,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 #if 2 // two children
 TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 {
-    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345}})");
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345}})");
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345})");
 
@@ -200,7 +200,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 #if 1 // three children
 TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
 {
-    auto rxMsgParent = new LFAST::RxMessage(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456}})");
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456}})");
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey1":1234,"ChildKey2":2345,"ChildKey3":3456})");
 

@@ -15,22 +15,22 @@ namespace LFAST
 void print_map(std::map<std::string, std::string> const &m);
 bool isKey(std::string const &);
 std::string cleanupKey(std::string const &);
-class TxMessage
+class MessageGenerator
 {
     public:
-        TxMessage() : DestIdStr("") {}
-        virtual ~TxMessage() {}
-        TxMessage(std::string destIdStr) : DestIdStr(destIdStr) {}
+        MessageGenerator() : DestIdStr("") {}
+        virtual ~MessageGenerator() {}
+        MessageGenerator(std::string destIdStr) : DestIdStr(destIdStr) {}
         std::string DestIdStr;
 
         template <typename T>
         inline void addArgument(std::string, const T &);
         template <std::size_t N>
         inline void addArgument(std::string, const char (&)[N]);
-        inline void addArgument(std::string, TxMessage &);
+        inline void addArgument(std::string, MessageGenerator &);
         inline void addArgument(std::string);
         std::string getMessageStr();
-        bool parseMessageStr(std::string const &, unsigned int);
+        // bool parseMessageStr(std::string const &, unsigned int);
 
         std::string getArgString(int idx)
         {
@@ -41,16 +41,16 @@ class TxMessage
         std::vector<std::string> argStrings;
 };
 
-struct RxMessage
+struct MessageParser
 {
 
-        RxMessage(std::string s)
+        MessageParser(std::string s)
         {
             this->parseObject(&s);
         }
         typedef std::map<std::string, std::string> RxMessageArg;
         RxMessageArg data;
-        RxMessage *child;
+        MessageParser *child;
 
         void parseObject(std::string *inBuff);
 
@@ -67,28 +67,28 @@ struct RxMessage
 };
 
 template <typename T>
-inline void TxMessage::addArgument(std::string label, const T &value)
+inline void MessageGenerator::addArgument(std::string label, const T &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":\"0x" << std::hex << value << "\"";
     this->argStrings.push_back(ss.str());
 }
 template <std::size_t N>
-inline void TxMessage::addArgument(std::string label, const char (&value)[N])
+inline void MessageGenerator::addArgument(std::string label, const char (&value)[N])
 {
     std::stringstream ss;
     ss << std::quoted(label) << ":" << std::quoted(std::string(value));
     this->argStrings.push_back(ss.str());
 }
 template <>
-inline void TxMessage::addArgument(std::string label, const int &value)
+inline void MessageGenerator::addArgument(std::string label, const int &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":" << value;
     this->argStrings.push_back(ss.str());
 }
 template <>
-inline void TxMessage::addArgument(std::string label, const bool &value)
+inline void MessageGenerator::addArgument(std::string label, const bool &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":" << std::boolalpha << value;
@@ -96,7 +96,7 @@ inline void TxMessage::addArgument(std::string label, const bool &value)
 }
 
 template <>
-inline void TxMessage::addArgument(std::string label, const std::string &value)
+inline void MessageGenerator::addArgument(std::string label, const std::string &value)
 {
     std::stringstream ss;
     ss << std::quoted(label) << ":" << std::quoted(value);
@@ -104,7 +104,7 @@ inline void TxMessage::addArgument(std::string label, const std::string &value)
 }
 
 template <>
-inline void TxMessage::addArgument(std::string label, const double &value)
+inline void MessageGenerator::addArgument(std::string label, const double &value)
 {
     const int sigdigits = std::numeric_limits<float>::max_digits10;
     std::stringstream ss;
@@ -112,7 +112,7 @@ inline void TxMessage::addArgument(std::string label, const double &value)
     this->argStrings.push_back(ss.str());
 }
 
-inline void TxMessage::addArgument(std::string label, TxMessage &msg)
+inline void MessageGenerator::addArgument(std::string label, MessageGenerator &msg)
 {
     std::stringstream ss;
 
@@ -121,7 +121,7 @@ inline void TxMessage::addArgument(std::string label, TxMessage &msg)
     this->argStrings.push_back(ss.str());
 }
 
-inline void TxMessage::addArgument(std::string label)
+inline void MessageGenerator::addArgument(std::string label)
 {
     std::stringstream ss;
     ss << std::quoted(label) << ":"

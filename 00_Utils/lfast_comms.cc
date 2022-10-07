@@ -11,7 +11,7 @@
 #include <map>
 
 
-std::string LFAST::TxMessage::getMessageStr()
+std::string LFAST::MessageGenerator::getMessageStr()
 {
     bool objFlag = false;
     std::stringstream ss;
@@ -48,16 +48,6 @@ std::string LFAST::TxMessage::getMessageStr()
     return ss.str();
 }
 
-bool LFAST::TxMessage::parseMessageStr(std::string const &str, unsigned int maxDepth)
-{
-    unsigned int nextMaxDepth = maxDepth - 1;
-    if (nextMaxDepth > 0)
-    {
-        std::string gutsStr;
-    }
-
-    return false;
-}
 
 bool LFAST::isObject(std::string str)
 {
@@ -66,7 +56,7 @@ bool LFAST::isObject(std::string str)
     return (std::regex_search(str, m, rgx));
 }
 
-bool LFAST::RxMessage::parseKeyValuePair(std::string *kvStr, std::string *keybuff, std::string *valbuff)
+bool LFAST::MessageParser::parseKeyValuePair(std::string *kvStr, std::string *keybuff, std::string *valbuff)
 {
     std::pair<std::string, std::string> result;
     std::regex r(R"(^\"(\w+)\":(.+)$)");
@@ -126,7 +116,7 @@ std::string extractLeadingValString(std::string *inBuff)
     }
 }
 
-void LFAST::RxMessage::parseObject(std::string *inBuff)
+void LFAST::MessageParser::parseObject(std::string *inBuff)
 {
     static int depth = 0;
     std::string keyStr = {0}, valStr = {0};
@@ -155,7 +145,7 @@ void LFAST::RxMessage::parseObject(std::string *inBuff)
 #endif
             valStr = postColonBuff;
             this->data[keyStr] = valStr;
-            this->child = new RxMessage(postColonBuff);
+            this->child = new MessageParser(postColonBuff);
         }
         else
         {
@@ -221,7 +211,7 @@ void LFAST::RxMessage::parseObject(std::string *inBuff)
     }
 }
 
-void LFAST::RxMessage::printMessage()
+void LFAST::MessageParser::printMessage()
 {
     std::cout << std::endl;
 }
