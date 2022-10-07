@@ -1,7 +1,7 @@
 #include "../00_Utils/lfast_comms.h"
 #include <gtest/gtest.h>
 #include <map>
-// cd build && ctest --output-on-failure .
+// cd build && clear && ctest --output-on-failure .
 
 TEST(lfast_comms_tests, test_No_arg)
 {
