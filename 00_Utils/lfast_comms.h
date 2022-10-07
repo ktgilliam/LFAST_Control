@@ -8,7 +8,7 @@
 #pragma once
 
 #define MAX_RX_DEPTH 5
-#define OUTPUT_DEBUG_INFO 0
+#define OUTPUT_DEBUG_INFO 1
 
 namespace LFAST
 {
@@ -21,6 +21,7 @@ class MessageGenerator
         MessageGenerator() : DestIdStr("") {}
         virtual ~MessageGenerator() {}
         MessageGenerator(std::string destIdStr) : DestIdStr(destIdStr) {}
+
         std::string DestIdStr;
 
         template <typename T>
@@ -30,7 +31,7 @@ class MessageGenerator
         inline void addArgument(std::string, MessageGenerator &);
         inline void addArgument(std::string);
         std::string getMessageStr();
-        // bool parseMessageStr(std::string const &, unsigned int);
+        const char* getMessageCStr();
 
         std::string getArgString(int idx)
         {
@@ -43,27 +44,63 @@ class MessageGenerator
 
 struct MessageParser
 {
+    MessageParser() : parsingStatus(ParsingStatus::PARSING_INACTIVE) {}
+    MessageParser(std::string s)
+    {
+        this->parseMessageBuffer(&s);
+    }
 
-        MessageParser(std::string s)
+    enum class ParsingStatus
+    {
+        PARSING_INACTIVE,
+        PARSING_IN_PROGRESS,
+        PARSING_SUCCESS,
+        PARSING_FAILURE
+    };
+
+    typedef std::map<std::string, std::string> RxMessageArg;
+    RxMessageArg data;
+    MessageParser *child;
+    ParsingStatus parsingStatus;
+
+    void parseMessageBuffer(std::string *inBuff);
+    void parseKeyValuePair(std::string *);
+    // bool parseKeyValuePair(std::string *, std::string *, std::string *);
+    void printMessage();
+    bool isNode()
+    {
+        return child == nullptr;
+    }
+    void printParsingStatusInfo()
+    {
+#if OUTPUT_DEBUG_INFO
+        switch(this->parsingStatus)
         {
-            this->parseObject(&s);
+            case ParsingStatus::PARSING_INACTIVE:
+                std::cout << "PARSING_INACTIVE" << std::endl;
+                break;
+            case ParsingStatus::PARSING_IN_PROGRESS:
+                std::cout << "PARSING_IN_PROGRESS" << std::endl;
+                break;
+            case ParsingStatus::PARSING_SUCCESS:
+                std::cout << "PARSING_SUCCESS" << std::endl;
+                break;
+            case ParsingStatus::PARSING_FAILURE:
+                std::cout << "PARSING_FAILURE" << std::endl;
+                break;
+            default:
+                std::cout << "Something weird." << std::endl;
+                break;
         }
-        typedef std::map<std::string, std::string> RxMessageArg;
-        RxMessageArg data;
-        MessageParser *child;
+#endif
+    }
+    bool succeeded()
+    {
+        std::cout << "Final: ";
+        printParsingStatusInfo();
+        return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
+    }
 
-        void parseObject(std::string *inBuff);
-
-        bool isNode()
-        {
-            return child == nullptr;
-        }
-
-        bool parseKeyValuePair(std::string *, std::string *, std::string *);
-        void printMessage();
-
-    protected:
-        std::string parseMessage(std::string *);
 };
 
 template <typename T>

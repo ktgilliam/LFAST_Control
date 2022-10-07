@@ -47,7 +47,11 @@ std::string LFAST::MessageGenerator::getMessageStr()
 
     return ss.str();
 }
-
+const char* LFAST::MessageGenerator::getMessageCStr()
+{
+    auto msgStr = this->getMessageStr();
+    return msgStr.c_str();
+}
 
 bool LFAST::isObject(std::string str)
 {
@@ -56,26 +60,55 @@ bool LFAST::isObject(std::string str)
     return (std::regex_search(str, m, rgx));
 }
 
-bool LFAST::MessageParser::parseKeyValuePair(std::string *kvStr, std::string *keybuff, std::string *valbuff)
+void LFAST::MessageParser::parseKeyValuePair(std::string *kvStr)
 {
-    std::pair<std::string, std::string> result;
-    std::regex r(R"(^\"(\w+)\":(.+)$)");
-    std::smatch m;
-    if (std::regex_search(*kvStr, m, r))
+    bool resultFlag = false;
+    if(this->parsingStatus == ParsingStatus::PARSING_IN_PROGRESS)
     {
-        while (!m.ready())
+        std::regex r(R"(^\"(\w+)\":(.+)$)");
+        std::smatch m;
+        if (std::regex_search(*kvStr, m, r))
         {
-        }
-        if (m.size() == 3)
-        {
-            *keybuff = m[1].str();
-            *valbuff = m[2].str();
-            *kvStr = "";
-            return true;
+            while (!m.ready())
+            {
+            }
+            if (m.size() == 3)
+            {
+                auto keyStr = m[1].str();
+                auto valStr = m[2].str();
+                this->data[keyStr] = valStr;
+#if OUTPUT_DEBUG_INFO
+                std::cout << __LINE__ << ":\t\t\tParsed kv pair: " << keyStr << ":::::" << valStr << std::endl;
+#endif
+                *kvStr = "";
+                resultFlag = true;
+            }
         }
     }
-    return false;
+    if(!resultFlag) this->parsingStatus = ParsingStatus::PARSING_FAILURE;
 }
+
+// bool LFAST::MessageParser::parseKeyValuePair(std::string *kvStr, std::string *keybuff, std::string *valbuff)
+// {
+//     std::pair<std::string, std::string> result;
+//     std::regex r(R"(^\"(\w+)\":(.+)$)");
+//     std::smatch m;
+//     if (std::regex_search(*kvStr, m, r))
+//     {
+//         while (!m.ready())
+//         {
+//         }
+//         if (m.size() == 3)
+//         {
+//             *keybuff = m[1].str();
+//             *valbuff = m[2].str();
+//             *kvStr = "";
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
 bool LFAST::isKey(std::string const &str)
 {
     auto c = str.back();
@@ -104,8 +137,8 @@ std::string extractLeadingValString(std::string *inBuff)
         auto retVal = m[1].str();
         *inBuff = m[2].str();
 
-        std::cout << "\t Extracted: " << retVal << std::endl;
-        std::cout << "\t Remaining: " << *inBuff << std::endl;
+        std::cout << __LINE__ << ":\t Extracted: " << retVal << std::endl;
+        std::cout << __LINE__ << ":\t Remaining: " << *inBuff << std::endl;
         return retVal;
     }
     else
@@ -116,20 +149,23 @@ std::string extractLeadingValString(std::string *inBuff)
     }
 }
 
-void LFAST::MessageParser::parseObject(std::string *inBuff)
+void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
 {
     static int depth = 0;
+    depth++;
+    this->parsingStatus = ParsingStatus::PARSING_IN_PROGRESS;
     std::string keyStr = {0}, valStr = {0};
+
+    // Extract outer-most object in inBuff (anything inside a matched set of curly braces)
     std::smatch m;
     std::regex re;
     re = (R"(^\{\"(\w+)\":(.*)\}$)");
     if (std::regex_search(*inBuff, m, re))
     {
-
         while (!m.ready())
             ;
 #if OUTPUT_DEBUG_INFO
-        std::cout << "Parsing: ";
+        std::cout << __LINE__ <<  ": Parsing: ";
         for (unsigned ii = 1; ii < m.size(); ii++)
             std::cout << "<" << m[ii] << ">";
         std::cout << std::endl;
@@ -141,7 +177,7 @@ void LFAST::MessageParser::parseObject(std::string *inBuff)
         if (isObject(postColonBuff))
         {
 #if OUTPUT_DEBUG_INFO
-            std::cout << "Found an object for parent " << keyStr << std::quoted(postColonBuff) << std::endl;
+            std::cout <<  __LINE__ << ": Found an object under parent " << keyStr << ": " << postColonBuff << std::endl;
 #endif
             valStr = postColonBuff;
             this->data[keyStr] = valStr;
@@ -149,41 +185,43 @@ void LFAST::MessageParser::parseObject(std::string *inBuff)
         }
         else
         {
-
             if (postColonBuff.size() > 0)
             {
+#if OUTPUT_DEBUG_INFO
+                std::cout << __LINE__ << ": Key: " << keyStr << "Buff contents not an object: "  << ": " << postColonBuff << std::endl;
+#endif
                 do
                 {
-#if OUTPUT_DEBUG_INFO
-                    std::cout << "Found a non object for parent " << keyStr << ": " << std::quoted(postColonBuff) << std::endl;
-                    if (postColonBuff.size() <= 0)
-                        std::cout << "Buffer empty" << std::endl;
-#endif
                     std::string newValStr1 = extractLeadingValString(&postColonBuff);
                     this->data[keyStr] = newValStr1;
 #if OUTPUT_DEBUG_INFO
-                    std::cout << "Added <" << keyStr << ":" << newValStr1 << ">"
-                              << "to key/value pair(s) [" << count++ << "]" << std::endl;
+                    std::cout << __LINE__ << ": Added <" << keyStr << ":" << newValStr1 << ">"
+                              << "to key/value pair(s) [" << depth << "]" << std::endl;
 #endif
                     if (postColonBuff.size() > 0)
                     {
-                        this->parseObject(&postColonBuff);
+                        this->parseMessageBuffer(&postColonBuff);
                     }
                     else
                     {
-                        std::cout << "We're done here.\n";
+#if OUTPUT_DEBUG_INFO
+                        std::cout << __LINE__ <<  ": We're done here.\n";
+#endif
                         this->child = nullptr;
                     }
                 }
                 while (postColonBuff.size() > 0);
             }
+            else
+            {
+#if OUTPUT_DEBUG_INFO
+                std::cout << __LINE__ << ": Buffer empty" << std::endl;
+#endif
+            }
         }
     }
     else
     {
-#if OUTPUT_DEBUG_INFO
-        std::cout << "\t\t" << *inBuff << "...might be kv pairs?" << std::endl;
-#endif
         std::string delimiter = ",";
         size_t pos = 0;
         std::string token;
@@ -192,24 +230,26 @@ void LFAST::MessageParser::parseObject(std::string *inBuff)
         {
             token = inBuff->substr(0, pos);
             inBuff->erase(0, pos + delimiter.length());
+            parseKeyValuePair(&token);
+            if( this->parsingStatus == ParsingStatus::PARSING_FAILURE ) break;
 #if OUTPUT_DEBUG_INFO
-            std::cout << "\t\t\t TOKEN (" << ++count << ")" << token << std::endl;
+            else std::cout << __LINE__ << ":\t\t\t" << inBuff->size() << "Chars remaining in buffer: " << *inBuff << std::endl;
 #endif
-            auto tmp = parseKeyValuePair(&token, &keyStr, &valStr);
-#if OUTPUT_DEBUG_INFO
-            std::cout << "\t\t\tParsed kv pair: " << keyStr << ":::::" << valStr << std::endl;
-            std::cout << "\t\t\tRemaining in buffer: " << *inBuff << std::endl;
-#endif
-            this->data[keyStr] = valStr;
         }
+        parseKeyValuePair(inBuff);
 
-        auto tmp = parseKeyValuePair(inBuff, &keyStr, &valStr);
 #if OUTPUT_DEBUG_INFO
-        std::cout << "\t\t\tParsed kv pair: " << keyStr << ":::::" << valStr << std::endl;
+        if(this->parsingStatus == ParsingStatus::PARSING_FAILURE) std::cout << "\t\t\tFAILED TO PARSE." << std::endl;
 #endif
-        this->data[keyStr] = valStr;
     }
+    this->printParsingStatusInfo();
+    if(this->parsingStatus == ParsingStatus::PARSING_IN_PROGRESS)
+    {
+        this->parsingStatus =  ParsingStatus::PARSING_SUCCESS;
+    }
+    this->printParsingStatusInfo();
 }
+
 
 void LFAST::MessageParser::printMessage()
 {

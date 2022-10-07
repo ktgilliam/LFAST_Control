@@ -80,11 +80,11 @@ LFAST_Mount::LFAST_Mount()
                         | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
                         | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE
-        // | TELESCOPE_CAN_GOTO
-        // | TELESCOPE_HAS_TRACK_RATE
-        // | TELESCOPE_CAN_CONTROL_TRACK
-        // | TELESCOPE_HAS_PIER_SIDE
-        ;
+                        // | TELESCOPE_CAN_GOTO
+                        // | TELESCOPE_HAS_TRACK_RATE
+                        // | TELESCOPE_CAN_CONTROL_TRACK
+                        // | TELESCOPE_HAS_PIER_SIDE
+                        ;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
@@ -95,16 +95,18 @@ LFAST_Mount::LFAST_Mount()
     m_WETimer.setSingleShot(true);
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
-                            {
+    {
         GuideNSNP.s = IPS_IDLE;
         GuideNSN[0].value = GuideNSN[1].value = 0;
-        IDSetNumber(&GuideNSNP, nullptr); });
+        IDSetNumber(&GuideNSNP, nullptr);
+    });
 
     m_WETimer.callOnTimeout([this]()
-                            {
+    {
         GuideWENP.s = IPS_IDLE;
         GuideWEN[0].value = GuideWEN[1].value = 0;
-        IDSetNumber(&GuideWENP, nullptr); });
+        IDSetNumber(&GuideWENP, nullptr);
+    });
 #endif
 
     /* initialize random seed: */
@@ -138,10 +140,14 @@ bool LFAST_Mount::initProperties()
     SlewRateSP.sp[5].s = ISS_ON;
 
     /* How fast do we jog compared to sidereal rate */
-    IUFillNumber(&JogRateN[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP, JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP, JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP, JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP, JOG_RATE_VALUE);
+    IUFillNumber(&JogRateN[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+                 JOG_RATE_VALUE);
+    IUFillNumber(&JogRateN[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+                 JOG_RATE_VALUE);
+    IUFillNumber(&JogRateN[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+                 JOG_RATE_VALUE);
+    IUFillNumber(&JogRateN[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+                 JOG_RATE_VALUE);
     IUFillNumberVector(&JogRateNP, JogRateN, NUM_AXES, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 
     // IUFillNumberVector(&JogRateNP, JogRateN, 2, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
@@ -186,7 +192,8 @@ bool LFAST_Mount::initProperties()
     // Jogging
     IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
     IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT_AZ", ISS_OFF);
-    IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW, ISR_1OFMANY, 60,
+    IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
+                       ISR_1OFMANY, 60,
                        IPS_IDLE);
 
     // Other stuff
@@ -285,13 +292,12 @@ bool LFAST_Mount::Handshake()
     if (isSimulation())
         return true;
 
-    int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
-
+    int rc = 0, nbytes_written = 0;
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    strncpy(pCMD, hsMsg.getMessageStr().c_str(), MAXRBUF);
+    auto pCMD = hsMsg.getMessageCStr();
+
     LOGF_DEBUG("CMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
@@ -300,12 +306,16 @@ bool LFAST_Mount::Handshake()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+
+    int nbytes_read = 0;
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read(PortFD, pRES, MAXRBUF, LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading Handshake from Mount TCP server. Result: %d", rc);
         return false;
     }
 
+    auto rxMsg = new LFAST::MessageParser(pRES);
     if (strcmp(pRES, "99#Handshake^") != 0)
     {
         LOGF_ERROR("Error connecting. Result: %s", pRES);
@@ -713,26 +723,26 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-    case MOTION_START:
-        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-        {
-            LOG_ERROR("Error setting N/S motion direction.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
-        break;
+        case MOTION_START:
+            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+            {
+                LOG_ERROR("Error setting N/S motion direction.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
+            break;
 
-    case MOTION_STOP:
-        if (!isSimulation() && !stopOpenLoopMotion())
-        {
-            LOG_ERROR("Error stopping N/S motion.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s halted.",
-                      (motion == LFAST_NORTH) ? "North" : "South");
-        break;
+        case MOTION_STOP:
+            if (!isSimulation() && !stopOpenLoopMotion())
+            {
+                LOG_ERROR("Error stopping N/S motion.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s halted.",
+                          (motion == LFAST_NORTH) ? "North" : "South");
+            break;
     }
 
     return true;
@@ -751,26 +761,26 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-    case MOTION_START:
-        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-        {
-            LOG_ERROR("Error setting W/E motion direction.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
-        break;
+        case MOTION_START:
+            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+            {
+                LOG_ERROR("Error setting W/E motion direction.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
+            break;
 
-    case MOTION_STOP:
-        if (!isSimulation() && !stopOpenLoopMotion())
-        {
-            LOG_ERROR("Error stopping W/E motion.");
-            return false;
-        }
-        else
-            LOGF_INFO("Movement toward %s halted.",
-                      (motion == LFAST_WEST) ? "West" : "East");
-        break;
+        case MOTION_STOP:
+            if (!isSimulation() && !stopOpenLoopMotion())
+            {
+                LOG_ERROR("Error stopping W/E motion.");
+                return false;
+            }
+            else
+                LOGF_INFO("Movement toward %s halted.",
+                          (motion == LFAST_WEST) ? "West" : "East");
+            break;
     }
 
     return true;
@@ -895,28 +905,28 @@ void LFAST_Mount::mountSim()
 
         switch (MovementNSSP.s)
         {
-        case IPS_BUSY:
-            if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
-                currentDEC += da_dec;
-            else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
-                currentDEC -= da_dec;
-            break;
+            case IPS_BUSY:
+                if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
+                    currentDEC += da_dec;
+                else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
+                    currentDEC -= da_dec;
+                break;
 
-        default:
-            break;
+            default:
+                break;
         }
 
         switch (MovementWESP.s)
         {
-        case IPS_BUSY:
-            if (MovementWES[DIRECTION_WEST].s == ISS_ON)
-                currentRA += da_ra / 15.;
-            else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
-                currentRA -= da_ra / 15.;
-            break;
+            case IPS_BUSY:
+                if (MovementWES[DIRECTION_WEST].s == ISS_ON)
+                    currentRA += da_ra / 15.;
+                else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
+                    currentRA -= da_ra / 15.;
+                break;
 
-        default:
-            break;
+            default:
+                break;
         }
 
         NewRaDec(currentRA, currentDEC);
@@ -926,59 +936,59 @@ void LFAST_Mount::mountSim()
     /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
     switch (TrackState)
     {
-    case SCOPE_IDLE:
-        /* RA moves at sidereal, Dec stands still */
-        currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
-        break;
+        case SCOPE_IDLE:
+            /* RA moves at sidereal, Dec stands still */
+            currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
+            break;
 
-    case SCOPE_SLEWING:
-    case SCOPE_PARKING:
-        /* slewing - nail it when both within one pulse @ SLEWRATE */
-        nlocked = 0;
+        case SCOPE_SLEWING:
+        case SCOPE_PARKING:
+            /* slewing - nail it when both within one pulse @ SLEWRATE */
+            nlocked = 0;
 
-        dx = getDeltaRa();
+            dx = getDeltaRa();
 
-        // Take shortest path
-        if (fabs(dx) > 12)
-            dx *= -1;
+            // Take shortest path
+            if (fabs(dx) > 12)
+                dx *= -1;
 
-        if (fabs(dx) <= da_ra)
-        {
-            currentRA = getTargetRa();
-            nlocked++;
-        }
-        else if (dx > 0)
-            currentRA += da_ra / 15.;
-        else
-            currentRA -= da_ra / 15.;
-
-        if (currentRA < 0)
-            currentRA += 24;
-        else if (currentRA > 24)
-            currentRA -= 24;
-
-        dx = getDeltaDec();
-        if (fabs(dx) <= da_dec)
-        {
-            currentDEC = getTargetDec();
-            nlocked++;
-        }
-        else if (dx > 0)
-            currentDEC += da_dec;
-        else
-            currentDEC -= da_dec;
-
-        if (nlocked == 2)
-        {
-            if (TrackState == SCOPE_SLEWING)
-                TrackState = SCOPE_TRACKING;
+            if (fabs(dx) <= da_ra)
+            {
+                currentRA = getTargetRa();
+                nlocked++;
+            }
+            else if (dx > 0)
+                currentRA += da_ra / 15.;
             else
-                SetParked(true);
-        }
-        break;
+                currentRA -= da_ra / 15.;
 
-    default:
-        break;
+            if (currentRA < 0)
+                currentRA += 24;
+            else if (currentRA > 24)
+                currentRA -= 24;
+
+            dx = getDeltaDec();
+            if (fabs(dx) <= da_dec)
+            {
+                currentDEC = getTargetDec();
+                nlocked++;
+            }
+            else if (dx > 0)
+                currentDEC += da_dec;
+            else
+                currentDEC -= da_dec;
+
+            if (nlocked == 2)
+            {
+                if (TrackState == SCOPE_SLEWING)
+                    TrackState = SCOPE_TRACKING;
+                else
+                    SetParked(true);
+            }
+            break;
+
+        default:
+            break;
     }
 
     NewRaDec(currentRA, currentDEC);
