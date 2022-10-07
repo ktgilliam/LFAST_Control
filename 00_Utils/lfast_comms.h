@@ -8,7 +8,7 @@
 #pragma once
 
 #define MAX_DEPTH 3
-#define OUTPUT_DEBUG_INFO false
+#define OUTPUT_DEBUG_INFO true
 
 #if OUTPUT_DEBUG_INFO
 #define DEBUG_PRINT_PARSE_STATUS() std::cout<<__LINE__<<": "; this->printParsingStatusInfo();
@@ -95,7 +95,7 @@ struct MessageParser
         void parseMessageBuffer(std::string *inBuff);
         void parseKeyValuePair(std::string *);
         void printParsingStatusInfo();
-        void printMessage();
+        std::string printMessage();
 
 
         template <typename T>
@@ -115,7 +115,7 @@ struct MessageParser
             return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
         }
 
-    protected:
+    // protected:
         unsigned int depth;
         static bool isObject(std::string &str);
         std::string find(std::string const &);
@@ -216,31 +216,32 @@ template <>
 inline unsigned int MessageParser::lookup(std::string const &keyStr)
 {
     auto resultStr = this->find(keyStr);
-    std::cout << "RESULT STRING: " << resultStr << "\n\n";
 
     unsigned int resultInt;
-    bool isHex = false;
+    // bool isHex = false;
 
-    if(resultStr.length() >= 3)
-    {
-        auto checkStr = resultStr.substr(0, 2);
-        std::cout << "First two chars: " << checkStr << std::endl;
-        if(checkStr.compare("0x") == 0)
-        {
-            std::cout << "IS HEX!!!!!!!!!!!!!!!!!!!1\n\n";
-            isHex = true;
-        }
-    }
+    // if(resultStr.length() >= 3)
+    // {
+    //     auto checkStr = resultStr.substr(0, 2);
+    //     if(checkStr.compare("0x") == 0)
+    //     {
+    //         isHex = true;
+    //     }
+    // }
 
-    if(isHex)
-    {
-        resultInt = std::stoul(resultStr, nullptr, 16);
-    }
-    else
-    {
-        std::istringstream iss(resultStr);
-        iss >> resultInt;
-    }
+    // if(isHex)
+    // {
+    //     resultInt = std::stoul(resultStr, nullptr, 16);
+    // }
+    // else
+    // {
+    // std::istringstream iss(resultStr);
+    // iss >> resultInt;
+    if(keyStr.length() > 0)
+        resultInt = std::stoul(resultStr, nullptr, 10);
+    // }
+
+    std::cout << "Result val: " << resultInt << std::endl;
     return resultInt;
 }
 
@@ -250,7 +251,7 @@ inline bool MessageParser::lookup(std::string const &keyStr)
 {
     auto resultStr = this->find(keyStr);
 
-    return (resultStr.compare("true")==0);
+    return (resultStr.compare("true") == 0);
 }
 
 

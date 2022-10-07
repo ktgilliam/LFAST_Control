@@ -129,7 +129,7 @@ TEST(lfast_comms_tests, nestedCommand1)
 
 TEST(lfast_comms_tests, simpleRxParserTest)
 {
-    auto rxMsg = new LFAST::MessageParser(R"({"ObjKey":1234})");
+    auto rxMsg = new LFAST::MessageParser("{\"ObjKey\":1234}\n");
     EXPECT_TRUE(rxMsg->succeeded());
     LFAST::print_map(rxMsg->data);
     std::cout << rxMsg->data["ObjKey"].c_str() << std::endl;
@@ -141,7 +141,7 @@ TEST(lfast_comms_tests, simpleRxParserTest)
 #if 1 // one child
 TEST(lfast_comms_tests, nestedRxParserTest_oneChild)
 {
-    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey":1234}})");
+    auto rxMsgParent = new LFAST::MessageParser("{\"ParentKey\":{\"ChildKey\":1234}}\n");
     ASSERT_TRUE(rxMsgParent->succeeded());
     std::string childStr = rxMsgParent->data["ParentKey"];
     EXPECT_STREQ(childStr.c_str(), R"({"ChildKey":1234})");
@@ -328,12 +328,14 @@ TEST(lfast_comms_tests, lookupInt)
 
 TEST(lfast_comms_tests, lookupUnsignedInt)
 {
-    auto rxMsg = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":255,"ChildKey2":0xFF,"ChildKey3":0xDEADBEEF}})");
+    auto rxMsg = new LFAST::MessageParser(
+        R"({"ParentKey":{"ChildKey1":255,"ChildKey2":0xFF,"ChildKey3":0xDEADBEEF, "ChildKey4":48879}})");
     ASSERT_TRUE(rxMsg->succeeded());
 
     EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey1"), 255);
-    EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey1"), rxMsg->lookup<unsigned int>("ChildKey2"));
-    EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey3"), 0xDEADBEEF);
+    // EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey1"), rxMsg->lookup<unsigned int>("ChildKey2"));
+    // EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey3"), 0xDEADBEEF);
+    EXPECT_EQ(rxMsg->lookup<unsigned int>("ChildKey4"), 48879);
 }
 
 TEST(lfast_comms_tests, lookupBool)
@@ -343,4 +345,15 @@ TEST(lfast_comms_tests, lookupBool)
 
     EXPECT_EQ(rxMsg->lookup<bool>("ChildKey1"), true);
     EXPECT_EQ(rxMsg->lookup<bool>("ChildKey2"), false);
+}
+
+//
+
+TEST(lfast_comms_tests, handshakeTest)
+{
+    auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}\n");
+    // auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}");
+    ASSERT_TRUE(rxMsg->succeeded());
+
+    EXPECT_EQ(rxMsg->lookup<unsigned int>("Handshake"), 0xbeef);
 }

@@ -1,6 +1,7 @@
 #include "lfast_comms.h"
 
 #include <string>
+#include <ctype.h>
 #include <sstream>
 #include <cstring>
 #include <vector>
@@ -9,8 +10,6 @@
 #include <regex>
 #include <iostream>
 #include <map>
-
-
 
 std::string LFAST::MessageGenerator::getMessageStr()
 {
@@ -153,13 +152,11 @@ std::string extractLeadingValString(std::string *inBuff)
 
 void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
 {
-    // if(this->depth > MAX_DEPTH )
-    // {
-    //     std::cout << __LINE__ << ": MAX DEPTH EXCEEDED(" << depth << ")\n";
-    //     this->parsingStatus = ParsingStatus::MAX_DEPTH_EXCEEDED;
-    //     return;
-    // }
-
+    inBuff->erase(std::remove_if( inBuff->begin(), inBuff->end(),
+                                  [](char c)
+    {
+        return (c == '\r' || c == '\t' || c == ' ' || c == '\n');
+    }), inBuff->end() );
 
     this->parsingStatus = ParsingStatus::PARSING_IN_PROGRESS;
     std::string keyStr = {0}, valStr = {0};
@@ -262,9 +259,21 @@ void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
 }
 
 
-void LFAST::MessageParser::printMessage()
+std::string LFAST::MessageParser::printMessage()
 {
-    std::cout << std::endl;
+    std::stringstream ss;
+    for(auto it = this->data.begin();
+            it != this->data.end();
+            it++)
+    {
+        ss << "{" << it->first << ": ";
+        if(this->childNode == nullptr)
+            ss << it->second << "}\n";
+        else
+            ss << this->childNode->printMessage();
+    }
+    ss << std::endl;
+    return ss.str();
 }
 
 void LFAST::print_map(std::map<std::string, std::string> const &m)

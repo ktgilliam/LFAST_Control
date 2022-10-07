@@ -59,7 +59,7 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define SLEW_LIMIT 1   /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 
 #define LFAST_TIMEOUT 3 /* Timeout in seconds */
-
+#define LFAST_MOUNT_HANDSHAKE_TIMEOUT 2
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
@@ -286,7 +286,6 @@ bool LFAST_Mount::updateProperties()
  * In order to know when the response is complete, we append the # character in
  * Javascript commands and read from the port until the # character is reached.
  *******************************************************************************/
-
 bool LFAST_Mount::Handshake()
 {
     if (isSimulation())
@@ -295,35 +294,43 @@ bool LFAST_Mount::Handshake()
     int rc = 0, nbytes_written = 0;
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
-    hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    auto pCMD = hsMsg.getMessageCStr();
+    // hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = hsMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
-
+    LOGF_DEBUG("Writing handshake command (pCMD= %s)", pCMD);
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing Handshake to Mount TCP server. Result: %d", rc);
         return false;
     }
 
-
     int nbytes_read = 0;
     char pRES[MAXRBUF] = {0};
-    if ((rc = tty_read(PortFD, pRES, MAXRBUF, LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '\n', LFAST_MOUNT_HANDSHAKE_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading Handshake from Mount TCP server. Result: %d", rc);
+        if(rc == -4)
+            LOGF_ERROR("Timeout reading Handshake from Mount TCP server.", rc);
+        else
+            LOGF_ERROR("Error reading Handshake from Mount TCP server. Result(%d): %d", nbytes_read, rc);
         return false;
     }
 
-    auto rxMsg = new LFAST::MessageParser(pRES);
-    if (strcmp(pRES, "99#Handshake^") != 0)
+    LOGF_DEBUG("Got message: %s", pRES);
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        LOGF_ERROR("Error connecting. Result: %s", pRES);
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
         return false;
     }
-    else
+    auto handshakeReturnVal = rxMsg.lookup<unsigned int>("Handshake");
+    // auto handshakeReturnVal = rxMsg->lookup<int>("Handshake");
+    // auto handshakeReturnVal = tmpUnsignedIntParser(pRES);
+    if(handshakeReturnVal != 0xbeef)
     {
-        LOGF_DEBUG("Got message ID: %s", pRES);
+        LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
+        // LOGF_DEBUG("Using signed parser: %d", handshakeReturnVal2);
+        return false;
     }
 
     return true;
