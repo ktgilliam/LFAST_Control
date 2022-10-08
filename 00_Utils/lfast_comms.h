@@ -50,75 +50,75 @@ class MessageGenerator
 
 struct MessageParser
 {
-        MessageParser() : parsingStatus(ParsingStatus::PARSING_INACTIVE), childNode(nullptr), parentNode(nullptr) {}
-        MessageParser(std::string s)
-            : MessageParser()
+    MessageParser() : parsingStatus(ParsingStatus::PARSING_INACTIVE), childNode(nullptr), parentNode(nullptr) {}
+    MessageParser(std::string s)
+        : MessageParser()
+    {
+        this->depth = 1;
+        this->parseMessageBuffer(&s);
+    }
+    MessageParser(std::string s, MessageParser* parentPtr)
+        : MessageParser()
+    {
+        this->parentNode = parentPtr;
+        this->depth = parentNode->depth + 1;
+        if(this->depth > MAX_DEPTH )
         {
-            this->depth = 1;
+#if OUTPUT_DEBUG_INFO
+            std::cout << __LINE__ << ": MAX DEPTH EXCEEDED(" << this->depth << ")\n";
+#endif
+            this->parsingStatus = ParsingStatus::MAX_DEPTH_EXCEEDED;
+        }
+        else
+        {
+#if OUTPUT_DEBUG_INFO
+            std::cout << __LINE__ << ": " << "Child Depth: " << this->depth << std::endl;
+#endif
             this->parseMessageBuffer(&s);
         }
-        MessageParser(std::string s, MessageParser* parentPtr)
-            : MessageParser()
-        {
-            this->parentNode = parentPtr;
-            this->depth = parentNode->depth + 1;
-            if(this->depth > MAX_DEPTH )
-            {
-#if OUTPUT_DEBUG_INFO
-                std::cout << __LINE__ << ": MAX DEPTH EXCEEDED(" << this->depth << ")\n";
-#endif
-                this->parsingStatus = ParsingStatus::MAX_DEPTH_EXCEEDED;
-            }
-            else
-            {
-#if OUTPUT_DEBUG_INFO
-                std::cout << __LINE__ << ": " << "Child Depth: " << this->depth << std::endl;
-#endif
-                this->parseMessageBuffer(&s);
-            }
-        }
-        ~MessageParser();
-        enum class ParsingStatus
-        {
-            PARSING_INACTIVE,
-            PARSING_IN_PROGRESS,
-            PARSING_SUCCESS,
-            PARSING_FAILURE,
-            MAX_DEPTH_EXCEEDED
-        };
+    }
+    ~MessageParser();
+    enum class ParsingStatus
+    {
+        PARSING_INACTIVE,
+        PARSING_IN_PROGRESS,
+        PARSING_SUCCESS,
+        PARSING_FAILURE,
+        MAX_DEPTH_EXCEEDED
+    };
 
-        std::map<std::string, std::string>  data;
-        MessageParser *childNode;
-        MessageParser *parentNode;
-        ParsingStatus parsingStatus;
+    std::map<std::string, std::string>  data;
+    MessageParser *childNode;
+    MessageParser *parentNode;
+    ParsingStatus parsingStatus;
 
-        void parseMessageBuffer(std::string *inBuff);
-        void parseKeyValuePair(std::string *);
-        void printParsingStatusInfo();
-        std::string printMessage();
+    void parseMessageBuffer(std::string *inBuff);
+    void parseKeyValuePair(std::string *);
+    void printParsingStatusInfo();
+    std::string printMessage();
 
 
-        template <typename T>
-        inline T lookup(std::string const &);
+    template <typename T>
+    inline T lookup(std::string const &);
 
-        bool isNode()
-        {
-            return childNode == nullptr;
-        }
-        bool isRoot()
-        {
-            return parentNode == nullptr;
-        }
-        bool succeeded()
-        {
-            DEBUG_PRINT_PARSE_STATUS();
-            return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
-        }
+    bool isNode()
+    {
+        return childNode == nullptr;
+    }
+    bool isRoot()
+    {
+        return parentNode == nullptr;
+    }
+    bool succeeded()
+    {
+        DEBUG_PRINT_PARSE_STATUS();
+        return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
+    }
 
     // protected:
-        unsigned int depth;
-        static bool isObject(std::string &str);
-        std::string find(std::string const &);
+    unsigned int depth;
+    static bool isObject(std::string &str);
+    std::string find(std::string const &);
 };
 
 // Generator template specializations
@@ -252,6 +252,18 @@ inline bool MessageParser::lookup(std::string const &keyStr)
     auto resultStr = this->find(keyStr);
 
     return (resultStr.compare("true") == 0);
+}
+
+template <>
+inline double MessageParser::lookup(std::string const &keyStr)
+{
+    std::cout << "#### DOUBLE PARSE RESULT:\n";
+    std::cout << keyStr << std::endl;
+    auto resultStr = this->find(keyStr);
+    std::cout << resultStr << std::endl;
+    double resultVal = std::atof(resultStr.c_str());
+    std::cout << resultVal << std::endl;
+    return resultVal;
 }
 
 

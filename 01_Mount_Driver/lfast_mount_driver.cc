@@ -65,9 +65,6 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 int scopeCapabilities;
 
-std::string convertToString(double dblVal);
-std::string getMessageIdString(int id);
-
 LFAST_Mount::LFAST_Mount()
 {
     setVersion(1, 4);
@@ -292,9 +289,10 @@ bool LFAST_Mount::Handshake()
         return true;
 
     int rc = 0, nbytes_written = 0;
+
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
-    // hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     auto commandStr = hsMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
@@ -316,7 +314,6 @@ bool LFAST_Mount::Handshake()
         return false;
     }
 
-    LOGF_DEBUG("Got message: %s", pRES);
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
     {
@@ -324,43 +321,26 @@ bool LFAST_Mount::Handshake()
         return false;
     }
     auto handshakeReturnVal = rxMsg.lookup<unsigned int>("Handshake");
-    // auto handshakeReturnVal = rxMsg->lookup<int>("Handshake");
-    // auto handshakeReturnVal = tmpUnsignedIntParser(pRES);
     if(handshakeReturnVal != 0xbeef)
     {
         LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
-        // LOGF_DEBUG("Using signed parser: %d", handshakeReturnVal2);
         return false;
     }
 
     return true;
 }
 
-std::string convertToString(double dblVal)
-{
-    ByteConverter converter;
-    converter.DOUBLE = dblVal;
-    return (std::string((char *)converter.BYTES, 8));
-}
-
-std::string getMessageIdString(int id)
-{
-    // int2char i2c;
-    // i2c.i = id;
-    char idStr[] = {'#', '#', (char)id};
-    return (std::string(idStr));
-}
-
 bool LFAST_Mount::getMountAltAz()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+
     double mountAlt = 0., mountAz = 0.;
     LOG_DEBUG("Requesting Mount Alt/Az");
 
-    strncpy(pCMD,
-            "2#getAltAz",
-            MAXRBUF);
+    LFAST::MessageGenerator getRaDecMsg("MountMessage");
+    getRaDecMsg.addArgument("RequestAltAz", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = getRaDecMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
     LOGF_DEBUG("CMD: %s", pCMD);
 
@@ -370,6 +350,7 @@ bool LFAST_Mount::getMountAltAz()
         return false;
     }
 
+    char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading GetRaDec from mount Mount TCP server. Result: %d", rc);
@@ -378,13 +359,23 @@ bool LFAST_Mount::getMountAltAz()
 
     LOGF_DEBUG("RES: %s", pRES);
 
-    // Read results successfully into temporary values before committing
-    if (sscanf(pRES, "2#ALT=%lf;AZ=%lf^", &mountAlt, &mountAz) == 2)
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        currentALT = mountAlt;
-        currentAZ = mountAz;
-        return true;
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
+        return false;
     }
+
+    currentAZ = rxMsg.lookup<double>("AzPosition");
+    currentALT = rxMsg.lookup<double>("AltPosition");
+
+    // // Read results successfully into temporary values before committing
+    // if (sscanf(pRES, "2#ALT=%lf;AZ=%lf^", &mountAlt, &mountAz) == 2)
+    // {
+    //     currentALT = mountAlt;
+    //     currentAZ = mountAz;
+    //     return true;
+    // }
 
     LOGF_ERROR("Error reading coordinates. Result: %s", pRES);
     return false;
@@ -539,7 +530,7 @@ bool LFAST_Mount::isMountTracking()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
-
+#if 0
     strncpy(pCMD,
             "3#getTrackingStatus",
             MAXRBUF);
@@ -571,6 +562,9 @@ bool LFAST_Mount::isMountTracking()
 
     LOGF_ERROR("Error checking for tracking. Invalid response: %s", pRES);
     return false;
+#else
+    return true;
+#endif
 }
 
 bool LFAST_Mount::Sync(double ra, double dec)

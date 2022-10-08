@@ -185,6 +185,30 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 }
 #endif
 
+#if 1 // two children
+TEST(lfast_comms_tests, nestedRxParserTest_twoDoubleChild)
+{
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":1.234567,"ChildKey2":-55.66778899}})");
+    ASSERT_TRUE(rxMsgParent->succeeded());
+    std::string childStr = rxMsgParent->data["ParentKey"];
+
+    std::string childVal1, childVal2;
+    auto rxMsgChild = rxMsgParent->childNode;
+    if (rxMsgChild)
+    {
+        childVal1 = rxMsgChild->data["ChildKey1"];
+        childVal2 = rxMsgChild->data["ChildKey2"];
+    }
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+    }
+
+    EXPECT_STREQ(childVal1.c_str(), "1.234567");
+    EXPECT_STREQ(childVal2.c_str(), "-55.66778899");
+}
+#endif
+
 #if 1 // Three children
 TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
 {
@@ -347,13 +371,21 @@ TEST(lfast_comms_tests, lookupBool)
     EXPECT_EQ(rxMsg->lookup<bool>("ChildKey2"), false);
 }
 
-//
-
-TEST(lfast_comms_tests, handshakeTest)
+TEST(lfast_comms_tests, lookupDouble)
 {
-    auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}\n");
-    // auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}");
+    auto rxMsg = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":1.23456,"ChildKey2":-55.123456789}})");
     ASSERT_TRUE(rxMsg->succeeded());
 
-    EXPECT_EQ(rxMsg->lookup<unsigned int>("Handshake"), 0xbeef);
+    EXPECT_EQ(rxMsg->lookup<double>("ChildKey1"), 1.23456);
+    EXPECT_EQ(rxMsg->lookup<double>("ChildKey2"), -55.123456789);
 }
+//
+
+// TEST(lfast_comms_tests, handshakeTest)
+// {
+//     auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}\n");
+//     // auto rxMsg = new LFAST::MessageParser("{\"KarbonMessage\":{\"Handshake\":48879}}");
+//     ASSERT_TRUE(rxMsg->succeeded());
+
+//     EXPECT_EQ(rxMsg->lookup<unsigned int>("Handshake"), 0xbeef);
+// }
