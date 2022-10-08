@@ -346,14 +346,14 @@ bool LFAST_Mount::getMountAltAz()
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing GetRaDec to mount Mount TCP server. Response: %d", rc);
+        LOGF_ERROR("Error writing Alt/Az request to mount Mount TCP server. Response: %d", rc);
         return false;
     }
 
     char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading GetRaDec from mount Mount TCP server. Result: %d", rc);
+        LOGF_ERROR("Error reading Alt/Az request response from mount Mount TCP server. Result: %d", rc);
         return false;
     }
 
@@ -368,14 +368,6 @@ bool LFAST_Mount::getMountAltAz()
 
     currentAZ = rxMsg.lookup<double>("AzPosition");
     currentALT = rxMsg.lookup<double>("AltPosition");
-
-    // // Read results successfully into temporary values before committing
-    // if (sscanf(pRES, "2#ALT=%lf;AZ=%lf^", &mountAlt, &mountAz) == 2)
-    // {
-    //     currentALT = mountAlt;
-    //     currentAZ = mountAz;
-    //     return true;
-    // }
 
     LOGF_ERROR("Error reading coordinates. Result: %s", pRES);
     return false;
@@ -493,6 +485,7 @@ bool LFAST_Mount::isSlewComplete()
 #if MOUNT_PARKING_ENABLED
 bool LFAST_Mount::isMountParked()
 {
+#if 0
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
@@ -523,6 +516,10 @@ bool LFAST_Mount::isMountParked()
 
     LOGF_ERROR("Error checking for park. Invalid response: %s", pRES);
     return false;
+#else
+#warning TODO: Implement isMountParked()
+    return true;
+#endif
 }
 #endif
 
@@ -563,6 +560,7 @@ bool LFAST_Mount::isMountTracking()
     LOGF_ERROR("Error checking for tracking. Invalid response: %s", pRES);
     return false;
 #else
+#warning TODO: Implement isMountTracking()
     return true;
 #endif
 }
