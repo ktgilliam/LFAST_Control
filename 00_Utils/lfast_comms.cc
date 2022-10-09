@@ -23,15 +23,15 @@ std::string LFAST::MessageGenerator::getMessageStr()
         ss << std::quoted(DestIdStr) << ":";
     }
 
-    if (this->argStrings.size() > 0)
+    if (this->argsList.size() > 0)
     {
         if (objFlag)
             ss << "{";
-        auto itr = this->argStrings.begin();
-        while (itr != this->argStrings.end())
+        auto itr = this->argsList.begin();
+        while (itr != this->argsList.end())
         {
             ss << *itr;
-            if (itr++ < this->argStrings.end() - 1)
+            if (itr++ < this->argsList.end() - 1)
             {
                 ss << ",";
             }

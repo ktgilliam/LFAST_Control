@@ -26,6 +26,8 @@
 #include "inditelescope.h"
 #include "inditimer.h"
 
+#include "../00_Utils/lfast_comms.h"
+
 union ByteConverter
 {
     unsigned long INT;
@@ -129,7 +131,8 @@ private:
     bool getMountAltAz();
     bool isSlewComplete();
 
-    bool sendTheSkyOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+    bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+    bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
 #if MOUNT_PARKING_ENABLED
     bool isMountParked();
 #endif

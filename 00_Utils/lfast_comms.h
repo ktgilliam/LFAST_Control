@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <iostream>
+#include <algorithm>
 
 #pragma once
 
@@ -21,9 +22,11 @@ namespace LFAST
 void print_map(std::map<std::string, std::string> const &m);
 bool isKey(std::string const &);
 std::string cleanupKey(std::string const &);
+
 class MessageGenerator
 {
     public:
+
         MessageGenerator() : DestIdStr("") {}
         virtual ~MessageGenerator() {}
         MessageGenerator(std::string destIdStr) : DestIdStr(destIdStr) {}
@@ -36,16 +39,17 @@ class MessageGenerator
         inline void addArgument(std::string, const char (&)[N]);
         inline void addArgument(std::string, MessageGenerator &);
         inline void addArgument(std::string);
+
         std::string getMessageStr();
         const char* getMessageCStr();
 
         std::string getArgString(int idx)
         {
-            return argStrings.at(idx);
+            return argsList.at(idx);
         }
+        // unsigned int numArgs(){return argsList.size();}
 
-    protected:
-        std::vector<std::string> argStrings;
+        std::vector<std::string> argsList;
 };
 
 struct MessageParser
@@ -127,28 +131,28 @@ inline void MessageGenerator::addArgument(std::string label, const T &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":\"0x" << std::hex << value << "\"";
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 template <std::size_t N>
 inline void MessageGenerator::addArgument(std::string label, const char (&value)[N])
 {
     std::stringstream ss;
     ss << std::quoted(label) << ":" << std::quoted(std::string(value));
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 template <>
 inline void MessageGenerator::addArgument(std::string label, const int &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":" << value;
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 template <>
 inline void MessageGenerator::addArgument(std::string label, const bool &value)
 {
     std::ostringstream ss;
     ss << std::quoted(label) << ":" << std::boolalpha << value;
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 
 template <>
@@ -156,7 +160,7 @@ inline void MessageGenerator::addArgument(std::string label, const std::string &
 {
     std::stringstream ss;
     ss << std::quoted(label) << ":" << std::quoted(value);
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 
 template <>
@@ -165,7 +169,7 @@ inline void MessageGenerator::addArgument(std::string label, const double &value
     const int sigdigits = std::numeric_limits<float>::max_digits10;
     std::stringstream ss;
     ss << std::quoted(label) << ":" << std::setprecision(sigdigits) << value;
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 
 inline void MessageGenerator::addArgument(std::string label, MessageGenerator &msg)
@@ -174,7 +178,7 @@ inline void MessageGenerator::addArgument(std::string label, MessageGenerator &m
 
     ss << std::quoted(label) << ":" << msg.getMessageStr();
 
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
 
 inline void MessageGenerator::addArgument(std::string label)
@@ -182,8 +186,9 @@ inline void MessageGenerator::addArgument(std::string label)
     std::stringstream ss;
     ss << std::quoted(label) << ":"
        << "null";
-    this->argStrings.push_back(ss.str());
+    this->argsList.push_back(ss.str());
 }
+
 
 // Parser template specializations:
 
@@ -250,6 +255,8 @@ template <>
 inline bool MessageParser::lookup(std::string const &keyStr)
 {
     auto resultStr = this->find(keyStr);
+    std::transform(resultStr.begin(), resultStr.end(), resultStr.begin(),
+        [](unsigned char c){ return std::tolower(c); });
 
     return (resultStr.compare("true") == 0);
 }

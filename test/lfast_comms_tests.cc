@@ -369,6 +369,12 @@ TEST(lfast_comms_tests, lookupBool)
 
     EXPECT_EQ(rxMsg->lookup<bool>("ChildKey1"), true);
     EXPECT_EQ(rxMsg->lookup<bool>("ChildKey2"), false);
+
+    auto rxMsg2 = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":True,"ChildKey2":False}})");
+    ASSERT_TRUE(rxMsg2->succeeded());
+    EXPECT_EQ(rxMsg2->lookup<bool>("ChildKey1"), true);
+    EXPECT_EQ(rxMsg2->lookup<bool>("ChildKey2"), false);
+    // FAIL();
 }
 
 TEST(lfast_comms_tests, lookupDouble)
