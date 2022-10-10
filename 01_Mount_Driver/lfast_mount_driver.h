@@ -131,7 +131,7 @@ private:
     bool getMountAltAz();
     bool isSlewComplete();
 
-    bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+    // bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
     bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
 #if MOUNT_PARKING_ENABLED
     bool isMountParked();
@@ -156,6 +156,8 @@ private:
     // Homing
     bool findHome();
 
+
+    void printScopeMode();
     // double currentRA{0};
     // double currentDEC{90};
     // double targetRA{0};

@@ -126,7 +126,6 @@ TEST(lfast_comms_tests, nestedCommand1)
                  R"({"ParentMessage":{"ParentArg1":77.1234567,"ChildMessage":{"ChildArg1":true,"ChildArg2":17}}})");
 }
 
-
 TEST(lfast_comms_tests, simpleRxParserTest)
 {
     auto rxMsg = new LFAST::MessageParser("{\"ObjKey\":1234}\n");
@@ -236,7 +235,6 @@ TEST(lfast_comms_tests, nestedRxParserTest_threeChild)
 }
 #endif
 
-
 #if 1 // 3 deep
 TEST(lfast_comms_tests, nestedRxParserTest_threeDeep)
 {
@@ -263,7 +261,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_threeDeep)
 }
 #endif
 
-//TODO: This one breaks it but going to leave it for now.
+// TODO: This one breaks it but going to leave it for now.
 #if 0 // 3 deep, 2 wide 
 TEST(lfast_comms_tests, nestedRxParserTest_threeDeepTwoWide)
 {
@@ -299,7 +297,6 @@ TEST(lfast_comms_tests, nestedRxParserTest_fourDeep)
 }
 #endif
 
-
 TEST(lfast_comms_tests, badParseDetection)
 {
     // 1. unbalanced brackets
@@ -319,7 +316,7 @@ TEST(lfast_comms_tests, badParseDetection)
     EXPECT_FALSE(rxMsg4->succeeded());
 }
 
-//Disabling so I can keep find in protected (don't know how to test protected members yet)
+// Disabling so I can keep find in protected (don't know how to test protected members yet)
 #if 0
 TEST(lfast_comms_tests, findGood)
 {
@@ -337,9 +334,8 @@ TEST(lfast_comms_tests, lookupString)
     ASSERT_TRUE(rxMsg->succeeded());
 
     EXPECT_STREQ(rxMsg->lookup<std::string>("ChildKey1").c_str(), "1234");
-    EXPECT_STREQ(rxMsg->lookup<std::string>("ChildKey2").c_str(), R"("Bangarang!")");
+    EXPECT_STREQ(rxMsg->lookup<std::string>("ChildKey2").c_str(), R"(Bangarang!)");
 }
-
 
 TEST(lfast_comms_tests, lookupInt)
 {
@@ -384,6 +380,22 @@ TEST(lfast_comms_tests, lookupDouble)
 
     EXPECT_EQ(rxMsg->lookup<double>("ChildKey1"), 1.23456);
     EXPECT_EQ(rxMsg->lookup<double>("ChildKey2"), -55.123456789);
+}
+
+TEST(lfast_comms_tests, getArgKeyTest)
+{
+    LFAST::MessageGenerator cmdMsg("MountMessage");
+    cmdMsg.addArgument("ParkCommand", 1.234);
+    cmdMsg.addArgument("NoDisconnect", true);
+
+    // auto respMsg = LFAST::MessageParser(R"({"KarbonMessage": {"UnparkCommand": "$OK^"})");
+    // ASSERT_TRUE(respMsg.succeeded());
+
+    bool resultFlag = true;
+    EXPECT_EQ(cmdMsg.numArgs(), 2);
+    EXPECT_STREQ(cmdMsg.getArgKey(0).c_str(), "ParkCommand");
+    EXPECT_STREQ(cmdMsg.getArgKey(1).c_str(), "NoDisconnect");
+
 }
 //
 
