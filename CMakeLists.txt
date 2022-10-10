@@ -45,7 +45,7 @@ if(INDI_FOUND)
 	message("BUILD_TESTS=TRUE, unit tests will be built.")
 	enable_testing()
 	include(CTest)
-	add_subdirectory(test)
+	add_subdirectory(03_Unit_Tests)
 	
    else ()
         message("BUILD_TESTS=FALSE, unit tests will NOT be built.")
