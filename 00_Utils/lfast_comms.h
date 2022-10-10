@@ -116,6 +116,7 @@ namespace LFAST
         std::string printMessage();
 
         template <typename T>
+        // inline bool lookup(std::string const &, T&);
         inline T lookup(std::string const &);
 
         bool isNode()

@@ -129,7 +129,7 @@ std::string extractLeadingValString(std::string *inBuff)
 {
     std::smatch m;
     std::regex re;
-    re = (R"((["|\w|.]+),(.*))");
+    re = (R"(([\$|\^|"|\w|.]+),(.*))");
     if (std::regex_search(*inBuff, m, re))
     {
         while (!m.ready())
