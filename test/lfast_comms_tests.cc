@@ -457,6 +457,22 @@ TEST(lfast_comms_tests, checkOkCommandTest)
     EXPECT_EQ(noDiscoResp.compare("$OK^"), 0);
 }
 #endif
+
+TEST(lfast_comms_tests, badLookupTest)
+{
+    auto rxMsg = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":"abcd","ChildKey2":"Bangarang!"}})");
+    ASSERT_TRUE(rxMsg->succeeded());
+    std::string val1 = {0}, val2 = {0}, val3 = {0};
+    bool result1 = rxMsg->lookup<std::string>("ChildKey1", &val1);
+    bool result2 = rxMsg->lookup<std::string>("ChildKey2", &val2);
+    bool result3 = rxMsg->lookup<std::string>("ChildKey3", &val2);
+    EXPECT_STREQ(val1.c_str(), "abcd");
+    EXPECT_TRUE(result1);
+    EXPECT_STREQ(val2.c_str(), "Bangarang!");
+    EXPECT_TRUE(result2);
+
+    EXPECT_FALSE(result3);
+}
 //
 
 // TEST(lfast_comms_tests, handshakeTest)

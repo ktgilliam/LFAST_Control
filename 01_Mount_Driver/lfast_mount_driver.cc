@@ -36,6 +36,7 @@
 #include "lfast_mount_driver.h"
 
 #include "indicom.h"
+#include "indipropertyswitch.h"
 
 #include <libnova/sidereal_time.h>
 #include <libnova/transform.h>
@@ -60,6 +61,7 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 
 #define LFAST_TIMEOUT 3 /* Timeout in seconds */
 #define LFAST_MOUNT_HANDSHAKE_TIMEOUT 2
+#define LFAST_HOMING_TIMEOUT 10
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
@@ -98,8 +100,7 @@ LFAST_Mount::LFAST_Mount()
 #endif
                         | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
-                        | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE
-        // | TELESCOPE_CAN_GOTO
+                        | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE | TELESCOPE_CAN_GOTO
         // | TELESCOPE_HAS_TRACK_RATE
         // | TELESCOPE_CAN_CONTROL_TRACK
         // | TELESCOPE_HAS_PIER_SIDE
@@ -145,7 +146,36 @@ bool LFAST_Mount::initProperties()
     INDI::Telescope::initProperties();
 
     // Delete properties we don't use
+    // deleteProperty(TrackModeSP.name);
     // deleteProperty("USEJOYSTICK");
+    // Jogging
+    // IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
+    // IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT/AZ", ISS_OFF);
+    // IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
+    //                    ISR_1OFMANY, 60,
+    //                    IPS_IDLE);
+    JogModeSP[JOG_MODE_NSEW].fill(
+        "JOG_MODE_RA_DEC", // The name of the VALUE
+        "Jog RA/DEC",      // The label of the VALUE
+        ISS_ON             // The switch state
+    );
+
+    JogModeSP[JOG_MODE_ALT_AZ].fill(
+        "JOG_MODE_ALT_AZ", // The name of the VALUE
+        "Jog ALT/AZ",      // The label of the VALUE
+        ISS_OFF            // The switch state
+    );
+
+    JogModeSP.fill(
+        getDeviceName(), // The name of the device
+        "JOG_MODE",      // The name of the PROPERTY
+        "Jog Mode",      // The label of the PROPERTY
+        MOTION_TAB,      // What tab should we be on?
+        IP_RW,           // Let's make it read/write.
+        ISR_1OFMANY,     // One can be active
+        60,              // With a timeout of 60 seconds
+        IPS_IDLE         // and an initial state of idle.
+    );
 
     for (int i = 0; i < SlewRateSP.nsp - 1; i++)
     {
@@ -157,15 +187,17 @@ bool LFAST_Mount::initProperties()
     SlewRateSP.sp[5].s = ISS_ON;
 
     /* How fast do we jog compared to sidereal rate */
-    IUFillNumber(&JogRateN[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateNSEW_N[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateNSEW_N[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
-                 JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
-                 JOG_RATE_VALUE);
-    IUFillNumberVector(&JogRateNP, JogRateN, NUM_AXES, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
+    IUFillNumberVector(&JogRateNSEW_NP, JogRateNSEW_N, NUM_SR_AXES, getDeviceName(), "JOG_RATE", "Jog N/S/E/W", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
+    IUFillNumber(&JogRateAltAz_N[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (%Max)", "%g", 0, 100, 1, 10);
+    IUFillNumber(&JogRateAltAz_N[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (%Max)", "%g", 0, 100, 1, 10);
+
+    IUFillNumberVector(&JogRateAltAz_NP, JogRateAltAz_N, NUM_MECH_AXES, getDeviceName(), "ALT_AZ_JOG_RATE", "Jog Alt/Az", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 
     // IUFillNumberVector(&JogRateNP, JogRateN, 2, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 #if MOUNT_GUIDER_ENABLED
@@ -206,12 +238,6 @@ bool LFAST_Mount::initProperties()
     initGuiderProperties(getDeviceName(), MOTION_TAB);
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 #endif
-    // Jogging
-    IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
-    IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT_AZ", ISS_OFF);
-    IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
-                       ISR_1OFMANY, 60,
-                       IPS_IDLE);
 
     // Other stuff
     addAuxControls();
@@ -244,11 +270,12 @@ bool LFAST_Mount::updateProperties()
             TrackState = SCOPE_IDLE;
         }
 
-        defineProperty(&TrackModeSP);
-        defineProperty(&TrackRateNP);
-
         defineProperty(&JogModeSP);
-        defineProperty(&JogRateNP);
+        defineProperty(&JogRateNSEW_NP);
+        // defineProperty(&JogRateAltAz_NP);
+
+        // defineProperty(&TrackModeSP);
+        defineProperty(&TrackRateNP);
 
 #if MOUNT_GUIDER_ENABLED
         defineProperty(&GuideNSNP);
@@ -279,8 +306,8 @@ bool LFAST_Mount::updateProperties()
     {
         deleteProperty(TrackModeSP.name);
         deleteProperty(TrackRateNP.name);
-        deleteProperty(JogModeSP.name);
-        deleteProperty(JogRateNP.name);
+        deleteProperty(JogModeSP.getName());
+        deleteProperty(JogRateNSEW_NP.name);
 #if MOUNT_GUIDER_ENABLED
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
@@ -416,7 +443,7 @@ bool LFAST_Mount::ReadScopeStatus()
         return true;
     }
     printScopeMode();
-    
+
     if (TrackState == SCOPE_SLEWING)
     {
         LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
@@ -481,7 +508,7 @@ bool LFAST_Mount::Goto(double r, double d)
     RaDecToAltAz(targetRA, targetDEC, &alt, &az);
 
     LFAST::MessageGenerator gotoCommandMsg("MountMessage");
-    gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    // gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     gotoCommandMsg.addArgument("slewToAltPosn", targetALT);
     gotoCommandMsg.addArgument("slewToAzPosn", targetAZ);
     auto commandStr = gotoCommandMsg.getMessageStr();
@@ -581,7 +608,7 @@ bool LFAST_Mount::isMountParked()
         if (!lookupValid)
         {
             LOGF_ERROR("Missing IsParked key in response: %s", pRES);
-            tcflush(PortFD, TCIOFLUSH);
+            // tcflush(PortFD, TCIFLUSH);
             return false;
         }
 
@@ -650,7 +677,7 @@ bool LFAST_Mount::Sync(double ra, double dec)
     currentAZ = az;
 
     LFAST::MessageGenerator syncDataMessage("MountMessage");
-    syncDataMessage.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    // syncDataMessage.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     syncDataMessage.addArgument("syncAltPosn", targetALT);
     syncDataMessage.addArgument("syncAzPosn", targetAZ);
 
@@ -672,7 +699,7 @@ bool LFAST_Mount::Park()
     double targetDEC = GetAxis2Park();
 
     LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
-    mountParkCmdMsg.addArgument("ParkCommand", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    mountParkCmdMsg.addArgument("Park", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     mountParkCmdMsg.addArgument("NoDisconnect", true);
 
     setTargetRaDec(targetRA, targetDEC);
@@ -687,19 +714,14 @@ bool LFAST_Mount::Park()
     TrackState = SCOPE_PARKING;
     LOG_INFO("Parking telescope in progress...");
 
-    // // Confirm we parked
-    // if (!isMountParked())
-    //     LOG_ERROR("Could not park for some reason.");
-    // else
-    //     SetParked(true);
     return true;
 }
 
 bool LFAST_Mount::UnPark()
 {
     LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
-    mountParkCmdMsg.addArgument("UnparkCommand", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    LOG_DEBUG("LFAST_Mount::UnPark()");
+    mountParkCmdMsg.addArgument("Unpark", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    // LOG_DEBUG("LFAST_Mount::UnPark()");
     if (!sendMountOKCommand(mountParkCmdMsg, "Unparking mount"))
     {
         return false;
@@ -721,9 +743,9 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     {
         if (strcmp(name, "JOG_RATE") == 0)
         {
-            IUUpdateNumber(&JogRateNP, values, names, n);
-            JogRateNP.s = IPS_OK;
-            IDSetNumber(&JogRateNP, nullptr);
+            IUUpdateNumber(&JogRateNSEW_NP, values, names, n);
+            JogRateNSEW_NP.s = IPS_OK;
+            IDSetNumber(&JogRateNSEW_NP, nullptr);
             return true;
         }
 #if MOUNT_GUIDER_ENABLED
@@ -771,6 +793,29 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             IDSetSwitch(&HomeSP, nullptr);
             return true;
         }
+        if (!strcmp(JogModeSP.getName(), name))
+        {
+            LOGF_INFO("Switching Jog Mode to %s", "<Placeholder>");
+            // Accept what we received.
+            JogModeSP.update(states, names, n);
+
+            // Find out what switch was clicked.
+            int index = JogModeSP.findOnSwitchIndex();
+            switch (index)
+            {
+            case JOG_MODE_NSEW: // see how much better this is than direct indexes? USE AN ENUM!
+                deleteProperty(JogRateAltAz_NP.name);
+                defineProperty(&JogRateNSEW_NP);
+                break;
+            case JOG_MODE_ALT_AZ:
+                deleteProperty(JogRateNSEW_NP.name);
+                defineProperty(&JogRateAltAz_NP);
+                break;
+            }
+            JogModeSP.apply();
+            // IDSetSwitch(&HomeSP, nullptr);
+            return true;
+        }
     }
 
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
@@ -779,7 +824,14 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
 bool LFAST_Mount::Abort()
 {
     // char pCMD[MAXRBUF] = {0};
-    LOG_INFO("Sending Abort Command");
+    LFAST::MessageGenerator abortCmdMsg("MountMessage");
+    abortCmdMsg.addArgument("AbortSlew", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+
+    LOG_INFO("Sending Abort Slew Command");
+    if (!sendMountOKCommand(abortCmdMsg, "Sending Abort Command"))
+    {
+        return false;
+    }
     // strncpy(pCMD, "LFAST_Mount.Abort();", MAXRBUF);
     // #warning DISABLED ABORT
     // return sendMountOKCommand("9#MountAbortCommand", "Abort mount slew");
@@ -790,15 +842,18 @@ bool LFAST_Mount::findHome()
 {
     // char pCMD[MAXRBUF] = {0};
     LOG_INFO("Sending Home Command");
-    // strncpy(pCMD, "LFAST_Mount.FindHome();"
-    //               "while(!LFAST_Mount.IsSlewComplete) {"
-    //               "sky6Web.Sleep(1000);}",
-    //         MAXRBUF);
-    // #warning DISABLED HOME
-    return false;
-    // return sendMountOKCommand("8#MountHomeCommand", "Find home", 60);
-}
+    LFAST::MessageGenerator homeCmdMsg("MountMessage");
+    homeCmdMsg.addArgument("FindHome", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
 
+    LOG_INFO("Sending Home Command");
+    if (!sendMountOKCommand(homeCmdMsg, "Sending Home Command", LFAST_HOMING_TIMEOUT))
+    {
+        return false;
+    }
+
+    return true;
+}
+#if MOUNT_GOTO_ENABLED
 bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
     if (TrackState == SCOPE_PARKED)
@@ -875,6 +930,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     return true;
 }
+#endif
 
 bool LFAST_Mount::startOpenLoopMotion(uint8_t motion, uint16_t rate)
 {
@@ -908,6 +964,12 @@ bool LFAST_Mount::SetCurrentPark()
 
     strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
     // if (!sendMountOKCommand(pCMD, "Setting Park Position"))
+
+    LFAST::MessageGenerator setParkPosnMsg("MountMessage");
+    setParkPosnMsg.addArgument("SetParkPosition", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+
+    LOG_INFO("Sending Set Park Position Message");
+
     return false;
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
@@ -938,6 +1000,15 @@ bool LFAST_Mount::SetParkPosition(double Axis1Value, double Axis2Value)
               "parking position and click Current.");
     return false;
 }
+
+// bool LFAST_Mount::JogAzEl(double Axis1Value, double Axis2Value)
+// {
+//     INDI_UNUSED(Axis1Value);
+//     INDI_UNUSED(Axis2Value);
+//     LOG_ERROR("Setting custom parking position directly is not supported. Slew to the desired "
+//               "parking position and click Current.");
+//     return false;
+// }
 #endif
 
 void LFAST_Mount::mountSim()
@@ -987,9 +1058,9 @@ void LFAST_Mount::mountSim()
     double motionRate = 0;
 
     if (MovementNSSP.s == IPS_BUSY)
-        motionRate = JogRateN[0].value;
+        motionRate = JogRateNSEW_N[0].value;
     else if (MovementWESP.s == IPS_BUSY)
-        motionRate = JogRateN[1].value;
+        motionRate = JogRateNSEW_N[1].value;
     if (motionRate != 0)
     {
         da_ra = motionRate * dt * 0.05;
@@ -1105,7 +1176,10 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
     char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '\0', timeout, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading sendMountOKCommand from Mount TCP server. Result: %d", rc);
+        if (rc == -4)
+            LOGF_ERROR("Timeout reading sendMountOKCommand from Mount TCP server.", rc);
+        else
+            LOGF_ERROR("Error reading sendMountOKCommand from Mount TCP server. Result: %d", rc);
         return false;
     }
     // pRES[nbytes_read] = '\0';
@@ -1122,14 +1196,16 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
     else
     {
         bool resultFlag = true;
+        LOGF_DEBUG("\tChecking %d args in: %s.", cmdMsg.numArgs(), pCMD);
         for (unsigned ii = 0; ii < cmdMsg.numArgs(); ++ii)
         {
             auto keyStr = cmdMsg.getArgKey(ii);
+            LOGF_DEBUG("\t(%s)", keyStr.c_str());
             std::string valStr = {0};
             auto lookupValid = rxMsg.lookup<std::string>(keyStr, &valStr);
             if (!lookupValid)
             {
-                LOGF_ERROR("Missing %s key in response: %s", keyStr, pRES);
+                LOGF_INFO("\tsendMountOKCommand: Missing %s key in response: %s", keyStr.c_str(), pRES);
                 return false;
             }
             LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), valStr.c_str());
