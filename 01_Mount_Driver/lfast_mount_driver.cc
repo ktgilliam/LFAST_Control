@@ -340,7 +340,13 @@ bool LFAST_Mount::Handshake()
         LOGF_ERROR("Error parsing received data <%s>", pRES);
         return false;
     }
-    auto handshakeReturnVal = rxMsg.lookup<unsigned int>("Handshake");
+    unsigned int handshakeReturnVal = 0;
+    bool lookupValid = rxMsg.lookup<unsigned int>("Handshake", &handshakeReturnVal);
+    if (!lookupValid)
+    {
+        LOGF_ERROR("Missing Handshake key in response: %s", pRES);
+        return false;
+    }
     if (handshakeReturnVal != 0xbeef)
     {
         LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
@@ -362,7 +368,7 @@ bool LFAST_Mount::getMountAltAz()
     auto commandStr = getAltAzMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
@@ -377,7 +383,7 @@ bool LFAST_Mount::getMountAltAz()
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\t\tRES: %s", pRES);
 
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
@@ -387,8 +393,13 @@ bool LFAST_Mount::getMountAltAz()
     }
     else
     {
-        currentAZ = rxMsg.lookup<double>("AzPosition");
-        currentALT = rxMsg.lookup<double>("AltPosition");
+        bool lookup1Valid = rxMsg.lookup<double>("AzPosition", &currentAZ);
+        bool lookup2Valid = rxMsg.lookup<double>("AltPosition", &currentALT);
+        if (!(lookup1Valid && lookup2Valid))
+        {
+            LOGF_ERROR("Missing Alt/Az key in response: %s", pRES);
+            return false;
+        }
         return true;
     }
 
@@ -405,6 +416,7 @@ bool LFAST_Mount::ReadScopeStatus()
         return true;
     }
     printScopeMode();
+    
     if (TrackState == SCOPE_SLEWING)
     {
         LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
@@ -433,7 +445,6 @@ bool LFAST_Mount::ReadScopeStatus()
         }
     }
 #endif
-
 
     LOG_DEBUG("\tReadScopeStatus(): CHECKING ALT/AZ");
     if (!getMountAltAz())
@@ -494,7 +505,7 @@ bool LFAST_Mount::isSlewComplete()
     auto commandStr = slewCompleteStatus.getMessageStr();
     auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
@@ -509,7 +520,7 @@ bool LFAST_Mount::isSlewComplete()
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\tRES: %s", pRES);
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
     {
@@ -518,7 +529,14 @@ bool LFAST_Mount::isSlewComplete()
     }
     else
     {
-        return (rxMsg.lookup<bool>("IsSlewComplete"));
+        bool slewCompleteFlag = false;
+        bool lookupValid = rxMsg.lookup<bool>("IsSlewComplete", &slewCompleteFlag);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing IsSlewComplete key in response: %s", pRES);
+            return false;
+        }
+        return (slewCompleteFlag);
     }
 
     LOGF_ERROR("Error reading IsSlewComplete. Result: %s", pRES);
@@ -533,7 +551,7 @@ bool LFAST_Mount::isMountParked()
     auto commandStr = mountParkStatusMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
@@ -549,7 +567,7 @@ bool LFAST_Mount::isMountParked()
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\tRES: %s", pRES);
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
     {
@@ -558,9 +576,16 @@ bool LFAST_Mount::isMountParked()
     }
     else
     {
-        auto resultStrForDebug = rxMsg.lookup<bool>("IsParked") ? "TRUE" : "FALSE";
-        LOGF_DEBUG("PARKING RESPONSE: %s", resultStrForDebug);
-        return (rxMsg.lookup<bool>("IsParked"));
+        bool isParked;
+        bool lookupValid = rxMsg.lookup<bool>("IsParked", &isParked);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing IsParked key in response: %s", pRES);
+            tcflush(PortFD, TCIOFLUSH);
+            return false;
+        }
+
+        return (isParked);
     }
 
     LOGF_ERROR("Error checking for park. Invalid response: %s", pRES);
@@ -575,7 +600,7 @@ bool LFAST_Mount::isMountTracking()
     auto commandStr = mountTrackStatusMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
@@ -591,7 +616,7 @@ bool LFAST_Mount::isMountTracking()
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\tRES: %s", pRES);
 
     LFAST::MessageParser rxMsg(pRES);
     double mountTrackRate = 0.;
@@ -602,7 +627,15 @@ bool LFAST_Mount::isMountTracking()
     }
     else
     {
-        return (rxMsg.lookup<double>("TrackRate") > 0.0);
+        double trackRate;
+        bool lookupValid = rxMsg.lookup<double>("TrackRate", &trackRate);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing TrackRate key in response: %s", pRES);
+            return false;
+        }
+
+        return (trackRate > 0.0);
     }
 
     LOGF_ERROR("Error checking for tracking. Invalid response: %s", pRES);
@@ -643,10 +676,11 @@ bool LFAST_Mount::Park()
     mountParkCmdMsg.addArgument("NoDisconnect", true);
 
     setTargetRaDec(targetRA, targetDEC);
+
     LOG_DEBUG("SENDING PARK COMMAND...........");
     if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
     {
-            LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
+        LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
         return false;
     }
 
@@ -668,10 +702,8 @@ bool LFAST_Mount::UnPark()
     LOG_DEBUG("LFAST_Mount::UnPark()");
     if (!sendMountOKCommand(mountParkCmdMsg, "Unparking mount"))
     {
-        LOG_DEBUG("Unpark Command returned FALSE!!!!!");
         return false;
     }
-        LOG_DEBUG("Unpark Command returned TRUE!!!!!");
     // Confirm we unparked
     if (isMountParked())
         LOG_ERROR("Could not unpark for some reason.");
@@ -752,7 +784,6 @@ bool LFAST_Mount::Abort()
     // #warning DISABLED ABORT
     // return sendMountOKCommand("9#MountAbortCommand", "Abort mount slew");
     return false;
-
 }
 
 bool LFAST_Mount::findHome()
@@ -877,7 +908,7 @@ bool LFAST_Mount::SetCurrentPark()
 
     strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
     // if (!sendMountOKCommand(pCMD, "Setting Park Position"))
-        return false;
+    return false;
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double ha = get_local_hour_angle(lst, getCurrentRa());
@@ -1091,13 +1122,19 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
     else
     {
         bool resultFlag = true;
-        for(unsigned ii = 0; ii < cmdMsg.numArgs(); ++ii)
+        for (unsigned ii = 0; ii < cmdMsg.numArgs(); ++ii)
         {
             auto keyStr = cmdMsg.getArgKey(ii);
-            auto resStr = rxMsg.lookup<std::string>(keyStr);
-            LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), resStr.c_str());
-            resultFlag &= resStr.compare("$OK^") == 0;
-            LOGF_DEBUG("%s RESULT: %d",keyStr.c_str(), resultFlag);
+            std::string valStr = {0};
+            auto lookupValid = rxMsg.lookup<std::string>(keyStr, &valStr);
+            if (!lookupValid)
+            {
+                LOGF_ERROR("Missing %s key in response: %s", keyStr, pRES);
+                return false;
+            }
+            LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), valStr.c_str());
+            resultFlag &= valStr.compare("$OK^") == 0;
+            LOGF_DEBUG("%s RESULT: %d", keyStr.c_str(), resultFlag);
         }
         return resultFlag;
     }

@@ -116,8 +116,8 @@ namespace LFAST
         std::string printMessage();
 
         template <typename T>
-        // inline bool lookup(std::string const &, T&);
-        inline T lookup(std::string const &);
+        inline bool lookup(std::string const &, T *);
+        // inline T lookup(std::string const &);
 
         bool isNode()
         {
@@ -136,7 +136,7 @@ namespace LFAST
         // protected:
         unsigned int depth;
         static bool isObject(std::string &str);
-        std::string find(std::string const &);
+        bool find(std::string const &, std::string *);
     };
 
     // Generator template specializations
@@ -213,32 +213,31 @@ namespace LFAST
     // }
 
     template <>
-    inline std::string MessageParser::lookup(std::string const &keyStr)
+    inline bool MessageParser::lookup(std::string const &keyStr, std::string *resultStr)
     {
-        auto resultStr = this->find(keyStr);
-        resultStr.erase(
-            std::remove(resultStr.begin(), resultStr.end(), '\"'),
-            resultStr.end());
-        return resultStr;
+        bool resultFlag = this->find(keyStr, resultStr);
+        resultStr->erase(
+            std::remove(resultStr->begin(), resultStr->end(), '\"'),
+            resultStr->end());
+        return resultFlag;
     }
 
     template <>
-    inline int MessageParser::lookup(std::string const &keyStr)
+    inline bool MessageParser::lookup(std::string const &keyStr, int *resultInt)
     {
-        auto resultStr = this->find(keyStr);
+        std::string resultStr = {0};
+        bool resultFlag = this->find(keyStr, &resultStr);
         std::istringstream iss(resultStr);
-        int resultInt;
-        iss >> resultInt;
-        return resultInt;
+        iss >> *resultInt;
+        return resultFlag;
     }
 
     // Assumes base 10 unless 0x is prepended to value
     template <>
-    inline unsigned int MessageParser::lookup(std::string const &keyStr)
+    inline bool MessageParser::lookup(std::string const &keyStr, unsigned int *resultUint)
     {
-        auto resultStr = this->find(keyStr);
-
-        unsigned int resultInt;
+        std::string resultStr = {0};
+        bool resultFlag = this->find(keyStr, &resultStr);
         // bool isHex = false;
 
         // if(resultStr.length() >= 3)
@@ -259,34 +258,32 @@ namespace LFAST
         // std::istringstream iss(resultStr);
         // iss >> resultInt;
         if (keyStr.length() > 0)
-            resultInt = std::stoul(resultStr, nullptr, 10);
+            *resultUint = std::stoul(resultStr, nullptr, 10);
         // }
 
-        std::cout << "Result val: " << resultInt << std::endl;
-        return resultInt;
+        std::cout << "Result val: " << resultUint << std::endl;
+        return resultFlag;
     }
 
     template <>
-    inline bool MessageParser::lookup(std::string const &keyStr)
+    inline bool MessageParser::lookup(std::string const &keyStr, bool *resultBool)
     {
-        auto resultStr = this->find(keyStr);
+        std::string resultStr = {0};
+        bool resultFlag = this->find(keyStr, &resultStr);
         std::transform(resultStr.begin(), resultStr.end(), resultStr.begin(),
                        [](unsigned char c)
                        { return std::tolower(c); });
-
-        return (resultStr.compare("true") == 0);
+        *resultBool = resultStr.compare("true") == 0;
+        return resultFlag;
     }
 
     template <>
-    inline double MessageParser::lookup(std::string const &keyStr)
+    inline bool MessageParser::lookup(std::string const &keyStr, double *resultDbl)
     {
-        std::cout << "#### DOUBLE PARSE RESULT:\n";
-        std::cout << keyStr << std::endl;
-        auto resultStr = this->find(keyStr);
-        std::cout << resultStr << std::endl;
-        double resultVal = std::atof(resultStr.c_str());
-        std::cout << resultVal << std::endl;
-        return resultVal;
+        std::string resultStr = {0};
+        bool resultFlag = this->find(keyStr, &resultStr);
+        *resultDbl = std::atof(resultStr.c_str());
+        return resultFlag;
     }
 
 }
