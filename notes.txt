@@ -1,2 +1,0 @@
-TCP Mount Example: 
-https://github.com/indilib/indi/blob/master/drivers/telescope/paramount.cpp
