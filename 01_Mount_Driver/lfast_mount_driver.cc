@@ -36,6 +36,7 @@
 #include "lfast_mount_driver.h"
 
 #include "indicom.h"
+#include "indipropertyswitch.h"
 
 #include <libnova/sidereal_time.h>
 #include <libnova/transform.h>
@@ -59,15 +60,35 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define SLEW_LIMIT 1   /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 
 #define LFAST_TIMEOUT 3 /* Timeout in seconds */
-
+#define LFAST_MOUNT_HANDSHAKE_TIMEOUT 2
+#define LFAST_HOMING_TIMEOUT 10
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 int scopeCapabilities;
 
-std::string convertToString(double dblVal);
-std::string getMessageIdString(int id);
-
+void LFAST_Mount::printScopeMode()
+{
+    // TelescopeStatus
+    switch (TrackState)
+    {
+    case SCOPE_IDLE:
+        LOG_DEBUG("# TrackState: SCOPE_IDLE");
+        break;
+    case SCOPE_SLEWING:
+        LOG_DEBUG("# TrackState: SCOPE_SLEWING");
+        break;
+    case SCOPE_TRACKING:
+        LOG_DEBUG("# TrackState: SCOPE_TRACKING");
+        break;
+    case SCOPE_PARKING:
+        LOG_DEBUG("# TrackState: SCOPE_PARKING");
+        break;
+    case SCOPE_PARKED:
+        LOG_DEBUG("# TrackState: SCOPE_PARKED");
+        break;
+    }
+}
 LFAST_Mount::LFAST_Mount()
 {
     setVersion(1, 4);
@@ -79,12 +100,11 @@ LFAST_Mount::LFAST_Mount()
 #endif
                         | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
-                        | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE
-                        // | TELESCOPE_CAN_GOTO
-                        // | TELESCOPE_HAS_TRACK_RATE
-                        // | TELESCOPE_CAN_CONTROL_TRACK
-                        // | TELESCOPE_HAS_PIER_SIDE
-                        ;
+                        | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE | TELESCOPE_CAN_GOTO
+        // | TELESCOPE_HAS_TRACK_RATE
+        // | TELESCOPE_CAN_CONTROL_TRACK
+        // | TELESCOPE_HAS_PIER_SIDE
+        ;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
@@ -95,18 +115,16 @@ LFAST_Mount::LFAST_Mount()
     m_WETimer.setSingleShot(true);
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
-    {
+                            {
         GuideNSNP.s = IPS_IDLE;
         GuideNSN[0].value = GuideNSN[1].value = 0;
-        IDSetNumber(&GuideNSNP, nullptr);
-    });
+        IDSetNumber(&GuideNSNP, nullptr); });
 
     m_WETimer.callOnTimeout([this]()
-    {
+                            {
         GuideWENP.s = IPS_IDLE;
         GuideWEN[0].value = GuideWEN[1].value = 0;
-        IDSetNumber(&GuideWENP, nullptr);
-    });
+        IDSetNumber(&GuideWENP, nullptr); });
 #endif
 
     /* initialize random seed: */
@@ -128,7 +146,36 @@ bool LFAST_Mount::initProperties()
     INDI::Telescope::initProperties();
 
     // Delete properties we don't use
+    // deleteProperty(TrackModeSP.name);
     // deleteProperty("USEJOYSTICK");
+    // Jogging
+    // IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
+    // IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT/AZ", ISS_OFF);
+    // IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
+    //                    ISR_1OFMANY, 60,
+    //                    IPS_IDLE);
+    JogModeSP[JOG_MODE_NSEW].fill(
+        "JOG_MODE_RA_DEC", // The name of the VALUE
+        "Jog RA/DEC",      // The label of the VALUE
+        ISS_ON             // The switch state
+    );
+
+    JogModeSP[JOG_MODE_ALT_AZ].fill(
+        "JOG_MODE_ALT_AZ", // The name of the VALUE
+        "Jog ALT/AZ",      // The label of the VALUE
+        ISS_OFF            // The switch state
+    );
+
+    JogModeSP.fill(
+        getDeviceName(), // The name of the device
+        "JOG_MODE",      // The name of the PROPERTY
+        "Jog Mode",      // The label of the PROPERTY
+        MOTION_TAB,      // What tab should we be on?
+        IP_RW,           // Let's make it read/write.
+        ISR_1OFMANY,     // One can be active
+        60,              // With a timeout of 60 seconds
+        IPS_IDLE         // and an initial state of idle.
+    );
 
     for (int i = 0; i < SlewRateSP.nsp - 1; i++)
     {
@@ -140,15 +187,17 @@ bool LFAST_Mount::initProperties()
     SlewRateSP.sp[5].s = ISS_ON;
 
     /* How fast do we jog compared to sidereal rate */
-    IUFillNumber(&JogRateN[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateNSEW_N[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateNSEW_N[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
-                 JOG_RATE_VALUE);
-    IUFillNumber(&JogRateN[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
-                 JOG_RATE_VALUE);
-    IUFillNumberVector(&JogRateNP, JogRateN, NUM_AXES, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
+    IUFillNumberVector(&JogRateNSEW_NP, JogRateNSEW_N, NUM_SR_AXES, getDeviceName(), "JOG_RATE", "Jog N/S/E/W", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
+    IUFillNumber(&JogRateAltAz_N[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (%Max)", "%g", 0, 100, 1, 10);
+    IUFillNumber(&JogRateAltAz_N[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (%Max)", "%g", 0, 100, 1, 10);
+
+    IUFillNumberVector(&JogRateAltAz_NP, JogRateAltAz_N, NUM_MECH_AXES, getDeviceName(), "ALT_AZ_JOG_RATE", "Jog Alt/Az", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 
     // IUFillNumberVector(&JogRateNP, JogRateN, 2, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 #if MOUNT_GUIDER_ENABLED
@@ -189,12 +238,6 @@ bool LFAST_Mount::initProperties()
     initGuiderProperties(getDeviceName(), MOTION_TAB);
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 #endif
-    // Jogging
-    IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
-    IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT_AZ", ISS_OFF);
-    IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
-                       ISR_1OFMANY, 60,
-                       IPS_IDLE);
 
     // Other stuff
     addAuxControls();
@@ -227,11 +270,12 @@ bool LFAST_Mount::updateProperties()
             TrackState = SCOPE_IDLE;
         }
 
-        defineProperty(&TrackModeSP);
-        defineProperty(&TrackRateNP);
-
         defineProperty(&JogModeSP);
-        defineProperty(&JogRateNP);
+        defineProperty(&JogRateNSEW_NP);
+        // defineProperty(&JogRateAltAz_NP);
+
+        // defineProperty(&TrackModeSP);
+        defineProperty(&TrackRateNP);
 
 #if MOUNT_GUIDER_ENABLED
         defineProperty(&GuideNSNP);
@@ -262,8 +306,8 @@ bool LFAST_Mount::updateProperties()
     {
         deleteProperty(TrackModeSP.name);
         deleteProperty(TrackRateNP.name);
-        deleteProperty(JogModeSP.name);
-        deleteProperty(JogRateNP.name);
+        deleteProperty(JogModeSP.getName());
+        deleteProperty(JogRateNSEW_NP.name);
 #if MOUNT_GUIDER_ENABLED
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
@@ -286,96 +330,103 @@ bool LFAST_Mount::updateProperties()
  * In order to know when the response is complete, we append the # character in
  * Javascript commands and read from the port until the # character is reached.
  *******************************************************************************/
-
 bool LFAST_Mount::Handshake()
 {
     if (isSimulation())
         return true;
 
     int rc = 0, nbytes_written = 0;
+
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    auto pCMD = hsMsg.getMessageCStr();
+    auto commandStr = hsMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
-
+    LOGF_DEBUG("Writing handshake command (pCMD= %s)", pCMD);
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing Handshake to Mount TCP server. Result: %d", rc);
         return false;
     }
 
-
     int nbytes_read = 0;
     char pRES[MAXRBUF] = {0};
-    if ((rc = tty_read(PortFD, pRES, MAXRBUF, LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_MOUNT_HANDSHAKE_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading Handshake from Mount TCP server. Result: %d", rc);
+        if (rc == -4)
+            LOGF_ERROR("Timeout reading Handshake from Mount TCP server.", rc);
+        else
+            LOGF_ERROR("Error reading Handshake from Mount TCP server. Result(%d): %d", nbytes_read, rc);
         return false;
     }
 
-    auto rxMsg = new LFAST::MessageParser(pRES);
-    if (strcmp(pRES, "99#Handshake^") != 0)
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        LOGF_ERROR("Error connecting. Result: %s", pRES);
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
         return false;
     }
-    else
+    unsigned int handshakeReturnVal = 0;
+    bool lookupValid = rxMsg.lookup<unsigned int>("Handshake", &handshakeReturnVal);
+    if (!lookupValid)
     {
-        LOGF_DEBUG("Got message ID: %s", pRES);
+        LOGF_ERROR("Missing Handshake key in response: %s", pRES);
+        return false;
+    }
+    if (handshakeReturnVal != 0xbeef)
+    {
+        LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
+        return false;
     }
 
     return true;
 }
 
-std::string convertToString(double dblVal)
-{
-    ByteConverter converter;
-    converter.DOUBLE = dblVal;
-    return (std::string((char *)converter.BYTES, 8));
-}
-
-std::string getMessageIdString(int id)
-{
-    // int2char i2c;
-    // i2c.i = id;
-    char idStr[] = {'#', '#', (char)id};
-    return (std::string(idStr));
-}
-
 bool LFAST_Mount::getMountAltAz()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+
     double mountAlt = 0., mountAz = 0.;
     LOG_DEBUG("Requesting Mount Alt/Az");
 
-    strncpy(pCMD,
-            "2#getAltAz",
-            MAXRBUF);
+    LFAST::MessageGenerator getAltAzMsg("MountMessage");
+    getAltAzMsg.addArgument("RequestAltAz", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = getAltAzMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing GetRaDec to mount Mount TCP server. Response: %d", rc);
+        LOGF_ERROR("Error writing Alt/Az request to mount Mount TCP server. Response: %d", rc);
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading GetRaDec from mount Mount TCP server. Result: %d", rc);
+        LOGF_ERROR("Error reading Alt/Az request response from mount Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\t\tRES: %s", pRES);
 
-    // Read results successfully into temporary values before committing
-    if (sscanf(pRES, "2#ALT=%lf;AZ=%lf^", &mountAlt, &mountAz) == 2)
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        currentALT = mountAlt;
-        currentAZ = mountAz;
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
+        return false;
+    }
+    else
+    {
+        bool lookup1Valid = rxMsg.lookup<double>("AzPosition", &currentAZ);
+        bool lookup2Valid = rxMsg.lookup<double>("AltPosition", &currentALT);
+        if (!(lookup1Valid && lookup2Valid))
+        {
+            LOGF_ERROR("Missing Alt/Az key in response: %s", pRES);
+            return false;
+        }
         return true;
     }
 
@@ -385,14 +436,17 @@ bool LFAST_Mount::getMountAltAz()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
+    LOG_DEBUG("\n##### CHECKING SCOPE STATUS #####");
     if (isSimulation())
     {
         mountSim();
         return true;
     }
+    printScopeMode();
 
     if (TrackState == SCOPE_SLEWING)
     {
+        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
         // Check if Scope is done slewing
         if (isSlewComplete())
         {
@@ -411,12 +465,15 @@ bool LFAST_Mount::ReadScopeStatus()
 #if MOUNT_PARKING_ENABLED
     else if (TrackState == SCOPE_PARKING)
     {
+        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
         if (isMountParked())
         {
             SetParked(true);
         }
     }
 #endif
+
+    LOG_DEBUG("\tReadScopeStatus(): CHECKING ALT/AZ");
     if (!getMountAltAz())
         return false;
 
@@ -442,13 +499,22 @@ bool LFAST_Mount::Goto(double r, double d)
     fs_sexa(RAStr, targetRA, 2, 3600);
     fs_sexa(DecStr, targetDEC, 2, 3600);
 
-    char pCMD[MAXRBUF] = {0};
-    snprintf(pCMD, MAXRBUF,
-             "LFAST_Mount.Asynchronous = true;"
-             "LFAST_Mount.SlewToRaDec(%g, %g,'');",
-             targetRA, targetDEC);
+    // snprintf(pCMD, MAXRBUF,
+    //          "LFAST_Mount.Asynchronous = true;"
+    //          "LFAST_Mount.SlewToRaDec(%g, %g,'');",
+    //          targetRA, targetDEC);
 
-    if (!sendTheSkyOKCommand(pCMD, "Slewing to target"))
+    double alt, az;
+    RaDecToAltAz(targetRA, targetDEC, &alt, &az);
+
+    LFAST::MessageGenerator gotoCommandMsg("MountMessage");
+    // gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    gotoCommandMsg.addArgument("slewToAltPosn", targetALT);
+    gotoCommandMsg.addArgument("slewToAzPosn", targetAZ);
+    auto commandStr = gotoCommandMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
+
+    if (!sendMountOKCommand(gotoCommandMsg, "Slewing to target"))
         return false;
 
     TrackState = SCOPE_SLEWING;
@@ -460,13 +526,13 @@ bool LFAST_Mount::Goto(double r, double d)
 bool LFAST_Mount::isSlewComplete()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
 
-    strncpy(pCMD,
-            "4#IsSlewComplete",
-            MAXRBUF);
+    LFAST::MessageGenerator slewCompleteStatus("MountMessage");
+    slewCompleteStatus.addArgument("IsSlewComplete", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = slewCompleteStatus.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("\tCMD: %s", pCMD);
 
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
@@ -474,54 +540,80 @@ bool LFAST_Mount::isSlewComplete()
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading IsSlewComplete from Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
-
-    int isComplete = 0;
-    if (sscanf(pRES, "4#SlewIsComplete=%d^", &isComplete) == 1)
+    LOGF_DEBUG("\tRES: %s", pRES);
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        return isComplete == 1 ? 1 : 0;
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
+        return false;
+    }
+    else
+    {
+        bool slewCompleteFlag = false;
+        bool lookupValid = rxMsg.lookup<bool>("IsSlewComplete", &slewCompleteFlag);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing IsSlewComplete key in response: %s", pRES);
+            return false;
+        }
+        return (slewCompleteFlag);
     }
 
-    LOGF_ERROR("Error reading isSlewComplete. Result: %s", pRES);
+    LOGF_ERROR("Error reading IsSlewComplete. Result: %s", pRES);
     return false;
 }
 
 #if MOUNT_PARKING_ENABLED
 bool LFAST_Mount::isMountParked()
 {
+    LFAST::MessageGenerator mountParkStatusMsg("MountMessage");
+    mountParkStatusMsg.addArgument("IsParked", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = mountParkStatusMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
+
+    LOGF_DEBUG("\tCMD: %s", pCMD);
+
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
-
-    strncpy(pCMD,
-            "5#IsMountParked",
-            MAXRBUF);
-
-    LOGF_DEBUG("CMD: %s", pCMD);
-
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing LFAST_Mount.IsParked() to Mount TCP server. Result: %d", rc);
+        LOGF_ERROR("Error writing IsParked to Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading LFAST_Mount.IsParked() from Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
-
-    if (strcmp(pRES, "5#MountIsParked=true^") == 0)
-        return true;
-    if (strcmp(pRES, "5#MountIsParked=false^") == 0)
+    LOGF_DEBUG("\tRES: %s", pRES);
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
+    {
+        LOGF_ERROR("isMountParked(): Error parsing received data <%s>", pRES);
         return false;
+    }
+    else
+    {
+        bool isParked;
+        bool lookupValid = rxMsg.lookup<bool>("IsParked", &isParked);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing IsParked key in response: %s", pRES);
+            // tcflush(PortFD, TCIFLUSH);
+            return false;
+        }
+
+        return (isParked);
+    }
 
     LOGF_ERROR("Error checking for park. Invalid response: %s", pRES);
     return false;
@@ -530,36 +622,47 @@ bool LFAST_Mount::isMountParked()
 
 bool LFAST_Mount::isMountTracking()
 {
+    LFAST::MessageGenerator mountTrackStatusMsg("MountMessage");
+    mountTrackStatusMsg.addArgument("getTrackRate", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    auto commandStr = mountTrackStatusMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
+
+    LOGF_DEBUG("\tCMD: %s", pCMD);
+
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
-
-    strncpy(pCMD,
-            "3#getTrackingStatus",
-            MAXRBUF);
-
-    LOGF_DEBUG("CMD: %s", pCMD);
-
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing LFAST_Mount.IsTracking to Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         LOGF_ERROR("Error reading LFAST_Mount.IsTracking from Mount TCP server. Result: %d", rc);
         return false;
     }
 
-    LOGF_DEBUG("RES: %s", pRES);
+    LOGF_DEBUG("\tRES: %s", pRES);
 
-    double SkyXTrackRate = 0.;
-    if (sscanf(pRES, "3#TrackRate=%lf^", &SkyXTrackRate) == 1)
+    LFAST::MessageParser rxMsg(pRES);
+    double mountTrackRate = 0.;
+    if (!rxMsg.succeeded())
     {
-        if (SkyXTrackRate == 0)
+        LOGF_ERROR("Error parsing received data <%s>", pRES);
+        return false;
+    }
+    else
+    {
+        double trackRate;
+        bool lookupValid = rxMsg.lookup<double>("TrackRate", &trackRate);
+        if (!lookupValid)
+        {
+            LOGF_ERROR("Missing TrackRate key in response: %s", pRES);
             return false;
-        else if (SkyXTrackRate > 0)
-            return true;
+        }
+
+        return (trackRate > 0.0);
     }
 
     LOGF_ERROR("Error checking for tracking. Invalid response: %s", pRES);
@@ -568,21 +671,21 @@ bool LFAST_Mount::isMountTracking()
 
 bool LFAST_Mount::Sync(double ra, double dec)
 {
-    char pCMD[MAXRBUF] = {0};
     double alt, az;
     RaDecToAltAz(ra, dec, &alt, &az);
-
-    snprintf(pCMD, MAXRBUF, "LFAST_Mount.Sync(%g, %g,'');", targetALT, targetAZ);
-    if (!sendTheSkyOKCommand(pCMD, "Syncing to target"))
-        return false;
-
     currentALT = alt;
     currentAZ = az;
 
+    LFAST::MessageGenerator syncDataMessage("MountMessage");
+    // syncDataMessage.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    syncDataMessage.addArgument("syncAltPosn", targetALT);
+    syncDataMessage.addArgument("syncAzPosn", targetAZ);
+
+    if (!sendMountOKCommand(syncDataMessage, "Syncing to target"))
+        return false;
+
     LOG_INFO("Sync is successful.");
-
     EqNP.s = IPS_OK;
-
     NewRaDec(ra, dec);
 
     return true;
@@ -595,16 +698,19 @@ bool LFAST_Mount::Park()
     double targetRA = range24(get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value) - targetHA);
     double targetDEC = GetAxis2Park();
 
+    LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
+    mountParkCmdMsg.addArgument("Park", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    mountParkCmdMsg.addArgument("NoDisconnect", true);
+
     setTargetRaDec(targetRA, targetDEC);
 
-    // char pCMD[MAXRBUF] = {0};
-    // strncpy(pCMD,
-    //         "LFAST_Mount.Asynchronous = true;"
-    //         "LFAST_Mount.ParkAndDoNotDisconnect();",
-    //         MAXRBUF);
-
-    if (!sendTheSkyOKCommand("6#MountParkCommand", "Parking mount"))
+    LOG_DEBUG("SENDING PARK COMMAND...........");
+    if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
+    {
+        LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
         return false;
+    }
+
     TrackState = SCOPE_PARKING;
     LOG_INFO("Parking telescope in progress...");
 
@@ -613,11 +719,13 @@ bool LFAST_Mount::Park()
 
 bool LFAST_Mount::UnPark()
 {
-    // char pCMD[MAXRBUF] = {0};
-    // strncpy(pCMD, "LFAST_Mount.Unpark();", MAXRBUF);
-    if (!sendTheSkyOKCommand("7#MountUnparkCommand", "Unparking mount"))
+    LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
+    mountParkCmdMsg.addArgument("Unpark", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    // LOG_DEBUG("LFAST_Mount::UnPark()");
+    if (!sendMountOKCommand(mountParkCmdMsg, "Unparking mount"))
+    {
         return false;
-
+    }
     // Confirm we unparked
     if (isMountParked())
         LOG_ERROR("Could not unpark for some reason.");
@@ -635,9 +743,9 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     {
         if (strcmp(name, "JOG_RATE") == 0)
         {
-            IUUpdateNumber(&JogRateNP, values, names, n);
-            JogRateNP.s = IPS_OK;
-            IDSetNumber(&JogRateNP, nullptr);
+            IUUpdateNumber(&JogRateNSEW_NP, values, names, n);
+            JogRateNSEW_NP.s = IPS_OK;
+            IDSetNumber(&JogRateNSEW_NP, nullptr);
             return true;
         }
 #if MOUNT_GUIDER_ENABLED
@@ -685,6 +793,29 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             IDSetSwitch(&HomeSP, nullptr);
             return true;
         }
+        if (!strcmp(JogModeSP.getName(), name))
+        {
+            LOGF_INFO("Switching Jog Mode to %s", "<Placeholder>");
+            // Accept what we received.
+            JogModeSP.update(states, names, n);
+
+            // Find out what switch was clicked.
+            int index = JogModeSP.findOnSwitchIndex();
+            switch (index)
+            {
+            case JOG_MODE_NSEW: // see how much better this is than direct indexes? USE AN ENUM!
+                deleteProperty(JogRateAltAz_NP.name);
+                defineProperty(&JogRateNSEW_NP);
+                break;
+            case JOG_MODE_ALT_AZ:
+                deleteProperty(JogRateNSEW_NP.name);
+                defineProperty(&JogRateAltAz_NP);
+                break;
+            }
+            JogModeSP.apply();
+            // IDSetSwitch(&HomeSP, nullptr);
+            return true;
+        }
     }
 
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
@@ -693,22 +824,36 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
 bool LFAST_Mount::Abort()
 {
     // char pCMD[MAXRBUF] = {0};
-    LOG_INFO("Sending Abort Command");
+    LFAST::MessageGenerator abortCmdMsg("MountMessage");
+    abortCmdMsg.addArgument("AbortSlew", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+
+    LOG_INFO("Sending Abort Slew Command");
+    if (!sendMountOKCommand(abortCmdMsg, "Sending Abort Command"))
+    {
+        return false;
+    }
     // strncpy(pCMD, "LFAST_Mount.Abort();", MAXRBUF);
-    return sendTheSkyOKCommand("9#MountAbortCommand", "Abort mount slew");
+    // #warning DISABLED ABORT
+    // return sendMountOKCommand("9#MountAbortCommand", "Abort mount slew");
+    return false;
 }
 
 bool LFAST_Mount::findHome()
 {
     // char pCMD[MAXRBUF] = {0};
     LOG_INFO("Sending Home Command");
-    // strncpy(pCMD, "LFAST_Mount.FindHome();"
-    //               "while(!LFAST_Mount.IsSlewComplete) {"
-    //               "sky6Web.Sleep(1000);}",
-    //         MAXRBUF);
-    return sendTheSkyOKCommand("8#MountHomeCommand", "Find home", 60);
-}
+    LFAST::MessageGenerator homeCmdMsg("MountMessage");
+    homeCmdMsg.addArgument("FindHome", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
 
+    LOG_INFO("Sending Home Command");
+    if (!sendMountOKCommand(homeCmdMsg, "Sending Home Command", LFAST_HOMING_TIMEOUT))
+    {
+        return false;
+    }
+
+    return true;
+}
+#if MOUNT_GOTO_ENABLED
 bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
     if (TrackState == SCOPE_PARKED)
@@ -723,26 +868,26 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-        case MOTION_START:
-            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-            {
-                LOG_ERROR("Error setting N/S motion direction.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
-            break;
+    case MOTION_START:
+        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+        {
+            LOG_ERROR("Error setting N/S motion direction.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
+        break;
 
-        case MOTION_STOP:
-            if (!isSimulation() && !stopOpenLoopMotion())
-            {
-                LOG_ERROR("Error stopping N/S motion.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s halted.",
-                          (motion == LFAST_NORTH) ? "North" : "South");
-            break;
+    case MOTION_STOP:
+        if (!isSimulation() && !stopOpenLoopMotion())
+        {
+            LOG_ERROR("Error stopping N/S motion.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s halted.",
+                      (motion == LFAST_NORTH) ? "North" : "South");
+        break;
     }
 
     return true;
@@ -761,37 +906,39 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-        case MOTION_START:
-            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-            {
-                LOG_ERROR("Error setting W/E motion direction.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
-            break;
+    case MOTION_START:
+        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+        {
+            LOG_ERROR("Error setting W/E motion direction.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
+        break;
 
-        case MOTION_STOP:
-            if (!isSimulation() && !stopOpenLoopMotion())
-            {
-                LOG_ERROR("Error stopping W/E motion.");
-                return false;
-            }
-            else
-                LOGF_INFO("Movement toward %s halted.",
-                          (motion == LFAST_WEST) ? "West" : "East");
-            break;
+    case MOTION_STOP:
+        if (!isSimulation() && !stopOpenLoopMotion())
+        {
+            LOG_ERROR("Error stopping W/E motion.");
+            return false;
+        }
+        else
+            LOGF_INFO("Movement toward %s halted.",
+                      (motion == LFAST_WEST) ? "West" : "East");
+        break;
     }
 
     return true;
 }
+#endif
 
 bool LFAST_Mount::startOpenLoopMotion(uint8_t motion, uint16_t rate)
 {
     char pCMD[MAXRBUF] = {0};
 
     snprintf(pCMD, MAXRBUF, "LFAST_Mount.DoCommand(9,'%d|%d');", motion, rate);
-    return sendTheSkyOKCommand(pCMD, "Starting open loop motion");
+    // return sendMountOKCommand(pCMD, "Starting open loop motion");
+    return false;
 }
 
 bool LFAST_Mount::stopOpenLoopMotion()
@@ -799,7 +946,8 @@ bool LFAST_Mount::stopOpenLoopMotion()
     char pCMD[MAXRBUF] = {0};
 
     strncpy(pCMD, "LFAST_Mount.DoCommand(10,'');", MAXRBUF);
-    return sendTheSkyOKCommand(pCMD, "Stopping open loop motion");
+    // return sendMountOKCommand(pCMD, "Stopping open loop motion");
+    return false;
 }
 
 bool LFAST_Mount::updateTime(ln_date *utc, double utc_offset)
@@ -815,8 +963,14 @@ bool LFAST_Mount::SetCurrentPark()
     char pCMD[MAXRBUF] = {0};
 
     strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
-    if (!sendTheSkyOKCommand(pCMD, "Setting Park Position"))
-        return false;
+    // if (!sendMountOKCommand(pCMD, "Setting Park Position"))
+
+    LFAST::MessageGenerator setParkPosnMsg("MountMessage");
+    setParkPosnMsg.addArgument("SetParkPosition", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+
+    LOG_INFO("Sending Set Park Position Message");
+
+    return false;
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double ha = get_local_hour_angle(lst, getCurrentRa());
@@ -846,6 +1000,15 @@ bool LFAST_Mount::SetParkPosition(double Axis1Value, double Axis2Value)
               "parking position and click Current.");
     return false;
 }
+
+// bool LFAST_Mount::JogAzEl(double Axis1Value, double Axis2Value)
+// {
+//     INDI_UNUSED(Axis1Value);
+//     INDI_UNUSED(Axis2Value);
+//     LOG_ERROR("Setting custom parking position directly is not supported. Slew to the desired "
+//               "parking position and click Current.");
+//     return false;
+// }
 #endif
 
 void LFAST_Mount::mountSim()
@@ -895,9 +1058,9 @@ void LFAST_Mount::mountSim()
     double motionRate = 0;
 
     if (MovementNSSP.s == IPS_BUSY)
-        motionRate = JogRateN[0].value;
+        motionRate = JogRateNSEW_N[0].value;
     else if (MovementWESP.s == IPS_BUSY)
-        motionRate = JogRateN[1].value;
+        motionRate = JogRateNSEW_N[1].value;
     if (motionRate != 0)
     {
         da_ra = motionRate * dt * 0.05;
@@ -905,28 +1068,28 @@ void LFAST_Mount::mountSim()
 
         switch (MovementNSSP.s)
         {
-            case IPS_BUSY:
-                if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
-                    currentDEC += da_dec;
-                else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
-                    currentDEC -= da_dec;
-                break;
+        case IPS_BUSY:
+            if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
+                currentDEC += da_dec;
+            else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
+                currentDEC -= da_dec;
+            break;
 
-            default:
-                break;
+        default:
+            break;
         }
 
         switch (MovementWESP.s)
         {
-            case IPS_BUSY:
-                if (MovementWES[DIRECTION_WEST].s == ISS_ON)
-                    currentRA += da_ra / 15.;
-                else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
-                    currentRA -= da_ra / 15.;
-                break;
+        case IPS_BUSY:
+            if (MovementWES[DIRECTION_WEST].s == ISS_ON)
+                currentRA += da_ra / 15.;
+            else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
+                currentRA -= da_ra / 15.;
+            break;
 
-            default:
-                break;
+        default:
+            break;
         }
 
         NewRaDec(currentRA, currentDEC);
@@ -936,109 +1099,182 @@ void LFAST_Mount::mountSim()
     /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
     switch (TrackState)
     {
-        case SCOPE_IDLE:
-            /* RA moves at sidereal, Dec stands still */
-            currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
-            break;
+    case SCOPE_IDLE:
+        /* RA moves at sidereal, Dec stands still */
+        currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
+        break;
 
-        case SCOPE_SLEWING:
-        case SCOPE_PARKING:
-            /* slewing - nail it when both within one pulse @ SLEWRATE */
-            nlocked = 0;
+    case SCOPE_SLEWING:
+    case SCOPE_PARKING:
+        /* slewing - nail it when both within one pulse @ SLEWRATE */
+        nlocked = 0;
 
-            dx = getDeltaRa();
+        dx = getDeltaRa();
 
-            // Take shortest path
-            if (fabs(dx) > 12)
-                dx *= -1;
+        // Take shortest path
+        if (fabs(dx) > 12)
+            dx *= -1;
 
-            if (fabs(dx) <= da_ra)
-            {
-                currentRA = getTargetRa();
-                nlocked++;
-            }
-            else if (dx > 0)
-                currentRA += da_ra / 15.;
+        if (fabs(dx) <= da_ra)
+        {
+            currentRA = getTargetRa();
+            nlocked++;
+        }
+        else if (dx > 0)
+            currentRA += da_ra / 15.;
+        else
+            currentRA -= da_ra / 15.;
+
+        if (currentRA < 0)
+            currentRA += 24;
+        else if (currentRA > 24)
+            currentRA -= 24;
+
+        dx = getDeltaDec();
+        if (fabs(dx) <= da_dec)
+        {
+            currentDEC = getTargetDec();
+            nlocked++;
+        }
+        else if (dx > 0)
+            currentDEC += da_dec;
+        else
+            currentDEC -= da_dec;
+
+        if (nlocked == 2)
+        {
+            if (TrackState == SCOPE_SLEWING)
+                TrackState = SCOPE_TRACKING;
             else
-                currentRA -= da_ra / 15.;
+                SetParked(true);
+        }
+        break;
 
-            if (currentRA < 0)
-                currentRA += 24;
-            else if (currentRA > 24)
-                currentRA -= 24;
-
-            dx = getDeltaDec();
-            if (fabs(dx) <= da_dec)
-            {
-                currentDEC = getTargetDec();
-                nlocked++;
-            }
-            else if (dx > 0)
-                currentDEC += da_dec;
-            else
-                currentDEC -= da_dec;
-
-            if (nlocked == 2)
-            {
-                if (TrackState == SCOPE_SLEWING)
-                    TrackState = SCOPE_TRACKING;
-                else
-                    SetParked(true);
-            }
-            break;
-
-        default:
-            break;
+    default:
+        break;
     }
 
     NewRaDec(currentRA, currentDEC);
 }
 
-bool LFAST_Mount::sendTheSkyOKCommand(const char *command, const char *errorMessage, uint8_t timeout)
+bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout)
 {
-    int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+    auto commandStr = cmdMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-    // snprintf(pCMD, MAXRBUF,
-    //          "/* Java Script */"
-    //          "var Out;"
-    //          "try {"
-    //          "%s"
-    //          "Out  = 'OK#'; }"
-    //          "catch (err) {Out = err; }",
-    //          command);
-    snprintf(pCMD, MAXRBUF, "%s", command);
-
-    LOGF_DEBUG("CMD: %s", pCMD);
+    LOGF_DEBUG("sendMountOKCommand pCMD: %s", pCMD);
 
     tcflush(PortFD, TCIOFLUSH);
 
+    int rc = 0, nbytes_written = 0, nbytes_read = 0;
     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing sendTheSkyOKCommand to Mount TCP server. Result: $%d", rc);
+        LOGF_ERROR("Error writing sendMountOKCommand to Mount TCP server. Result: $%d", rc);
         return false;
     }
 
-    if ((rc = tty_read_section(PortFD, pRES, '^', timeout, &nbytes_read)) != TTY_OK)
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', timeout, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading sendTheSkyOKCommand from Mount TCP server. Result: %d", rc);
+        if (rc == -4)
+            LOGF_ERROR("Timeout reading sendMountOKCommand from Mount TCP server.", rc);
+        else
+            LOGF_ERROR("Error reading sendMountOKCommand from Mount TCP server. Result: %d", rc);
         return false;
     }
-
-    LOGF_DEBUG("RES: %s", pRES);
+    // pRES[nbytes_read] = '\0';
+    LOGF_DEBUG("sendMountOKCommand pRES: %s", pRES);
 
     tcflush(PortFD, TCIOFLUSH);
 
-    char expectedResponse[MAXRBUF] = {0};
-    snprintf(expectedResponse, MAXRBUF, "%s=$OK^", command);
-    if (strcmp(expectedResponse, pRES) == 0)
-        return true;
-    else
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
     {
-        LOGF_ERROR("sendTheSkyOKCommand Error %s - Invalid response: %s", errorMessage, pRES);
+        LOGF_ERROR("sendMountOKCommand: Error parsing received data <%s>", pRES);
         return false;
     }
+    else
+    {
+        bool resultFlag = true;
+        LOGF_DEBUG("\tChecking %d args in: %s.", cmdMsg.numArgs(), pCMD);
+        for (unsigned ii = 0; ii < cmdMsg.numArgs(); ++ii)
+        {
+            auto keyStr = cmdMsg.getArgKey(ii);
+            LOGF_DEBUG("\t(%s)", keyStr.c_str());
+            std::string valStr = {0};
+            auto lookupValid = rxMsg.lookup<std::string>(keyStr, &valStr);
+            if (!lookupValid)
+            {
+                LOGF_INFO("\tsendMountOKCommand: Missing %s key in response: %s", keyStr.c_str(), pRES);
+                return false;
+            }
+            LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), valStr.c_str());
+            resultFlag &= valStr.compare("$OK^") == 0;
+            LOGF_DEBUG("%s RESULT: %d", keyStr.c_str(), resultFlag);
+        }
+        return resultFlag;
+    }
 }
+
+// bool LFAST_Mount::sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout)
+// {
+//     int rc = 0, nbytes_written = 0, nbytes_read = 0;
+//     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+
+//     // snprintf(pCMD, MAXRBUF,
+//     //          "/* Java Script */"
+//     //          "var Out;"
+//     //          "try {"
+//     //          "%s"
+//     //          "Out  = 'OK#'; }"
+//     //          "catch (err) {Out = err; }",
+//     //          command);
+//     snprintf(pCMD, MAXRBUF, "%s", command);
+
+//     LOGF_DEBUG("CMD: %s", pCMD);
+
+//     tcflush(PortFD, TCIOFLUSH);
+
+//     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+//     {
+//         LOGF_ERROR("Error writing sendMountCommand to Mount TCP server. Result: $%d", rc);
+//         return false;
+//     }
+
+//     if ((rc = tty_read_section(PortFD, pRES, '\0', timeout, &nbytes_read)) != TTY_OK)
+//     {
+//         LOGF_ERROR("Error reading sendMountCommand from Mount TCP server. Result: %d", rc);
+//         return false;
+//     }
+
+//     LOGF_DEBUG("RES: %s", pRES);
+
+//     tcflush(PortFD, TCIOFLUSH);
+
+//     LOGF_DEBUG("RES: %s", pRES);
+//     LFAST::MessageParser rxMsg(pRES);
+//     if (!rxMsg.succeeded())
+//     {
+//         LOGF_ERROR("Error parsing received data <%s>", pRES);
+//         return false;
+//     }
+//     else
+//     {
+//         bool resultFlag = rxMsg.lookup<std::string>("IsParked").compare("$OK^") == 0;
+//         return resultFlag;
+//     }
+
+//     char expectedResponse[MAXRBUF] = {0};
+//     snprintf(expectedResponse, MAXRBUF, "%s=$OK^", command);
+//     if (strcmp(expectedResponse, pRES) == 0)
+//         return true;
+//     else
+//     {
+//         LOGF_ERROR("sendMountCommand Error %s - Invalid response: %s", errorMessage, pRES);
+//         return false;
+//     }
+// }
+
 #if MOUNT_GUIDER_ENABLED
 IPState LFAST_Mount::GuideNorth(uint32_t ms)
 {
@@ -1110,6 +1346,7 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
     return IPS_BUSY;
 }
 #endif
+
 bool LFAST_Mount::setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate)
 {
     int on = enable ? 1 : 0;
@@ -1117,7 +1354,8 @@ bool LFAST_Mount::setTheSkyTracking(bool enable, bool isSidereal, double raRate,
     char pCMD[MAXRBUF] = {0};
 
     snprintf(pCMD, MAXRBUF, "LFAST_Mount.SetTracking(%d, %d, %g, %g);", on, ignore, raRate, deRate);
-    return sendTheSkyOKCommand(pCMD, "Setting tracking rate");
+    // return sendMountOKCommand(pCMD, "Setting tracking rate");
+    return false;
 }
 
 bool LFAST_Mount::SetTrackRate(double raRate, double deRate)

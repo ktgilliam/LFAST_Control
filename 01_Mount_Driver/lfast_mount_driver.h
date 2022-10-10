@@ -25,6 +25,9 @@
 #include "indiguiderinterface.h"
 #include "inditelescope.h"
 #include "inditimer.h"
+#include "indipropertyswitch.h"
+
+#include "../00_Utils/lfast_comms.h"
 
 union ByteConverter
 {
@@ -35,7 +38,7 @@ union ByteConverter
 
 #define MOUNT_PARKING_ENABLED 1
 #define MOUNT_GUIDER_ENABLED 0
-
+#define MOUNT_GOTO_ENABLED 1
 // #define MOUNT_GOTO_ENABLED
 #define TRACK_SOLAR_ENABLED 0
 #define TRACK_LUNAR_ENABLED 0
@@ -50,11 +53,14 @@ enum
 {
     RA_AXIS,
     DEC_AXIS,
+    NUM_SR_AXES
+};
+enum
+{
     ALT_AXIS,
     AZ_AXIS,
-    NUM_AXES
+    NUM_MECH_AXES
 };
-
 enum
 {
     LFAST_NORTH,
@@ -129,7 +135,8 @@ private:
     bool getMountAltAz();
     bool isSlewComplete();
 
-    bool sendTheSkyOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+    // bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+    bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
 #if MOUNT_PARKING_ENABLED
     bool isMountParked();
 #endif
@@ -153,6 +160,7 @@ private:
     // Homing
     bool findHome();
 
+    void printScopeMode();
     // double currentRA{0};
     // double currentDEC{90};
     // double targetRA{0};
@@ -168,14 +176,18 @@ private:
     // Jog Rate
     enum
     {
-        JOG_MODE_RA_DEC,
+        JOG_MODE_NSEW,
         JOG_MODE_ALT_AZ,
     };
-    INumber JogRateN[NUM_AXES];
-    INumberVectorProperty JogRateNP;
+    // ISwitch JogModeS[NUM_JOG_MODES];
+    // ISwitchVectorProperty JogModeSP;
+    INDI::PropertySwitch JogModeSP{2};
 
-    ISwitch JogModeS[NUM_JOG_MODES];
-    ISwitchVectorProperty JogModeSP;
+    INumber JogRateNSEW_N[NUM_SR_AXES];
+    INumberVectorProperty JogRateNSEW_NP;
+
+    INumber JogRateAltAz_N[NUM_MECH_AXES];
+    INumberVectorProperty JogRateAltAz_NP;
 
 #if MOUNT_GUIDER_ENABLED
     // Guide Rate
@@ -191,14 +203,14 @@ private:
     ISwitch MovementAzS[2];
     ISwitchVectorProperty MovementAzSP;
 
-    // Tracking Mode
+// Tracking Mode
+// #if NUM_TRACK_MODES > 1
     ISwitch TrackModeS[NUM_TRACK_MODES];
     ISwitchVectorProperty TrackModeSP;
-
+// #endif
     // Homing
     ISwitchVectorProperty HomeSP;
     ISwitch HomeS[1];
-
 
     // Timers
     INDI::Timer m_NSTimer;

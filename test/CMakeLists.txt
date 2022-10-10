@@ -63,8 +63,21 @@ target_link_libraries(
   GTest::gtest_main
 )
 
+# #### mount driver tests
+# add_executable(
+#   lfast_mount_driver_tests
+#   lfast_mount_driver_tests.cc
+# )
+
+# target_link_libraries(
+#   lfast_mount_driver_tests
+#   lfast_mount_driver_testable
+#   GTest::gtest_main
+# )
+
 #### Bringing it all together
 include(GoogleTest)
 gtest_discover_tests(bash_wrapper_tests)
 # gtest_discover_tests(can_bus_interface_tests)
 gtest_discover_tests(lfast_comms_tests)
+
