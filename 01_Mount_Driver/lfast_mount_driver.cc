@@ -71,19 +71,19 @@ void LFAST_Mount::printScopeMode()
     switch (TrackState)
     {
     case SCOPE_IDLE:
-        LOG_DEBUG("SCOPE_IDLE");
+        LOG_DEBUG("# TrackState: SCOPE_IDLE");
         break;
     case SCOPE_SLEWING:
-        LOG_DEBUG("SCOPE_SLEWING");
+        LOG_DEBUG("# TrackState: SCOPE_SLEWING");
         break;
     case SCOPE_TRACKING:
-        LOG_DEBUG("SCOPE_TRACKING");
+        LOG_DEBUG("# TrackState: SCOPE_TRACKING");
         break;
     case SCOPE_PARKING:
-        LOG_DEBUG("SCOPE_PARKING");
+        LOG_DEBUG("# TrackState: SCOPE_PARKING");
         break;
     case SCOPE_PARKED:
-        LOG_DEBUG("SCOPE_PARKED");
+        LOG_DEBUG("# TrackState: SCOPE_PARKED");
         break;
     }
 }
@@ -398,7 +398,7 @@ bool LFAST_Mount::getMountAltAz()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
-    LOG_DEBUG("CHECKING SCOPE STATUS");
+    LOG_DEBUG("\n##### CHECKING SCOPE STATUS #####");
     if (isSimulation())
     {
         mountSim();
@@ -407,7 +407,7 @@ bool LFAST_Mount::ReadScopeStatus()
     printScopeMode();
     if (TrackState == SCOPE_SLEWING)
     {
-        LOG_DEBUG("### ReadScopeStatus(): CHECKING IF SLEWING");
+        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
         // Check if Scope is done slewing
         if (isSlewComplete())
         {
@@ -426,13 +426,16 @@ bool LFAST_Mount::ReadScopeStatus()
 #if MOUNT_PARKING_ENABLED
     else if (TrackState == SCOPE_PARKING)
     {
-        LOG_DEBUG("### ReadScopeStatus(): CHECKING IF PARKED");
+        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
         if (isMountParked())
         {
             SetParked(true);
         }
     }
 #endif
+
+
+    LOG_DEBUG("\tReadScopeStatus(): CHECKING ALT/AZ");
     if (!getMountAltAz())
         return false;
 
@@ -640,9 +643,12 @@ bool LFAST_Mount::Park()
     mountParkCmdMsg.addArgument("NoDisconnect", true);
 
     setTargetRaDec(targetRA, targetDEC);
-    LOG_DEBUG("bool LFAST_Mount::Park()");
+    LOG_DEBUG("SENDING PARK COMMAND...........");
     if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
+    {
+            LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
         return false;
+    }
 
     TrackState = SCOPE_PARKING;
     LOG_INFO("Parking telescope in progress...");
@@ -1089,9 +1095,9 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
         {
             auto keyStr = cmdMsg.getArgKey(ii);
             auto resStr = rxMsg.lookup<std::string>(keyStr);
-            // LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), resStr.c_str());
+            LOGF_DEBUG("ARG CHECK: %s->%s", keyStr.c_str(), resStr.c_str());
             resultFlag &= resStr.compare("$OK^") == 0;
-            // LOGF_DEBUG("%s RESULT: %d",keyStr.c_str(), resultFlag);
+            LOGF_DEBUG("%s RESULT: %d",keyStr.c_str(), resultFlag);
         }
         return resultFlag;
     }

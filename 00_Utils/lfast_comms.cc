@@ -129,7 +129,7 @@ std::string extractLeadingValString(std::string *inBuff)
 {
     std::smatch m;
     std::regex re;
-    re = (R"(([\w|.]+),(.*))");
+    re = (R"((["|\w|.]+),(.*))");
     if (std::regex_search(*inBuff, m, re))
     {
         while (!m.ready())
@@ -198,7 +198,7 @@ void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
             if (postColonBuff.size() > 0)
             {
 #if OUTPUT_DEBUG_INFO
-                std::cout << __LINE__ << ": Key: " << keyStr << "Buff contents not an object: "  << ": " << postColonBuff << std::endl;
+                std::cout << __LINE__ << ": Key: <" << keyStr << "> Buffer contents not an object: " << postColonBuff << std::endl;
 #endif
                 do
                 {

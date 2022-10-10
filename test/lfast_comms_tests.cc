@@ -184,6 +184,7 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoChild)
 }
 #endif
 
+
 #if 1 // two children
 TEST(lfast_comms_tests, nestedRxParserTest_twoDoubleChild)
 {
@@ -205,6 +206,29 @@ TEST(lfast_comms_tests, nestedRxParserTest_twoDoubleChild)
 
     EXPECT_STREQ(childVal1.c_str(), "1.234567");
     EXPECT_STREQ(childVal2.c_str(), "-55.66778899");
+}
+#endif
+
+#if 1 // two children
+TEST(lfast_comms_tests, nestedRxParserTest_twoStringChild)
+{
+    auto rxMsgParent = new LFAST::MessageParser(R"({"ParentKey":{"ChildKey1":"Womp1","ChildKey2":"Womp2"}})");
+    ASSERT_TRUE(rxMsgParent->succeeded());
+
+    std::string childVal1, childVal2;
+    auto rxMsgChild = rxMsgParent->childNode;
+    if (rxMsgChild)
+    {
+        childVal1 = rxMsgChild->data["ChildKey1"];
+        childVal2 = rxMsgChild->data["ChildKey2"];
+    }
+    else
+    {
+        GTEST_FATAL_FAILURE_("child pointer null");
+    }
+
+    EXPECT_STREQ(childVal1.c_str(), "\"Womp1\"");
+    EXPECT_STREQ(childVal2.c_str(), "\"Womp2\"");
 }
 #endif
 
@@ -388,15 +412,36 @@ TEST(lfast_comms_tests, getArgKeyTest)
     cmdMsg.addArgument("ParkCommand", 1.234);
     cmdMsg.addArgument("NoDisconnect", true);
 
-    // auto respMsg = LFAST::MessageParser(R"({"KarbonMessage": {"UnparkCommand": "$OK^"})");
-    // ASSERT_TRUE(respMsg.succeeded());
-
     bool resultFlag = true;
     EXPECT_EQ(cmdMsg.numArgs(), 2);
     EXPECT_STREQ(cmdMsg.getArgKey(0).c_str(), "ParkCommand");
     EXPECT_STREQ(cmdMsg.getArgKey(1).c_str(), "NoDisconnect");
-
 }
+
+#if 1
+TEST(lfast_comms_tests, checkOkCommandTest)
+{
+    LFAST::MessageGenerator cmdMsg("MountMessage");
+    cmdMsg.addArgument("ParkCommand", 1.234);
+    cmdMsg.addArgument("NoDisconnect", true);
+
+    auto respMsg = LFAST::MessageParser(R"({"KarbonMessage": {"ParkCommand": "$OK^", "NoDisconnect": "$OK^"}})");
+    ASSERT_TRUE(respMsg.succeeded());
+    respMsg.printMessage();
+
+    ASSERT_EQ(cmdMsg.numArgs(), 2);
+
+    auto parkRespKey = cmdMsg.getArgKey(0);
+    auto parkResp = respMsg.lookup<std::string>(parkRespKey);
+    std::cout << "Park Response Key/Resp: <" << parkRespKey << ">\t<" << parkResp << ">" << std::endl;
+    EXPECT_EQ(parkResp.compare("$OK^"), 0);
+
+    auto noDiscoKey = cmdMsg.getArgKey(1);
+    auto noDiscoResp = respMsg.lookup<std::string>(noDiscoKey);
+    std::cout << "No Disco Key/Resp: <" << noDiscoKey << ">:\t<" << noDiscoResp << ">" << std::endl;
+    EXPECT_EQ(noDiscoResp.compare("$OK^"), 0);
+}
+#endif
 //
 
 // TEST(lfast_comms_tests, handshakeTest)
