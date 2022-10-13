@@ -155,6 +155,13 @@ namespace LFAST
         this->argsList.push_back(ss.str());
     }
     template <>
+    inline void MessageGenerator::addArgument(std::string label, const unsigned int &value)
+    {
+        std::ostringstream ss;
+        ss << std::quoted(label) << ":" << value;
+        this->argsList.push_back(ss.str());
+    }
+    template <>
     inline void MessageGenerator::addArgument(std::string label, const int &value)
     {
         std::ostringstream ss;

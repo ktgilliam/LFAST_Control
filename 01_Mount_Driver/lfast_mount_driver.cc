@@ -342,9 +342,11 @@ bool LFAST_Mount::Handshake()
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     auto commandStr = hsMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
+    // pCMD[strlen(commandStr.c_str())] = '\0';
 
     LOGF_DEBUG("Writing handshake command (pCMD= %s)", pCMD);
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+    //     if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
+    if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str()) + 1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing Handshake to Mount TCP server. Result: %d", rc);
         return false;
@@ -355,7 +357,7 @@ bool LFAST_Mount::Handshake()
     if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_MOUNT_HANDSHAKE_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
         if (rc == -4)
-            LOGF_ERROR("Timeout reading Handshake from Mount TCP server.", rc);
+            LOGF_ERROR("Timeout reading Handshake from Mount TCP server. [%s]", pRES);
         else
             LOGF_ERROR("Error reading Handshake from Mount TCP server. Result(%d): %d", nbytes_read, rc);
         return false;
@@ -397,7 +399,7 @@ bool LFAST_Mount::getMountAltAz()
 
     LOGF_DEBUG("\tCMD: %s", pCMD);
 
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+    if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str()) + 1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing Alt/Az request to mount Mount TCP server. Response: %d", rc);
         return false;
@@ -534,7 +536,7 @@ bool LFAST_Mount::isSlewComplete()
 
     LOGF_DEBUG("\tCMD: %s", pCMD);
 
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+        if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing IsSlewComplete to Mount TCP server. Result: %d", rc);
         return false;
@@ -581,7 +583,7 @@ bool LFAST_Mount::isMountParked()
     LOGF_DEBUG("\tCMD: %s", pCMD);
 
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+        if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing IsParked to Mount TCP server. Result: %d", rc);
         return false;
@@ -630,7 +632,7 @@ bool LFAST_Mount::isMountTracking()
     LOGF_DEBUG("\tCMD: %s", pCMD);
 
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+        if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing LFAST_Mount.IsTracking to Mount TCP server. Result: %d", rc);
         return false;
@@ -1167,7 +1169,7 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
     tcflush(PortFD, TCIOFLUSH);
 
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-    if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+        if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
     {
         LOGF_ERROR("Error writing sendMountOKCommand to Mount TCP server. Result: $%d", rc);
         return false;
@@ -1235,7 +1237,7 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
 
 //     tcflush(PortFD, TCIOFLUSH);
 
-//     if ((rc = tty_write_string(PortFD, pCMD, &nbytes_written)) != TTY_OK)
+//         if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
 //     {
 //         LOGF_ERROR("Error writing sendMountCommand to Mount TCP server. Result: $%d", rc);
 //         return false;

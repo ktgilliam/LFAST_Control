@@ -44,7 +44,7 @@ std::string LFAST::MessageGenerator::getMessageStr()
         ss << std::quoted("");
     }
     ss << "}";
-
+    ss << '\0';
     return ss.str();
 }
 const char *LFAST::MessageGenerator::getMessageCStr()
