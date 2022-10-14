@@ -49,6 +49,12 @@ union ByteConverter
 #define AZ_EL_JOG_ENABLED 1
 #define NUM_JOG_MODES (1 + AZ_EL_JOG_ENABLED)
 
+
+#define LFAST_TIMEOUT 3 /* Timeout in seconds */
+#define LFAST_MOUNT_HANDSHAKE_TIMEOUT 2
+#define LFAST_HOMING_TIMEOUT 10
+
+
 enum
 {
     RA_AXIS,
