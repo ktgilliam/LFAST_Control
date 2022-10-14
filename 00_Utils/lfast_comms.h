@@ -133,10 +133,12 @@ namespace LFAST
             return (this->parsingStatus == ParsingStatus::PARSING_SUCCESS);
         }
 
-        // protected:
+        protected:
         unsigned int depth;
         static bool isObject(std::string &str);
         bool find(std::string const &, std::string *);
+        void cleanupString(std::string *);
+
     };
 
     // Generator template specializations

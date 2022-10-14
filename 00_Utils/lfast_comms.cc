@@ -44,7 +44,7 @@ std::string LFAST::MessageGenerator::getMessageStr()
         ss << std::quoted("");
     }
     ss << "}";
-    ss << '\0';
+    // ss << '\0';
     return ss.str();
 }
 const char *LFAST::MessageGenerator::getMessageCStr()
@@ -153,13 +153,9 @@ std::string extractLeadingValString(std::string *inBuff)
 
 void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
 {
-    inBuff->erase(std::remove_if(inBuff->begin(), inBuff->end(),
-                                 [](char c)
-                                 {
-                                     return (c == '\r' || c == '\t' || c == ' ' || c == '\n');
-                                 }),
-                  inBuff->end());
-
+    cleanupString(inBuff);
+    // bool isObjFlag = (inBuff->front() == '{') && (inBuff->back() == '}');
+    // std::cout << "isObjFlag" << isObjFlag << std::endl;
     this->parsingStatus = ParsingStatus::PARSING_IN_PROGRESS;
     std::string keyStr = {0}, valStr = {0};
 
@@ -194,6 +190,7 @@ void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
                 this->parsingStatus = this->childNode->parsingStatus;
                 return;
             }
+
         }
         else
         {
@@ -227,11 +224,16 @@ void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
     }
     else
     {
-        if (this->parentNode == nullptr) // You're not inside an object, string is not correctly formatted.
-        {
-            this->parsingStatus = ParsingStatus::PARSING_FAILURE;
-            return;
-        }
+//         // if (this->parentNode == nullptr || !isObjFlag) 
+//         // if (this->parentNode == nullptr) 
+//         if(!isObjFlag)// You're not inside an object, string is not correctly formatted.
+//         {
+// #if OUTPUT_DEBUG_INFO
+//             std::cout << __LINE__ << "Parsing failure (outside object).\n";
+// #endif
+//             this->parsingStatus = ParsingStatus::PARSING_FAILURE;
+//             return;
+//         }
         std::string delimiter = ",";
         size_t pos = 0;
         std::string token;
@@ -260,6 +262,16 @@ void LFAST::MessageParser::parseMessageBuffer(std::string *inBuff)
         this->parsingStatus = ParsingStatus::PARSING_SUCCESS;
     }
     DEBUG_PRINT_PARSE_STATUS();
+}
+
+void LFAST::MessageParser::cleanupString(std::string *inBuff)
+{
+    inBuff->erase(std::remove_if(inBuff->begin(), inBuff->end(),
+                                 [](char c)
+                                 {
+                                     return (c == '\0' || c == '\r' || c == '\t' || c == ' ' || c == '\n');
+                                 }),
+                  inBuff->end());
 }
 
 std::string LFAST::MessageParser::printMessage()
