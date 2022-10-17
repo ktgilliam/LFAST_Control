@@ -65,28 +65,7 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 int scopeCapabilities;
 
-void LFAST_Mount::printScopeMode()
-{
-    // TelescopeStatus
-    switch (TrackState)
-    {
-    case SCOPE_IDLE:
-        LOG_DEBUG("# TrackState: SCOPE_IDLE");
-        break;
-    case SCOPE_SLEWING:
-        LOG_DEBUG("# TrackState: SCOPE_SLEWING");
-        break;
-    case SCOPE_TRACKING:
-        LOG_DEBUG("# TrackState: SCOPE_TRACKING");
-        break;
-    case SCOPE_PARKING:
-        LOG_DEBUG("# TrackState: SCOPE_PARKING");
-        break;
-    case SCOPE_PARKED:
-        LOG_DEBUG("# TrackState: SCOPE_PARKED");
-        break;
-    }
-}
+
 LFAST_Mount::LFAST_Mount()
 {
     setVersion(1, 4);
@@ -96,33 +75,40 @@ LFAST_Mount::LFAST_Mount()
 #if MOUNT_PARKING_ENABLED
                         | TELESCOPE_CAN_PARK
 #endif
-                        | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
-                        // | TELESCOPE_HAS_TIME
-                        | TELESCOPE_HAS_LOCATION | TELESCOPE_HAS_TRACK_MODE | TELESCOPE_CAN_GOTO
-        // | TELESCOPE_HAS_TRACK_RATE
-        // | TELESCOPE_CAN_CONTROL_TRACK
-        // | TELESCOPE_HAS_PIER_SIDE
-        ;
+                        | TELESCOPE_CAN_ABORT 
+                        | TELESCOPE_CAN_SYNC
+                        | TELESCOPE_HAS_TIME
+                        | TELESCOPE_HAS_LOCATION 
+                        | TELESCOPE_HAS_TRACK_MODE 
+                        | TELESCOPE_CAN_GOTO
+                        // | TELESCOPE_HAS_TRACK_RATE
+                        // | TELESCOPE_CAN_CONTROL_TRACK
+                        // | TELESCOPE_HAS_PIER_SIDE
+                        ;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
     setTelescopeConnection(CONNECTION_TCP);
 
+    // The mount is initially in IDLE state.
+     TrackState = SCOPE_IDLE;
 #if MOUNT_GUIDER_ENABLED
     m_NSTimer.setSingleShot(true);
     m_WETimer.setSingleShot(true);
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
-                            {
+    {
         GuideNSNP.s = IPS_IDLE;
         GuideNSN[0].value = GuideNSN[1].value = 0;
-        IDSetNumber(&GuideNSNP, nullptr); });
+        IDSetNumber(&GuideNSNP, nullptr);
+    });
 
     m_WETimer.callOnTimeout([this]()
-                            {
+    {
         GuideWENP.s = IPS_IDLE;
         GuideWEN[0].value = GuideWEN[1].value = 0;
-        IDSetNumber(&GuideWENP, nullptr); });
+        IDSetNumber(&GuideWENP, nullptr);
+    });
 #endif
 
     /* initialize random seed: */
@@ -143,38 +129,6 @@ bool LFAST_Mount::initProperties()
     /* Make sure to init parent properties first */
     INDI::Telescope::initProperties();
 
-    // Delete properties we don't use
-    // deleteProperty(TrackModeSP.name);
-    // deleteProperty("USEJOYSTICK");
-    // Jogging
-    // IUFillSwitch(&JogModeS[JOG_MODE_RA_DEC], "JOG_MODE_RA_DEC", "Jog RA/DEC", ISS_ON);
-    // IUFillSwitch(&JogModeS[JOG_MODE_ALT_AZ], "JOG_MODE_ALT_AZ", "Jog ALT/AZ", ISS_OFF);
-    // IUFillSwitchVector(&JogModeSP, JogModeS, NUM_JOG_MODES, getDeviceName(), "JOG_MODE", "Jog Mode", MOTION_TAB, IP_RW,
-    //                    ISR_1OFMANY, 60,
-    //                    IPS_IDLE);
-    JogModeSP[JOG_MODE_NSEW].fill(
-        "JOG_MODE_RA_DEC", // The name of the VALUE
-        "Jog RA/DEC",      // The label of the VALUE
-        ISS_ON             // The switch state
-    );
-
-    JogModeSP[JOG_MODE_ALT_AZ].fill(
-        "JOG_MODE_ALT_AZ", // The name of the VALUE
-        "Jog ALT/AZ",      // The label of the VALUE
-        ISS_OFF            // The switch state
-    );
-
-    JogModeSP.fill(
-        getDeviceName(), // The name of the device
-        "JOG_MODE",      // The name of the PROPERTY
-        "Jog Mode",      // The label of the PROPERTY
-        MOTION_TAB,      // What tab should we be on?
-        IP_RW,           // Let's make it read/write.
-        ISR_1OFMANY,     // One can be active
-        60,              // With a timeout of 60 seconds
-        IPS_IDLE         // and an initial state of idle.
-    );
-
     for (int i = 0; i < SlewRateSP.nsp - 1; i++)
     {
         sprintf(SlewRateSP.sp[i].label, "%.fx", slewspeeds[i]);
@@ -185,17 +139,14 @@ bool LFAST_Mount::initProperties()
     SlewRateSP.sp[5].s = ISS_ON;
 
     /* How fast do we jog compared to sidereal rate */
-    IUFillNumber(&JogRateNSEW_N[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateN[RA_AXIS], "JOG_RATE_WE", "W/E Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
-    IUFillNumber(&JogRateNSEW_N[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
+    IUFillNumber(&JogRateN[DEC_AXIS], "JOG_RATE_NS", "N/S Rate (arcmin)", "%g", JOG_RATE_MIN, JOG_RATE_MAX, JOG_RATE_STEP,
                  JOG_RATE_VALUE);
 
-    IUFillNumberVector(&JogRateNSEW_NP, JogRateNSEW_N, NUM_SR_AXES, getDeviceName(), "JOG_RATE", "Jog N/S/E/W", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+    IUFillNumberVector(&JogRateNP, JogRateN, NUM_SR_AXES, getDeviceName(), "JOG_RATE", "Jog N/S/E/W", MOTION_TAB, IP_RW, 0,
+                       IPS_IDLE);
 
-    IUFillNumber(&JogRateAltAz_N[ALT_AXIS], "JOG_RATE_ALT", "Alt Rate (%Max)", "%g", 0, 100, 1, 10);
-    IUFillNumber(&JogRateAltAz_N[AZ_AXIS], "JOG_RATE_AZ", "Az Rate (%Max)", "%g", 0, 100, 1, 10);
-
-    IUFillNumberVector(&JogRateAltAz_NP, JogRateAltAz_N, NUM_MECH_AXES, getDeviceName(), "ALT_AZ_JOG_RATE", "Jog Alt/Az", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 
     // IUFillNumberVector(&JogRateNP, JogRateN, 2, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
 #if MOUNT_GUIDER_ENABLED
@@ -232,6 +183,8 @@ bool LFAST_Mount::initProperties()
     TrackState = SCOPE_IDLE;
 
     SetParkDataType(PARK_AZ_ALT);
+
+
 #if MOUNT_GUIDER_ENABLED
     initGuiderProperties(getDeviceName(), MOTION_TAB);
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
@@ -244,7 +197,8 @@ bool LFAST_Mount::initProperties()
 
     double currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
-    setTargetRaDec(currentRA, currentDEC);
+    targetRA = currentRA;
+    targetDEC = currentDEC;
 
     setDefaultPollingPeriod(250);
     return true;
@@ -268,11 +222,7 @@ bool LFAST_Mount::updateProperties()
             TrackState = SCOPE_IDLE;
         }
 
-        defineProperty(&JogModeSP);
-        defineProperty(&JogRateNSEW_NP);
-        // defineProperty(&JogRateAltAz_NP);
-
-        // defineProperty(&TrackModeSP);
+        defineProperty(&JogRateNP);
         defineProperty(&TrackRateNP);
 
 #if MOUNT_GUIDER_ENABLED
@@ -286,15 +236,17 @@ bool LFAST_Mount::updateProperties()
         {
             // If loading parking data is successful, we just set the default parking values.
             SetAxis1ParkDefault(0);
-            SetAxis2ParkDefault(currentALT);
+            SetAxis2ParkDefault(currentDEC);
         }
         else
         {
             // Otherwise, we set all parking data to default in case no parking data is found.
+            // Axis 1 is RA/AZ
+            // Axis 2 is DEC/ALT
             SetAxis1Park(0);
-            SetAxis2Park(currentALT);
+            SetAxis2Park(currentDEC);
             SetAxis1ParkDefault(0);
-            SetAxis2ParkDefault(currentALT);
+            SetAxis2ParkDefault(currentDEC);
         }
         SetParked(isMountParked());
 #endif
@@ -304,8 +256,7 @@ bool LFAST_Mount::updateProperties()
     {
         deleteProperty(TrackModeSP.name);
         deleteProperty(TrackRateNP.name);
-        deleteProperty(JogModeSP.getName());
-        deleteProperty(JogRateNSEW_NP.name);
+        deleteProperty(JogRateNP.name);
 #if MOUNT_GUIDER_ENABLED
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
@@ -338,6 +289,8 @@ bool LFAST_Mount::Handshake()
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    hsMsg.addArgument("latitude", LocationN[LOCATION_LATITUDE].value);
+    hsMsg.addArgument("longitude", LocationN[LOCATION_LONGITUDE].value);
     auto commandStr = hsMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
     // pCMD[strlen(commandStr.c_str())] = '\0';
@@ -383,7 +336,7 @@ bool LFAST_Mount::Handshake()
     return true;
 }
 
-bool LFAST_Mount::getMountAltAz()
+bool LFAST_Mount::getMountRaDec()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
 
@@ -391,7 +344,7 @@ bool LFAST_Mount::getMountAltAz()
     LOG_DEBUG("Requesting Mount Alt/Az");
 
     LFAST::MessageGenerator getAltAzMsg("MountMessage");
-    getAltAzMsg.addArgument("RequestAltAz", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
+    getAltAzMsg.addArgument("RequestRaDec", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     auto commandStr = getAltAzMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
@@ -399,14 +352,14 @@ bool LFAST_Mount::getMountAltAz()
 
     if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("getMountAltAz(): Error writing Alt/Az request to mount Mount TCP server. Response: %d", rc);
+        LOGF_ERROR("getMountRaDec(): Error writing Alt/Az request to mount Mount TCP server. Response: %d", rc);
         return false;
     }
 
     char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("getMountAltAz(): Error reading Alt/Az request response from mount Mount TCP server. Result: %d", rc);
+        LOGF_ERROR("getMountRaDec(): Error reading Alt/Az request response from mount Mount TCP server. Result: %d", rc);
         return false;
     }
 
@@ -415,16 +368,16 @@ bool LFAST_Mount::getMountAltAz()
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
     {
-        LOGF_ERROR("getMountAltAz(): Error parsing received data: %s", pRES);
+        LOGF_ERROR("getMountRaDec(): Error parsing received data: %s", pRES);
         return false;
     }
     else
     {
-        bool lookup1Valid = rxMsg.lookup<double>("AzPosition", &currentAZ);
-        bool lookup2Valid = rxMsg.lookup<double>("AltPosition", &currentALT);
+        bool lookup1Valid = rxMsg.lookup<double>("RA", &currentRA);
+        bool lookup2Valid = rxMsg.lookup<double>("DEC", &currentDEC);
         if (!(lookup1Valid && lookup2Valid))
         {
-            LOGF_ERROR("Missing Alt/Az key in response: %s", pRES);
+            LOGF_ERROR("Missing RA/DEC key in response: %s", pRES);
             return false;
         }
         return true;
@@ -436,7 +389,6 @@ bool LFAST_Mount::getMountAltAz()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
-    LOG_DEBUG("\n##### CHECKING SCOPE STATUS #####");
     if (isSimulation())
     {
         mountSim();
@@ -474,13 +426,11 @@ bool LFAST_Mount::ReadScopeStatus()
 #endif
 
     LOG_DEBUG("\tReadScopeStatus(): CHECKING ALT/AZ");
-    if (!getMountAltAz())
+    if (!getMountRaDec())
         return false;
 
     char RAStr[64], DecStr[64];
 
-    double currentRA = this->getCurrentRa();
-    double currentDEC = this->getCurrentDec();
     fs_sexa(RAStr, currentRA, 2, 3600);
     fs_sexa(DecStr, currentDEC, 2, 3600);
 
@@ -492,25 +442,17 @@ bool LFAST_Mount::ReadScopeStatus()
 
 bool LFAST_Mount::Goto(double r, double d)
 {
-    double targetRA = r;
-    double targetDEC = d;
+    targetRA = r;
+    targetDEC = d;
     char RAStr[64], DecStr[64];
 
     fs_sexa(RAStr, targetRA, 2, 3600);
     fs_sexa(DecStr, targetDEC, 2, 3600);
 
-    // snprintf(pCMD, MAXRBUF,
-    //          "LFAST_Mount.Asynchronous = true;"
-    //          "LFAST_Mount.SlewToRaDec(%g, %g,'');",
-    //          targetRA, targetDEC);
-
-    double alt, az;
-    RaDecToAltAz(targetRA, targetDEC, &alt, &az);
-
     LFAST::MessageGenerator gotoCommandMsg("MountMessage");
     // gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    gotoCommandMsg.addArgument("slewToAltPosn", targetALT);
-    gotoCommandMsg.addArgument("slewToAzPosn", targetAZ);
+    gotoCommandMsg.addArgument("slewToRaPosn", targetRA);
+    gotoCommandMsg.addArgument("slewToDecPosn", targetDEC);
     auto commandStr = gotoCommandMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
@@ -671,22 +613,20 @@ bool LFAST_Mount::isMountTracking()
 
 bool LFAST_Mount::Sync(double ra, double dec)
 {
-    double alt, az;
-    RaDecToAltAz(ra, dec, &alt, &az);
-    currentALT = alt;
-    currentAZ = az;
+    currentRA = ra;
+    currentDEC = dec;
 
     LFAST::MessageGenerator syncDataMessage("MountMessage");
     // syncDataMessage.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    syncDataMessage.addArgument("syncAltPosn", targetALT);
-    syncDataMessage.addArgument("syncAzPosn", targetAZ);
+    syncDataMessage.addArgument("syncRaPosn", currentRA);
+    syncDataMessage.addArgument("syncDecPosn", currentDEC);
 
     if (!sendMountOKCommand(syncDataMessage, "Syncing to target"))
         return false;
 
     LOG_INFO("Sync is successful.");
     EqNP.s = IPS_OK;
-    NewRaDec(ra, dec);
+    NewRaDec(currentRA, currentDEC);
 
     return true;
 }
@@ -701,8 +641,6 @@ bool LFAST_Mount::Park()
     LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
     mountParkCmdMsg.addArgument("Park", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     // mountParkCmdMsg.addArgument("NoDisconnect", true);
-
-    setTargetRaDec(targetRA, targetDEC);
 
     LOG_DEBUG("SENDING PARK COMMAND...........");
     if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
@@ -743,9 +681,9 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     {
         if (strcmp(name, "JOG_RATE") == 0)
         {
-            IUUpdateNumber(&JogRateNSEW_NP, values, names, n);
-            JogRateNSEW_NP.s = IPS_OK;
-            IDSetNumber(&JogRateNSEW_NP, nullptr);
+            IUUpdateNumber(&JogRateNP, values, names, n);
+            JogRateNP.s = IPS_OK;
+            IDSetNumber(&JogRateNP, nullptr);
             return true;
         }
 #if MOUNT_GUIDER_ENABLED
@@ -791,29 +729,6 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             }
 
             IDSetSwitch(&HomeSP, nullptr);
-            return true;
-        }
-        if (!strcmp(JogModeSP.getName(), name))
-        {
-            LOGF_INFO("Switching Jog Mode to %s", "<Placeholder>");
-            // Accept what we received.
-            JogModeSP.update(states, names, n);
-
-            // Find out what switch was clicked.
-            int index = JogModeSP.findOnSwitchIndex();
-            switch (index)
-            {
-            case JOG_MODE_NSEW: // see how much better this is than direct indexes? USE AN ENUM!
-                deleteProperty(JogRateAltAz_NP.name);
-                defineProperty(&JogRateNSEW_NP);
-                break;
-            case JOG_MODE_ALT_AZ:
-                deleteProperty(JogRateNSEW_NP.name);
-                defineProperty(&JogRateAltAz_NP);
-                break;
-            }
-            JogModeSP.apply();
-            // IDSetSwitch(&HomeSP, nullptr);
             return true;
         }
     }
@@ -868,26 +783,26 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-    case MOTION_START:
-        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-        {
-            LOG_ERROR("Error setting N/S motion direction.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
-        break;
+        case MOTION_START:
+            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+            {
+                LOG_ERROR("Error setting N/S motion direction.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s.", (motion == LFAST_NORTH) ? "North" : "South");
+            break;
 
-    case MOTION_STOP:
-        if (!isSimulation() && !stopOpenLoopMotion())
-        {
-            LOG_ERROR("Error stopping N/S motion.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s halted.",
-                      (motion == LFAST_NORTH) ? "North" : "South");
-        break;
+        case MOTION_STOP:
+            if (!isSimulation() && !stopOpenLoopMotion())
+            {
+                LOG_ERROR("Error stopping N/S motion.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s halted.",
+                          (motion == LFAST_NORTH) ? "North" : "South");
+            break;
     }
 
     return true;
@@ -906,26 +821,26 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-    case MOTION_START:
-        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-        {
-            LOG_ERROR("Error setting W/E motion direction.");
-            return false;
-        }
-        else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
-        break;
+        case MOTION_START:
+            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+            {
+                LOG_ERROR("Error setting W/E motion direction.");
+                return false;
+            }
+            else
+                LOGF_INFO("Moving toward %s.", (motion == LFAST_WEST) ? "West" : "East");
+            break;
 
-    case MOTION_STOP:
-        if (!isSimulation() && !stopOpenLoopMotion())
-        {
-            LOG_ERROR("Error stopping W/E motion.");
-            return false;
-        }
-        else
-            LOGF_INFO("Movement toward %s halted.",
-                      (motion == LFAST_WEST) ? "West" : "East");
-        break;
+        case MOTION_STOP:
+            if (!isSimulation() && !stopOpenLoopMotion())
+            {
+                LOG_ERROR("Error stopping W/E motion.");
+                return false;
+            }
+            else
+                LOGF_INFO("Movement toward %s halted.",
+                          (motion == LFAST_WEST) ? "West" : "East");
+            break;
     }
 
     return true;
@@ -973,10 +888,10 @@ bool LFAST_Mount::SetCurrentPark()
     return false;
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
-    double ha = get_local_hour_angle(lst, getCurrentRa());
+    double ha = get_local_hour_angle(lst, currentRA);
 
-    SetAxis1Park(currentAZ);
-    SetAxis2Park(currentALT);
+    SetAxis1Park(ha);
+    SetAxis2Park(currentDEC);
 
     return true;
 }
@@ -1011,151 +926,6 @@ bool LFAST_Mount::SetParkPosition(double Axis1Value, double Axis2Value)
 // }
 #endif
 
-void LFAST_Mount::mountSim()
-{
-    static double currentRA, currentDEC;
-    static bool firstTime = true;
-    if (firstTime)
-    {
-        currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
-        currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
-        firstTime = false;
-    }
-    static struct timeval ltv
-    {
-        0, 0
-    };
-    struct timeval tv
-    {
-        0, 0
-    };
-    double dt, dx, da_ra = 0, da_dec = 0;
-    int nlocked;
-
-    /* update elapsed time since last poll, don't presume exactly POLLMS */
-    gettimeofday(&tv, nullptr);
-
-    if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
-        ltv = tv;
-
-    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
-    ltv = tv;
-
-    if (fabs(getDeltaRa()) * 15. >= GOTO_LIMIT)
-        da_ra = GOTO_RATE * dt;
-    else if (fabs(getDeltaRa()) * 15. >= SLEW_LIMIT)
-        da_ra = SLEW_RATE * dt;
-    else
-        da_ra = FINE_SLEW_RATE * dt;
-
-    if (fabs(getDeltaDec()) >= GOTO_LIMIT)
-        da_dec = GOTO_RATE * dt;
-    else if (fabs(getDeltaDec()) >= SLEW_LIMIT)
-        da_dec = SLEW_RATE * dt;
-    else
-        da_dec = FINE_SLEW_RATE * dt;
-
-    double motionRate = 0;
-
-    if (MovementNSSP.s == IPS_BUSY)
-        motionRate = JogRateNSEW_N[0].value;
-    else if (MovementWESP.s == IPS_BUSY)
-        motionRate = JogRateNSEW_N[1].value;
-    if (motionRate != 0)
-    {
-        da_ra = motionRate * dt * 0.05;
-        da_dec = motionRate * dt * 0.05;
-
-        switch (MovementNSSP.s)
-        {
-        case IPS_BUSY:
-            if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
-                currentDEC += da_dec;
-            else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
-                currentDEC -= da_dec;
-            break;
-
-        default:
-            break;
-        }
-
-        switch (MovementWESP.s)
-        {
-        case IPS_BUSY:
-            if (MovementWES[DIRECTION_WEST].s == ISS_ON)
-                currentRA += da_ra / 15.;
-            else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
-                currentRA -= da_ra / 15.;
-            break;
-
-        default:
-            break;
-        }
-
-        NewRaDec(currentRA, currentDEC);
-        return;
-    }
-
-    /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
-    switch (TrackState)
-    {
-    case SCOPE_IDLE:
-        /* RA moves at sidereal, Dec stands still */
-        currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
-        break;
-
-    case SCOPE_SLEWING:
-    case SCOPE_PARKING:
-        /* slewing - nail it when both within one pulse @ SLEWRATE */
-        nlocked = 0;
-
-        dx = getDeltaRa();
-
-        // Take shortest path
-        if (fabs(dx) > 12)
-            dx *= -1;
-
-        if (fabs(dx) <= da_ra)
-        {
-            currentRA = getTargetRa();
-            nlocked++;
-        }
-        else if (dx > 0)
-            currentRA += da_ra / 15.;
-        else
-            currentRA -= da_ra / 15.;
-
-        if (currentRA < 0)
-            currentRA += 24;
-        else if (currentRA > 24)
-            currentRA -= 24;
-
-        dx = getDeltaDec();
-        if (fabs(dx) <= da_dec)
-        {
-            currentDEC = getTargetDec();
-            nlocked++;
-        }
-        else if (dx > 0)
-            currentDEC += da_dec;
-        else
-            currentDEC -= da_dec;
-
-        if (nlocked == 2)
-        {
-            if (TrackState == SCOPE_SLEWING)
-                TrackState = SCOPE_TRACKING;
-            else
-                SetParked(true);
-        }
-        break;
-
-    default:
-        break;
-    }
-
-    NewRaDec(currentRA, currentDEC);
-}
 
 bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout)
 {
@@ -1216,64 +986,27 @@ bool LFAST_Mount::sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char
     }
 }
 
-// bool LFAST_Mount::sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout)
-// {
-//     int rc = 0, nbytes_written = 0, nbytes_read = 0;
-//     char pCMD[MAXRBUF] = {0}, pRES[MAXRBUF] = {0};
+void LFAST_Mount::sendMountPassthroughCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout)
+{
+    cmdMsg.addArgument("NOREPLY", true);
+    auto commandStr = cmdMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
 
-//     // snprintf(pCMD, MAXRBUF,
-//     //          "/* Java Script */"
-//     //          "var Out;"
-//     //          "try {"
-//     //          "%s"
-//     //          "Out  = 'OK#'; }"
-//     //          "catch (err) {Out = err; }",
-//     //          command);
-//     snprintf(pCMD, MAXRBUF, "%s", command);
+    LOGF_DEBUG("sendMountPassthroughCommand pCMD: %s", pCMD);
 
-//     LOGF_DEBUG("CMD: %s", pCMD);
+    tcflush(PortFD, TCIOFLUSH);
 
-//     tcflush(PortFD, TCIOFLUSH);
+    int rc = 0, nbytes_written = 0, nbytes_read = 0;
+    if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
+    {
+        LOGF_ERROR("Error writing sendMountOKCommand to Mount TCP server. Result: $%d", rc);
+        return;
+    }
+    // pRES[nbytes_read] = '\0';
+    tcflush(PortFD, TCIOFLUSH);
 
-//         if ((rc = tty_write(PortFD, pCMD, std::strlen(commandStr.c_str())+1, &nbytes_written)) != TTY_OK)
-//     {
-//         LOGF_ERROR("Error writing sendMountCommand to Mount TCP server. Result: $%d", rc);
-//         return false;
-//     }
-
-//     if ((rc = tty_read_section(PortFD, pRES, '\0', timeout, &nbytes_read)) != TTY_OK)
-//     {
-//         LOGF_ERROR("Error reading sendMountCommand from Mount TCP server. Result: %d", rc);
-//         return false;
-//     }
-
-//     LOGF_DEBUG("RES: %s", pRES);
-
-//     tcflush(PortFD, TCIOFLUSH);
-
-//     LOGF_DEBUG("RES: %s", pRES);
-//     LFAST::MessageParser rxMsg(pRES);
-//     if (!rxMsg.succeeded())
-//     {
-//         LOGF_ERROR("Error parsing received data <%s>", pRES);
-//         return false;
-//     }
-//     else
-//     {
-//         bool resultFlag = rxMsg.lookup<std::string>("IsParked").compare("$OK^") == 0;
-//         return resultFlag;
-//     }
-
-//     char expectedResponse[MAXRBUF] = {0};
-//     snprintf(expectedResponse, MAXRBUF, "%s=$OK^", command);
-//     if (strcmp(expectedResponse, pRES) == 0)
-//         return true;
-//     else
-//     {
-//         LOGF_ERROR("sendMountCommand Error %s - Invalid response: %s", errorMessage, pRES);
-//         return false;
-//     }
-// }
+   return;
+}
 
 #if MOUNT_GUIDER_ENABLED
 IPState LFAST_Mount::GuideNorth(uint32_t ms)
@@ -1390,47 +1123,6 @@ bool LFAST_Mount::SetTrackEnabled(bool enabled)
         return setTheSkyTracking(false, false, 0.0, 0.0);
 }
 
-double LFAST_Mount::getCurrentRa()
-{
-    double currentRa;
-    AltAzToRaDec(currentALT, currentAZ, &currentRa, 0);
-    return currentRa;
-}
-double LFAST_Mount::getCurrentDec()
-{
-    double currentDec;
-    AltAzToRaDec(currentALT, currentAZ, 0, &currentDec);
-    return currentDec;
-}
-double LFAST_Mount::getTargetRa()
-{
-    double tgtRa;
-    AltAzToRaDec(targetALT, targetAZ, &tgtRa, 0);
-    return tgtRa;
-}
-double LFAST_Mount::getTargetDec()
-{
-    double tgtDec;
-    AltAzToRaDec(targetALT, targetAZ, 0, &tgtDec);
-    return tgtDec;
-}
-double LFAST_Mount::getDeltaRa()
-{
-    return (getTargetRa() - getCurrentRa());
-}
-double LFAST_Mount::getDeltaDec()
-{
-    return (getTargetDec() - getCurrentDec());
-}
-
-void LFAST_Mount::setTargetRaDec(double ra, double dec)
-{
-    double *tgtAz, *tgtAlt;
-    tgtAz = &(this->targetAZ);
-    tgtAlt = &(this->targetALT);
-    RaDecToAltAz(ra, dec, tgtAlt, tgtAz);
-}
-
 void LFAST_Mount::AltAzToRaDec(double alt, double az, double *ra, double *dec)
 {
     double haTmp;
@@ -1477,4 +1169,187 @@ void LFAST_Mount::altAzToHADec(double alt, double az, double *ha, double *dec)
     if (dec)
         *dec = decTmp;
     return;
+}
+
+// // Account for the quadrant in declination
+// double Celestron::trimDecAngle(double angle)
+// {
+//     angle = angle - 360 * floor(angle / 360);
+//     if (angle < 0)
+//         angle += 360.0;
+
+//     if ((angle > 90.) && (angle <= 270.))
+//         angle = 180. - angle;
+//     else if ((angle > 270.) && (angle <= 360.))
+//         angle = angle - 360.;
+
+//     return angle;
+// }
+void LFAST_Mount::printScopeMode()
+{
+    // TelescopeStatus
+    switch (TrackState)
+    {
+        case SCOPE_IDLE:
+            LOG_DEBUG("# TrackState: SCOPE_IDLE");
+            break;
+        case SCOPE_SLEWING:
+            LOG_DEBUG("# TrackState: SCOPE_SLEWING");
+            break;
+        case SCOPE_TRACKING:
+            LOG_DEBUG("# TrackState: SCOPE_TRACKING");
+            break;
+        case SCOPE_PARKING:
+            LOG_DEBUG("# TrackState: SCOPE_PARKING");
+            break;
+        case SCOPE_PARKED:
+            LOG_DEBUG("# TrackState: SCOPE_PARKED");
+            break;
+    }
+}
+
+void LFAST_Mount::mountSim()
+{
+    static double currentRA, currentDEC;
+    static bool firstTime = true;
+    if (firstTime)
+    {
+        currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
+        currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
+        firstTime = false;
+    }
+    static struct timeval ltv
+    {
+        0, 0
+    };
+    struct timeval tv
+    {
+        0, 0
+    };
+    double dt, dx, da_ra = 0, da_dec = 0;
+    int nlocked;
+
+    /* update elapsed time since last poll, don't presume exactly POLLMS */
+    gettimeofday(&tv, nullptr);
+
+    if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
+        ltv = tv;
+
+    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
+    ltv = tv;
+
+    if (fabs(targetRA - currentRA) * 15. >= GOTO_LIMIT)
+        da_ra = GOTO_RATE * dt;
+    else if (fabs(targetRA - currentRA) * 15. >= SLEW_LIMIT)
+        da_ra = SLEW_RATE * dt;
+    else
+        da_ra = FINE_SLEW_RATE * dt;
+
+    if (fabs(targetDEC - currentDEC) >= GOTO_LIMIT)
+        da_dec = GOTO_RATE * dt;
+    else if (fabs(targetDEC - currentDEC) >= SLEW_LIMIT)
+        da_dec = SLEW_RATE * dt;
+    else
+        da_dec = FINE_SLEW_RATE * dt;
+
+    double motionRate = 0;
+
+    if (MovementNSSP.s == IPS_BUSY)
+        motionRate = JogRateN[0].value;
+    else if (MovementWESP.s == IPS_BUSY)
+        motionRate = JogRateN[1].value;
+    if (motionRate != 0)
+    {
+        da_ra = motionRate * dt * 0.05;
+        da_dec = motionRate * dt * 0.05;
+
+        switch (MovementNSSP.s)
+        {
+            case IPS_BUSY:
+                if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
+                    currentDEC += da_dec;
+                else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
+                    currentDEC -= da_dec;
+                break;
+
+            default:
+                break;
+        }
+
+        switch (MovementWESP.s)
+        {
+            case IPS_BUSY:
+                if (MovementWES[DIRECTION_WEST].s == ISS_ON)
+                    currentRA += da_ra / 15.;
+                else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
+                    currentRA -= da_ra / 15.;
+                break;
+
+            default:
+                break;
+        }
+
+        NewRaDec(currentRA, currentDEC);
+        return;
+    }
+
+    /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
+    switch (TrackState)
+    {
+        case SCOPE_IDLE:
+            /* RA moves at sidereal, Dec stands still */
+            currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
+            break;
+
+        case SCOPE_SLEWING:
+        case SCOPE_PARKING:
+            /* slewing - nail it when both within one pulse @ SLEWRATE */
+            nlocked = 0;
+
+            dx = targetRA - currentRA;
+
+            // Take shortest path
+            if (fabs(dx) > 12)
+                dx *= -1;
+
+            if (fabs(dx) <= da_ra)
+            {
+                currentRA = targetRA;
+                nlocked++;
+            }
+            else if (dx > 0)
+                currentRA += da_ra / 15.;
+            else
+                currentRA -= da_ra / 15.;
+
+            if (currentRA < 0)
+                currentRA += 24;
+            else if (currentRA > 24)
+                currentRA -= 24;
+
+            dx = targetDEC - currentDEC;
+            if (fabs(dx) <= da_dec)
+            {
+                currentDEC = targetDEC;
+                nlocked++;
+            }
+            else if (dx > 0)
+                currentDEC += da_dec;
+            else
+                currentDEC -= da_dec;
+
+            if (nlocked == 2)
+            {
+                if (TrackState == SCOPE_SLEWING)
+                    TrackState = SCOPE_TRACKING;
+                else
+                    SetParked(true);
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    NewRaDec(currentRA, currentDEC);
 }

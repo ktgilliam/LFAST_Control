@@ -88,141 +88,127 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
 class LFAST_Mount : public INDI::Telescope
 #endif
 {
-public:
-    LFAST_Mount();
-    virtual ~LFAST_Mount() = default;
+    public:
+        LFAST_Mount();
+        virtual ~LFAST_Mount() = default;
 
-    virtual const char *getDefaultName() override;
-    virtual bool Handshake() override;
-    virtual bool ReadScopeStatus() override;
-    virtual bool initProperties() override;
-    virtual bool updateProperties() override;
+        virtual const char *getDefaultName() override;
+        virtual bool Handshake() override;
+        virtual bool ReadScopeStatus() override;
+        virtual bool initProperties() override;
+        virtual bool updateProperties() override;
 
-    virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-    virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
+        virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+        virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
 
-protected:
-    virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
-    virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
-    // bool MoveAltAz(INDI_HO_AXIS dir, TelescopeMotionCommand command);
+    protected:
+        virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
+        virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
+        // bool MoveAltAz(INDI_HO_AXIS dir, TelescopeMotionCommand command);
 
-    virtual bool Abort() override;
+        virtual bool Abort() override;
 
-    virtual bool updateTime(ln_date *utc, double utc_offset) override;
+        virtual bool updateTime(ln_date *utc, double utc_offset) override;
 
 #if MOUNT_PARKING_ENABLED
-    // Parking
-    virtual bool SetCurrentPark() override;
-    virtual bool SetDefaultPark() override;
-    virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
-    virtual bool Park() override;
-    virtual bool UnPark() override;
+        // Parking
+        virtual bool SetCurrentPark() override;
+        virtual bool SetDefaultPark() override;
+        virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
+        virtual bool Park() override;
+        virtual bool UnPark() override;
 #endif
-    virtual bool Goto(double, double) override;
-    virtual bool Sync(double ra, double dec) override;
+        virtual bool Goto(double, double) override;
+        virtual bool Sync(double ra, double dec) override;
 
-    // Tracking
-    virtual bool SetTrackMode(uint8_t mode) override;
-    virtual bool SetTrackRate(double raRate, double deRate) override;
-    virtual bool SetTrackEnabled(bool enabled) override;
+        // Tracking
+        virtual bool SetTrackMode(uint8_t mode) override;
+        virtual bool SetTrackRate(double raRate, double deRate) override;
+        virtual bool SetTrackEnabled(bool enabled) override;
 
 #if MOUNT_GUIDER_ENABLED
-    // Guiding
-    virtual IPState GuideNorth(uint32_t ms) override;
-    virtual IPState GuideSouth(uint32_t ms) override;
-    virtual IPState GuideEast(uint32_t ms) override;
-    virtual IPState GuideWest(uint32_t ms) override;
-    // these all call these two functions
-    IPState GuideNS(int32_t ms);
-    IPState GuideWE(int32_t ms);
+        // Guiding
+        virtual IPState GuideNorth(uint32_t ms) override;
+        virtual IPState GuideSouth(uint32_t ms) override;
+        virtual IPState GuideEast(uint32_t ms) override;
+        virtual IPState GuideWest(uint32_t ms) override;
+        // these all call these two functions
+        IPState GuideNS(int32_t ms);
+        IPState GuideWE(int32_t ms);
 #endif
-private:
-    void mountSim();
-    bool getMountAltAz();
-    bool isSlewComplete();
+    private:
+        void mountSim();
+        bool getMountRaDec();
+        bool isSlewComplete();
 
-    // bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
-    bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
+        // bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
+        bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
+        void sendMountPassthroughCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
 #if MOUNT_PARKING_ENABLED
-    bool isMountParked();
+        bool isMountParked();
 #endif
-    bool isMountTracking();
-    bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
-    bool stopOpenLoopMotion();
-    bool setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate);
+        bool isMountTracking();
+        bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
+        bool stopOpenLoopMotion();
+        bool setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate);
 
-    double getCurrentRa();
-    double getCurrentDec();
-    double getTargetRa();
-    double getTargetDec();
-    double getDeltaRa();
-    double getDeltaDec();
+        void setTargetRaDec(double ra, double dec);
 
-    void setTargetRaDec(double ra, double dec);
+        void AltAzToRaDec(double alt, double az, double *ra, double *dec);
+        void RaDecToAltAz(double ra, double dec, double *alt, double *az);
+        void altAzToHADec(double alt, double az, double *ha, double *dec);
+        // Homing
+        bool findHome();
 
-    void AltAzToRaDec(double alt, double az, double *ra, double *dec);
-    void RaDecToAltAz(double ra, double dec, double *alt, double *az);
-    void altAzToHADec(double alt, double az, double *ha, double *dec);
-    // Homing
-    bool findHome();
+        void printScopeMode();
+        // double currentRA{0};
+        // double currentDEC{90};
+        // double targetRA{0};
+        // double targetDEC{0};
 
-    void printScopeMode();
-    // double currentRA{0};
-    // double currentDEC{90};
-    // double targetRA{0};
-    // double targetDEC{0};
+        double currentDEC{0};
+        double currentRA{90};
+        double targetDEC{0};
+        double targetRA{0};
 
-    double currentALT{0};
-    double currentAZ{90};
-    double targetALT{0};
-    double targetAZ{0};
+        unsigned int DBG_SCOPE{0};
 
-    unsigned int DBG_SCOPE{0};
+        // Jog Rate
+        // ISwitch JogModeS[NUM_JOG_MODES];
+        // ISwitchVectorProperty JogModeSP;
+        // INDI::PropertySwitch JogModeSP{2};
 
-    // Jog Rate
-    enum
-    {
-        JOG_MODE_NSEW,
-        JOG_MODE_ALT_AZ,
-    };
-    // ISwitch JogModeS[NUM_JOG_MODES];
-    // ISwitchVectorProperty JogModeSP;
-    INDI::PropertySwitch JogModeSP{2};
-
-    INumber JogRateNSEW_N[NUM_SR_AXES];
-    INumberVectorProperty JogRateNSEW_NP;
-
-    INumber JogRateAltAz_N[NUM_MECH_AXES];
-    INumberVectorProperty JogRateAltAz_NP;
+        INumber JogRateN[NUM_SR_AXES];
+        INumberVectorProperty JogRateNP;
 
 #if MOUNT_GUIDER_ENABLED
-    // Guide Rate
-    INumber GuideRateN[2];
-    INumberVectorProperty GuideRateNP;
+        // Guide Rate
+        INumber GuideRateN[2];
+        INumberVectorProperty GuideRateNP;
 #endif
-    // Jogging Mode
+        // Jogging Mode
 
-    // A switch for Alt motion
-    ISwitch MovementAltS[2];
-    ISwitchVectorProperty MovementAltSP;
-    // A switch for Az motion
-    ISwitch MovementAzS[2];
-    ISwitchVectorProperty MovementAzSP;
+        // A switch for Alt motion
+        ISwitch MovementAltS[2];
+        ISwitchVectorProperty MovementAltSP;
+        // A switch for Az motion
+        ISwitch MovementAzS[2];
+        ISwitchVectorProperty MovementAzSP;
 
-// Tracking Mode
-// #if NUM_TRACK_MODES > 1
-    ISwitch TrackModeS[NUM_TRACK_MODES];
-    ISwitchVectorProperty TrackModeSP;
-// #endif
-    // Homing
-    ISwitchVectorProperty HomeSP;
-    ISwitch HomeS[1];
+        // Tracking Mode
+        // #if NUM_TRACK_MODES > 1
+        ISwitch TrackModeS[NUM_TRACK_MODES];
+        ISwitchVectorProperty TrackModeSP;
+        // #endif
+        // Homing
+        ISwitchVectorProperty HomeSP;
+        ISwitch HomeS[1];
 
-    // Timers
-    INDI::Timer m_NSTimer;
-    INDI::Timer m_WETimer;
+        // Timers
+        INDI::Timer m_NSTimer;
+        INDI::Timer m_WETimer;
 
-    // Tracking Rate
-    //    INumber TrackRateN[2];
-    //    INumberVectorProperty TrackRateNP;
+        // Tracking Rate
+        //    INumber TrackRateN[2];
+        //    INumberVectorProperty TrackRateNP;
 };
