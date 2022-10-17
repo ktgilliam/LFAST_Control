@@ -36,15 +36,9 @@ union ByteConverter
     unsigned char BYTES[8];
 };
 
-#define MOUNT_PARKING_ENABLED 1
-#define MOUNT_GUIDER_ENABLED 0
-#define MOUNT_GOTO_ENABLED 1
-// #define MOUNT_GOTO_ENABLED
-#define TRACK_SOLAR_ENABLED 0
-#define TRACK_LUNAR_ENABLED 0
-#define TRACK_CUSTOM_ENABLED 0
-#define TRACK_ALT_AZ_ENABLED 0
-#define NUM_TRACK_MODES (1 + TRACK_SOLAR_ENABLED + TRACK_LUNAR_ENABLED + TRACK_ALT_AZ_ENABLED + TRACK_CUSTOM_ENABLED)
+
+
+
 
 #define AZ_EL_JOG_ENABLED 1
 #define NUM_JOG_MODES (1 + AZ_EL_JOG_ENABLED)
@@ -54,39 +48,44 @@ union ByteConverter
 #define LFAST_MOUNT_HANDSHAKE_TIMEOUT 2
 #define LFAST_HOMING_TIMEOUT 10
 
-
+namespace LFAST
+{
 enum
 {
     RA_AXIS,
     DEC_AXIS,
-    NUM_SR_AXES
+    NUM_AXES
 };
 enum
 {
-    ALT_AXIS,
-    AZ_AXIS,
-    NUM_MECH_AXES
+    NORTH,
+    SOUTH,
+    EAST,
+    WEST
 };
+
+#define TRACK_SOLAR_ENABLED 0
+#define TRACK_LUNAR_ENABLED 0
+#define TRACK_CUSTOM_ENABLED 0
+#define TRACK_ALT_AZ_ENABLED 0
+#define NUM_TRACK_MODES (1 + TRACK_SOLAR_ENABLED + TRACK_LUNAR_ENABLED + TRACK_ALT_AZ_ENABLED + TRACK_CUSTOM_ENABLED)
 enum
 {
-    LFAST_NORTH,
-    LFAST_SOUTH,
-    LFAST_EAST,
-    LFAST_WEST,
-    // LFAST_ALT,
-    // LFAST_AZ
+    TRACK_SIDEREAL = 0,
+    TRACK_SOLAR = 1,
+    TRACK_LUNAR = 2,
+    TRACK_ALT_AZ = 3,
+    TRACK_CUSTOM = 4,
 };
+
+}
 
 #define JOG_RATE_MIN 0
 #define JOG_RATE_MAX 600
 #define JOG_RATE_STEP 60
 #define JOG_RATE_VALUE 30
 
-#if MOUNT_GUIDER_ENABLED
 class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
-#else
-class LFAST_Mount : public INDI::Telescope
-#endif
 {
     public:
         LFAST_Mount();
@@ -110,14 +109,12 @@ class LFAST_Mount : public INDI::Telescope
 
         virtual bool updateTime(ln_date *utc, double utc_offset) override;
 
-#if MOUNT_PARKING_ENABLED
         // Parking
         virtual bool SetCurrentPark() override;
         virtual bool SetDefaultPark() override;
         virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
         virtual bool Park() override;
         virtual bool UnPark() override;
-#endif
         virtual bool Goto(double, double) override;
         virtual bool Sync(double ra, double dec) override;
 
@@ -126,7 +123,6 @@ class LFAST_Mount : public INDI::Telescope
         virtual bool SetTrackRate(double raRate, double deRate) override;
         virtual bool SetTrackEnabled(bool enabled) override;
 
-#if MOUNT_GUIDER_ENABLED
         // Guiding
         virtual IPState GuideNorth(uint32_t ms) override;
         virtual IPState GuideSouth(uint32_t ms) override;
@@ -135,7 +131,6 @@ class LFAST_Mount : public INDI::Telescope
         // these all call these two functions
         IPState GuideNS(int32_t ms);
         IPState GuideWE(int32_t ms);
-#endif
     private:
         void mountSim();
         bool getMountRaDec();
@@ -144,13 +139,10 @@ class LFAST_Mount : public INDI::Telescope
         // bool sendMountOKCommand(const char *command, const char *errorMessage, uint8_t timeout = 3);
         bool sendMountOKCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
         void sendMountPassthroughCommand(LFAST::MessageGenerator &cmdMsg, const char *errorMessage, uint8_t timeout = 3);
-#if MOUNT_PARKING_ENABLED
-        bool isMountParked();
-#endif
-        bool isMountTracking();
+        bool checkMountStatus(std::string parameter);
         bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
         bool stopOpenLoopMotion();
-        bool setTheSkyTracking(bool enable, bool isSidereal, double raRate, double deRate);
+        bool setMountTracking(bool enable, double raRate, double decRate);
 
         void setTargetRaDec(double ra, double dec);
 
@@ -178,14 +170,12 @@ class LFAST_Mount : public INDI::Telescope
         // ISwitchVectorProperty JogModeSP;
         // INDI::PropertySwitch JogModeSP{2};
 
-        INumber JogRateN[NUM_SR_AXES];
+        INumber JogRateN[LFAST::NUM_AXES];
         INumberVectorProperty JogRateNP;
 
-#if MOUNT_GUIDER_ENABLED
         // Guide Rate
         INumber GuideRateN[2];
         INumberVectorProperty GuideRateNP;
-#endif
         // Jogging Mode
 
         // A switch for Alt motion
@@ -209,6 +199,6 @@ class LFAST_Mount : public INDI::Telescope
         INDI::Timer m_WETimer;
 
         // Tracking Rate
-        //    INumber TrackRateN[2];
-        //    INumberVectorProperty TrackRateNP;
+        INumber TrackRateN[2];
+        INumberVectorProperty TrackRateNP;
 };
