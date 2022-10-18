@@ -76,7 +76,7 @@ LFAST_Mount::LFAST_Mount()
                         | TELESCOPE_CAN_ABORT
                         | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
-                        | TELESCOPE_HAS_LOCATION
+                        // | TELESCOPE_HAS_LOCATION
                         | TELESCOPE_CAN_GOTO
                         // | TELESCOPE_HAS_TRACK_MODE
                         // | TELESCOPE_HAS_TRACK_RATE
@@ -148,7 +148,7 @@ bool LFAST_Mount::initProperties()
                  JOG_RATE_STEP,
                  JOG_RATE_VALUE);
 
-    IUFillNumberVector(&JogRateNP, JogRateN, LFAST::NUM_AXES, getDeviceName(), "JOG_RATE", "Jog N/S/E/W", MOTION_TAB, IP_RW, 0,
+    IUFillNumberVector(&JogRateNP, JogRateN, LFAST::NUM_AXES, getDeviceName(), "JOG_RATE", "Jog", MOTION_TAB, IP_RW, 0,
                        IPS_IDLE);
 
 
@@ -431,8 +431,8 @@ bool LFAST_Mount::Goto(double r, double d)
 
     LFAST::MessageGenerator gotoCommandMsg("MountMessage");
     // gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    gotoCommandMsg.addArgument("slewToRaPosn", targetRA);
-    gotoCommandMsg.addArgument("slewToDecPosn", targetDEC);
+    gotoCommandMsg.addArgument("slewToRa", targetRA);
+    gotoCommandMsg.addArgument("slewToDec", targetDEC);
     auto commandStr = gotoCommandMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
 
@@ -460,14 +460,14 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing %s to Mount TCP server. Result: %d",parameter, rc);
+        LOGF_ERROR("Error writing %s to Mount TCP server. Result: %d",parameter.c_str(), rc);
         return false;
     }
 
     char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading %s from Mount TCP server. Result: %d",parameter, rc);
+        LOGF_ERROR("Error reading %s from Mount TCP server. Result: %d",parameter.c_str(), rc);
         return false;
     }
 
@@ -475,7 +475,7 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
     LFAST::MessageParser rxMsg(pRES);
     if (!rxMsg.succeeded())
     {
-        LOGF_ERROR("%s: Error parsing received data <%s>", parameter, pRES);
+        LOGF_ERROR("%s: Error parsing received data <%s>", parameter.c_str(), pRES);
         return false;
     }
     else
@@ -484,7 +484,7 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
         bool lookupValid = rxMsg.lookup<bool>(parameter, &isParked);
         if (!lookupValid)
         {
-            LOGF_ERROR("Missing %s key in response: %s", parameter, pRES);
+            LOGF_ERROR("Missing %s key in response: %s", parameter.c_str(), pRES);
             // tcflush(PortFD, TCIFLUSH);
             return false;
         }
