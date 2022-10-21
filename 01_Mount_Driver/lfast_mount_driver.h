@@ -78,8 +78,14 @@ enum
     TRACK_CUSTOM = 4,
 };
 
-}
+typedef enum 
+{
+    SLEW_THEN_TRACK = 0,
+    SLEW_ONLY = 1,
+    SLEW_THEN_SYNC = 2
+} SLEW_MODE;
 
+}
 #define JOG_RATE_MIN 0
 #define JOG_RATE_MAX 600
 #define JOG_RATE_STEP 60
@@ -131,6 +137,8 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
         // these all call these two functions
         IPState GuideNS(int32_t ms);
         IPState GuideWE(int32_t ms);
+
+        LFAST::SLEW_MODE slewMode;
     private:
         void mountSim();
         bool getMountRaDec();

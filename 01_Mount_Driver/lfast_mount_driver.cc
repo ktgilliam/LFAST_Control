@@ -59,30 +59,25 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define GOTO_LIMIT 5.5 /* Move at GOTO_RATE until distance from target is GOTO_LIMIT degrees */
 #define SLEW_LIMIT 1   /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 
-
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 int scopeCapabilities;
-
 
 LFAST_Mount::LFAST_Mount()
 {
     setVersion(0, 2);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_HAS_LOCATION
-                        | TELESCOPE_CAN_PARK
-                        | TELESCOPE_CAN_ABORT
-                        | TELESCOPE_CAN_SYNC
+    scopeCapabilities = TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_PARK | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
                         // | TELESCOPE_HAS_LOCATION
                         | TELESCOPE_CAN_GOTO
-                        // | TELESCOPE_HAS_TRACK_MODE
-                        // | TELESCOPE_HAS_TRACK_RATE
-                        // | TELESCOPE_CAN_CONTROL_TRACK
-                        // | TELESCOPE_HAS_PIER_SIDE
-                        ;
+        // | TELESCOPE_HAS_TRACK_MODE
+        // | TELESCOPE_HAS_TRACK_RATE
+        // | TELESCOPE_CAN_CONTROL_TRACK
+        // | TELESCOPE_HAS_PIER_SIDE
+        ;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
@@ -98,18 +93,16 @@ LFAST_Mount::LFAST_Mount()
     m_WETimer.setSingleShot(true);
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
-    {
+                            {
         GuideNSNP.s = IPS_IDLE;
         GuideNSN[0].value = GuideNSN[1].value = 0;
-        IDSetNumber(&GuideNSNP, nullptr);
-    });
+        IDSetNumber(&GuideNSNP, nullptr); });
 
     m_WETimer.callOnTimeout([this]()
-    {
+                            {
         GuideWENP.s = IPS_IDLE;
         GuideWEN[0].value = GuideWEN[1].value = 0;
-        IDSetNumber(&GuideWENP, nullptr);
-    });
+        IDSetNumber(&GuideWENP, nullptr); });
 
     // Set the driver interface to indicate that we can also do pulse guiding
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
@@ -151,7 +144,6 @@ bool LFAST_Mount::initProperties()
     IUFillNumberVector(&JogRateNP, JogRateN, LFAST::NUM_AXES, getDeviceName(), "JOG_RATE", "Jog", MOTION_TAB, IP_RW, 0,
                        IPS_IDLE);
 
-
     // IUFillNumberVector(&JogRateNP, JogRateN, 2, getDeviceName(), "JOG_RATE", "Jog Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
     /* How fast do we guide compared to sidereal rate */
     IUFillNumber(&GuideRateN[LFAST::RA_AXIS], "GUIDE_RATE_WE", "W/E Rate", "%1.1f", 0.0, 1.0, 0.1, 0.5);
@@ -186,7 +178,6 @@ bool LFAST_Mount::initProperties()
 
     SetParkDataType(PARK_AZ_ALT);
 
-
     initGuiderProperties(getDeviceName(), MOTION_TAB);
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 
@@ -200,7 +191,7 @@ bool LFAST_Mount::initProperties()
     targetRA = currentRA;
     targetDEC = currentDEC;
 
-    setDefaultPollingPeriod(250);
+    setDefaultPollingPeriod(100);
     return true;
 }
 
@@ -210,17 +201,6 @@ bool LFAST_Mount::updateProperties()
 
     if (isConnected())
     {
-        if (checkMountStatus("IsTracking"))
-        {
-            IUResetSwitch(&TrackModeSP);
-            TrackModeS[TRACK_SIDEREAL].s = ISS_ON;
-            TrackState = SCOPE_TRACKING;
-        }
-        else
-        {
-            IUResetSwitch(&TrackModeSP);
-            TrackState = SCOPE_IDLE;
-        }
 
         defineProperty(&JogRateNP);
         defineProperty(&TrackRateNP);
@@ -247,6 +227,19 @@ bool LFAST_Mount::updateProperties()
             SetAxis2ParkDefault(currentDEC);
         }
         SetParked(checkMountStatus("IsParked"));
+
+        if (checkMountStatus("IsTracking"))
+        {
+            IUResetSwitch(&TrackModeSP);
+            TrackModeS[TRACK_SIDEREAL].s = ISS_ON;
+            TrackState = SCOPE_TRACKING;
+        }
+        else
+        {
+            IUResetSwitch(&TrackModeSP);
+            TrackState = SCOPE_IDLE;
+        }
+
         defineProperty(&HomeSP);
     }
     else
@@ -321,7 +314,6 @@ bool LFAST_Mount::Handshake()
     return true;
 }
 
-
 bool LFAST_Mount::getMountRaDec()
 {
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
@@ -382,8 +374,9 @@ bool LFAST_Mount::ReadScopeStatus()
     }
     printScopeMode();
 
-    if (TrackState == SCOPE_SLEWING)
+    switch (TrackState)
     {
+    case SCOPE_SLEWING:
         LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
         // Check if Scope is done slewing
         if (checkMountStatus("IsSlewComplete"))
@@ -399,15 +392,46 @@ bool LFAST_Mount::ReadScopeStatus()
             else
                 LOG_INFO("Slew is complete. Tracking...");
         }
-    }
-    else if (TrackState == SCOPE_PARKING)
-    {
+        break;
+    case SCOPE_PARKING:
+        // Intentional fall-through
+    case SCOPE_PARKED:
+        // Intentional fall-through
+    case SCOPE_IDLE:
         LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
         if (checkMountStatus("IsParked"))
         {
             SetParked(true);
         }
+        break;
     }
+
+    // if (TrackState == SCOPE_SLEWING)
+    // {
+    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
+    //     // Check if Scope is done slewing
+    //     if (checkMountStatus("IsSlewComplete"))
+    //     {
+    //         TrackState = SCOPE_TRACKING;
+
+    //         if (HomeSP.s == IPS_BUSY)
+    //         {
+    //             IUResetSwitch(&HomeSP);
+    //             HomeSP.s = IPS_OK;
+    //             LOG_INFO("Finding home completed.");
+    //         }
+    //         else
+    //             LOG_INFO("Slew is complete. Tracking...");
+    //     }
+    // }
+    // else if (TrackState == SCOPE_PARKING)
+    // {
+    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
+    //     if (checkMountStatus("IsParked"))
+    //     {
+    //         SetParked(true);
+    //     }
+    // }
 
     LOG_DEBUG("\tReadScopeStatus(): CHECKING Ra/Dec");
     if (!getMountRaDec())
@@ -429,6 +453,7 @@ bool LFAST_Mount::Goto(double r, double d)
     targetRA = r;
     targetDEC = d;
 
+    // ###
     LFAST::MessageGenerator gotoCommandMsg("MountMessage");
     // gotoCommandMsg.addArgument("getTrackingStatus", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     gotoCommandMsg.addArgument("slewToRa", targetRA);
@@ -460,14 +485,14 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
     int rc = 0, nbytes_written = 0, nbytes_read = 0;
     if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
     {
-        LOGF_ERROR("Error writing %s to Mount TCP server. Result: %d",parameter.c_str(), rc);
+        LOGF_ERROR("Error writing %s to Mount TCP server. Result: %d", parameter.c_str(), rc);
         return false;
     }
 
     char pRES[MAXRBUF] = {0};
     if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
     {
-        LOGF_ERROR("Error reading %s from Mount TCP server. Result: %d",parameter.c_str(), rc);
+        LOGF_ERROR("Error reading %s from Mount TCP server. Result: %d", parameter.c_str(), rc);
         return false;
     }
 
@@ -480,8 +505,8 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
     }
     else
     {
-        bool isParked;
-        bool lookupValid = rxMsg.lookup<bool>(parameter, &isParked);
+        bool paramVal;
+        bool lookupValid = rxMsg.lookup<bool>(parameter, &paramVal);
         if (!lookupValid)
         {
             LOGF_ERROR("Missing %s key in response: %s", parameter.c_str(), pRES);
@@ -489,13 +514,12 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
             return false;
         }
 
-        return (isParked);
+        return (paramVal);
     }
 
-    LOGF_ERROR("Error checking for %s. Invalid response: %s",parameter, pRES);
+    LOGF_ERROR("Error checking for %s. Invalid response: %s", parameter, pRES);
     return false;
 }
-
 
 bool LFAST_Mount::Sync(double ra, double dec)
 {
@@ -548,72 +572,12 @@ bool LFAST_Mount::UnPark()
         return false;
     }
     // Confirm we unparked
-    if(checkMountStatus("IsParked"))
+    if (checkMountStatus("IsParked"))
         LOG_ERROR("Could not unpark for some reason.");
     else
         SetParked(false);
 
     return true;
-}
-
-bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
-{
-    //  first check if it's for our device
-    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
-    {
-        if (strcmp(name, "JOG_RATE") == 0)
-        {
-            IUUpdateNumber(&JogRateNP, values, names, n);
-            JogRateNP.s = IPS_OK;
-            IDSetNumber(&JogRateNP, nullptr);
-            return true;
-        }
-        // Guiding Rate
-        if (strcmp(name, GuideRateNP.name) == 0)
-        {
-            IUUpdateNumber(&GuideRateNP, values, names, n);
-            GuideRateNP.s = IPS_OK;
-            IDSetNumber(&GuideRateNP, nullptr);
-            return true;
-        }
-        if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
-        {
-            processGuiderProperties(name, values, names, n);
-            return true;
-        }
-    }
-
-    //  if we didn't process it, continue up the chain, let somebody else give it a shot
-    return INDI::Telescope::ISNewNumber(dev, name, values, names, n);
-}
-
-bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
-{
-    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
-    {
-        if (!strcmp(HomeSP.name, name))
-        {
-            LOG_INFO("Moving to home position. Please stand by...");
-            if (findHome())
-            {
-                HomeS[0].s = ISS_OFF;
-                TrackState = SCOPE_IDLE;
-                HomeSP.s = IPS_OK;
-                LOG_INFO("Mount arrived at home position.");
-            }
-            else
-            {
-                HomeS[0].s = ISS_OFF;
-                HomeSP.s = IPS_ALERT;
-                LOG_ERROR("Failed to go to home position");
-            }
-
-            IDSetSwitch(&HomeSP, nullptr);
-            return true;
-        }
-    }
-
-    return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
 }
 
 bool LFAST_Mount::Abort()
@@ -662,26 +626,26 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-        case MOTION_START:
-            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-            {
-                LOG_ERROR("Error setting N/S motion direction.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s.", (motion == LFAST::NORTH) ? "North" : "South");
-            break;
+    case MOTION_START:
+        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+        {
+            LOG_ERROR("Error setting N/S motion direction.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s.", (motion == LFAST::NORTH) ? "North" : "South");
+        break;
 
-        case MOTION_STOP:
-            if (!isSimulation() && !stopOpenLoopMotion())
-            {
-                LOG_ERROR("Error stopping N/S motion.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s halted.",
-                          (motion == LFAST::NORTH) ? "North" : "South");
-            break;
+    case MOTION_STOP:
+        if (!isSimulation() && !stopOpenLoopMotion())
+        {
+            LOG_ERROR("Error stopping N/S motion.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s halted.",
+                      (motion == LFAST::NORTH) ? "North" : "South");
+        break;
     }
 
     return true;
@@ -700,26 +664,26 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     switch (command)
     {
-        case MOTION_START:
-            if (!isSimulation() && !startOpenLoopMotion(motion, rate))
-            {
-                LOG_ERROR("Error setting W/E motion direction.");
-                return false;
-            }
-            else
-                LOGF_INFO("Moving toward %s.", (motion == LFAST::WEST) ? "West" : "East");
-            break;
+    case MOTION_START:
+        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+        {
+            LOG_ERROR("Error setting W/E motion direction.");
+            return false;
+        }
+        else
+            LOGF_INFO("Moving toward %s.", (motion == LFAST::WEST) ? "West" : "East");
+        break;
 
-        case MOTION_STOP:
-            if (!isSimulation() && !stopOpenLoopMotion())
-            {
-                LOG_ERROR("Error stopping W/E motion.");
-                return false;
-            }
-            else
-                LOGF_INFO("Movement toward %s halted.",
-                          (motion == LFAST::WEST) ? "West" : "East");
-            break;
+    case MOTION_STOP:
+        if (!isSimulation() && !stopOpenLoopMotion())
+        {
+            LOG_ERROR("Error stopping W/E motion.");
+            return false;
+        }
+        else
+            LOGF_INFO("Movement toward %s halted.",
+                      (motion == LFAST::WEST) ? "West" : "East");
+        break;
     }
 
     return true;
@@ -961,32 +925,31 @@ bool LFAST_Mount::SetTrackMode(uint8_t mode)
     switch (mode)
     {
 #if TRACK_SOLAR_ENABLED
-        case TRACK_SOLAR:
-            dRA = TRACKRATE_SOLAR;
-            break;
+    case TRACK_SOLAR:
+        dRA = TRACKRATE_SOLAR;
+        break;
 #endif
 #if TRACK_LUNAR_ENABLED
-        case TRACK_LUNAR:
-            dRA = TRACKRATE_LUNAR;
-            break;
+    case TRACK_LUNAR:
+        dRA = TRACKRATE_LUNAR;
+        break;
 #endif
 #if TRACK_CUSTOM_ENABLED
-        case TRACK_CUSTOM:
-            dRA = TrackRateN[LFAST::RA_AXIS].value;
-            dDE = TrackRateN[LFAST::DEC_AXIS].value;
-            break;
+    case TRACK_CUSTOM:
+        dRA = TrackRateN[LFAST::RA_AXIS].value;
+        dDE = TrackRateN[LFAST::DEC_AXIS].value;
+        break;
 #endif
 #if TRACK_ALT_AZ_ENABLED
-        case TRACK_ALT_AZ:
+    case TRACK_ALT_AZ:
 #warning ALT AZ TRACKING NOT YET IMPLEMENTED.
-            break;
+        break;
 #endif
-        case TRACK_SIDEREAL:
-        // Intentional fall-through
-        default:
-            dRA = TRACKRATE_SIDEREAL;
-            break;
-
+    case TRACK_SIDEREAL:
+    // Intentional fall-through
+    default:
+        dRA = TRACKRATE_SIDEREAL;
+        break;
     }
 
     return setMountTracking(true, dRA, dDE);
@@ -1069,22 +1032,84 @@ void LFAST_Mount::printScopeMode()
     // TelescopeStatus
     switch (TrackState)
     {
-        case SCOPE_IDLE:
-            LOG_DEBUG("# TrackState: SCOPE_IDLE");
-            break;
-        case SCOPE_SLEWING:
-            LOG_DEBUG("# TrackState: SCOPE_SLEWING");
-            break;
-        case SCOPE_TRACKING:
-            LOG_DEBUG("# TrackState: SCOPE_TRACKING");
-            break;
-        case SCOPE_PARKING:
-            LOG_DEBUG("# TrackState: SCOPE_PARKING");
-            break;
-        case SCOPE_PARKED:
-            LOG_DEBUG("# TrackState: SCOPE_PARKED");
-            break;
+    case SCOPE_IDLE:
+        LOG_DEBUG("# TrackState: SCOPE_IDLE");
+        break;
+    case SCOPE_SLEWING:
+        LOG_DEBUG("# TrackState: SCOPE_SLEWING");
+        break;
+    case SCOPE_TRACKING:
+        LOG_DEBUG("# TrackState: SCOPE_TRACKING");
+        break;
+    case SCOPE_PARKING:
+        LOG_DEBUG("# TrackState: SCOPE_PARKING");
+        break;
+    case SCOPE_PARKED:
+        LOG_DEBUG("# TrackState: SCOPE_PARKED");
+        break;
     }
+}
+
+bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
+{
+    //  first check if it's for our device
+    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
+    {
+        if (strcmp(name, "JOG_RATE") == 0)
+        {
+            IUUpdateNumber(&JogRateNP, values, names, n);
+            JogRateNP.s = IPS_OK;
+            IDSetNumber(&JogRateNP, nullptr);
+            return true;
+        }
+        // Guiding Rate
+        if (strcmp(name, GuideRateNP.name) == 0)
+        {
+            IUUpdateNumber(&GuideRateNP, values, names, n);
+            GuideRateNP.s = IPS_OK;
+            IDSetNumber(&GuideRateNP, nullptr);
+            return true;
+        }
+        if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
+        {
+            processGuiderProperties(name, values, names, n);
+            return true;
+        }
+    }
+
+    //  if we didn't process it, continue up the chain, let somebody else give it a shot
+    return INDI::Telescope::ISNewNumber(dev, name, values, names, n);
+}
+
+bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
+{
+    LOGF_DEBUG("SWITCH PRESSED: %s\r\n", name);
+
+    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
+    {
+        if (!strcmp(HomeSP.name, name))
+        {
+            LOG_INFO("Moving to home position. Please stand by...");
+            if (findHome())
+            {
+                HomeS[0].s = ISS_OFF;
+                TrackState = SCOPE_IDLE;
+                HomeSP.s = IPS_OK;
+                LOG_INFO("Mount arrived at home position.");
+            }
+            else
+            {
+                HomeS[0].s = ISS_OFF;
+                HomeSP.s = IPS_ALERT;
+                LOG_ERROR("Failed to go to home position");
+            }
+
+            IDSetSwitch(&HomeSP, nullptr);
+            return true;
+        }
+    }
+
+    return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
 }
 
 void LFAST_Mount::mountSim()
@@ -1144,28 +1169,28 @@ void LFAST_Mount::mountSim()
 
         switch (MovementNSSP.s)
         {
-            case IPS_BUSY:
-                if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
-                    currentDEC += da_dec;
-                else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
-                    currentDEC -= da_dec;
-                break;
+        case IPS_BUSY:
+            if (MovementNSS[DIRECTION_NORTH].s == ISS_ON)
+                currentDEC += da_dec;
+            else if (MovementNSS[DIRECTION_SOUTH].s == ISS_ON)
+                currentDEC -= da_dec;
+            break;
 
-            default:
-                break;
+        default:
+            break;
         }
 
         switch (MovementWESP.s)
         {
-            case IPS_BUSY:
-                if (MovementWES[DIRECTION_WEST].s == ISS_ON)
-                    currentRA += da_ra / 15.;
-                else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
-                    currentRA -= da_ra / 15.;
-                break;
+        case IPS_BUSY:
+            if (MovementWES[DIRECTION_WEST].s == ISS_ON)
+                currentRA += da_ra / 15.;
+            else if (MovementWES[DIRECTION_EAST].s == ISS_ON)
+                currentRA -= da_ra / 15.;
+            break;
 
-            default:
-                break;
+        default:
+            break;
         }
 
         NewRaDec(currentRA, currentDEC);
@@ -1175,59 +1200,59 @@ void LFAST_Mount::mountSim()
     /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
     switch (TrackState)
     {
-        case SCOPE_IDLE:
-            /* RA moves at sidereal, Dec stands still */
-            currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
-            break;
+    case SCOPE_IDLE:
+        /* RA moves at sidereal, Dec stands still */
+        currentRA += (TRACKRATE_SIDEREAL / 3600.0 * dt / 15.);
+        break;
 
-        case SCOPE_SLEWING:
-        case SCOPE_PARKING:
-            /* slewing - nail it when both within one pulse @ SLEWRATE */
-            nlocked = 0;
+    case SCOPE_SLEWING:
+    case SCOPE_PARKING:
+        /* slewing - nail it when both within one pulse @ SLEWRATE */
+        nlocked = 0;
 
-            dx = targetRA - currentRA;
+        dx = targetRA - currentRA;
 
-            // Take shortest path
-            if (fabs(dx) > 12)
-                dx *= -1;
+        // Take shortest path
+        if (fabs(dx) > 12)
+            dx *= -1;
 
-            if (fabs(dx) <= da_ra)
-            {
-                currentRA = targetRA;
-                nlocked++;
-            }
-            else if (dx > 0)
-                currentRA += da_ra / 15.;
+        if (fabs(dx) <= da_ra)
+        {
+            currentRA = targetRA;
+            nlocked++;
+        }
+        else if (dx > 0)
+            currentRA += da_ra / 15.;
+        else
+            currentRA -= da_ra / 15.;
+
+        if (currentRA < 0)
+            currentRA += 24;
+        else if (currentRA > 24)
+            currentRA -= 24;
+
+        dx = targetDEC - currentDEC;
+        if (fabs(dx) <= da_dec)
+        {
+            currentDEC = targetDEC;
+            nlocked++;
+        }
+        else if (dx > 0)
+            currentDEC += da_dec;
+        else
+            currentDEC -= da_dec;
+
+        if (nlocked == 2)
+        {
+            if (TrackState == SCOPE_SLEWING)
+                TrackState = SCOPE_TRACKING;
             else
-                currentRA -= da_ra / 15.;
+                SetParked(true);
+        }
+        break;
 
-            if (currentRA < 0)
-                currentRA += 24;
-            else if (currentRA > 24)
-                currentRA -= 24;
-
-            dx = targetDEC - currentDEC;
-            if (fabs(dx) <= da_dec)
-            {
-                currentDEC = targetDEC;
-                nlocked++;
-            }
-            else if (dx > 0)
-                currentDEC += da_dec;
-            else
-                currentDEC -= da_dec;
-
-            if (nlocked == 2)
-            {
-                if (TrackState == SCOPE_SLEWING)
-                    TrackState = SCOPE_TRACKING;
-                else
-                    SetParked(true);
-            }
-            break;
-
-        default:
-            break;
+    default:
+        break;
     }
 
     NewRaDec(currentRA, currentDEC);
