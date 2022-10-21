@@ -69,7 +69,10 @@ LFAST_Mount::LFAST_Mount()
     setVersion(0, 2);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_PARK | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
+    scopeCapabilities = TELESCOPE_HAS_LOCATION 
+                        | TELESCOPE_CAN_PARK 
+                        | TELESCOPE_CAN_ABORT 
+                        | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
                         // | TELESCOPE_HAS_LOCATION
                         | TELESCOPE_CAN_GOTO
@@ -406,33 +409,6 @@ bool LFAST_Mount::ReadScopeStatus()
         break;
     }
 
-    // if (TrackState == SCOPE_SLEWING)
-    // {
-    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
-    //     // Check if Scope is done slewing
-    //     if (checkMountStatus("IsSlewComplete"))
-    //     {
-    //         TrackState = SCOPE_TRACKING;
-
-    //         if (HomeSP.s == IPS_BUSY)
-    //         {
-    //             IUResetSwitch(&HomeSP);
-    //             HomeSP.s = IPS_OK;
-    //             LOG_INFO("Finding home completed.");
-    //         }
-    //         else
-    //             LOG_INFO("Slew is complete. Tracking...");
-    //     }
-    // }
-    // else if (TrackState == SCOPE_PARKING)
-    // {
-    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
-    //     if (checkMountStatus("IsParked"))
-    //     {
-    //         SetParked(true);
-    //     }
-    // }
-
     LOG_DEBUG("\tReadScopeStatus(): CHECKING Ra/Dec");
     if (!getMountRaDec())
         return false;
@@ -549,7 +525,7 @@ bool LFAST_Mount::Park()
     mountParkCmdMsg.addArgument("Park", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     // mountParkCmdMsg.addArgument("NoDisconnect", true);
 
-    LOG_DEBUG("SENDING PARK COMMAND...........");
+    LOG_INFO("SENDING PARK COMMAND.");
     if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
     {
         LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
@@ -566,7 +542,8 @@ bool LFAST_Mount::UnPark()
 {
     LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
     mountParkCmdMsg.addArgument("Unpark", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    // LOG_DEBUG("LFAST_Mount::UnPark()");
+
+    LOG_INFO("SENDING UNPARK COMMAND.");
     if (!sendMountOKCommand(mountParkCmdMsg, "Unparking mount"))
     {
         return false;
@@ -586,7 +563,7 @@ bool LFAST_Mount::Abort()
     LFAST::MessageGenerator abortCmdMsg("MountMessage");
     abortCmdMsg.addArgument("AbortSlew", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
 
-    LOG_INFO("Sending Abort Slew Command");
+    LOG_INFO("Sending ABORT Slew Command");
     // sendMountPassthroughCommand(abortCmdMsg, "Sending Abort Command");
     if (!sendMountOKCommand(abortCmdMsg, "Sending Abort Command"))
     {
@@ -718,7 +695,7 @@ bool LFAST_Mount::SetCurrentPark()
 {
     char pCMD[MAXRBUF] = {0};
 
-    strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
+    // strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
     // if (!sendMountOKCommand(pCMD, "Setting Park Position"))
 
     LFAST::MessageGenerator setParkPosnMsg("MountMessage");
@@ -902,68 +879,69 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
     return IPS_BUSY;
 }
 
-bool LFAST_Mount::setMountTracking(bool enable, double raRate, double decRate)
-{
-    LFAST::MessageGenerator trackCmdMessage("MountMessage");
-    trackCmdMessage.addArgument("EnableTrack", enable);
-    trackCmdMessage.addArgument("raRate", raRate);
-    trackCmdMessage.addArgument("decRate", decRate);
+// bool LFAST_Mount::setMountTracking(bool enable, double raRate, double decRate)
+// {
+//     LFAST::MessageGenerator trackCmdMessage("MountMessage");
+//     trackCmdMessage.addArgument("EnableTrack", enable);
+//     trackCmdMessage.addArgument("raRate", raRate);
+//     trackCmdMessage.addArgument("decRate", decRate);
+// LOG_INFO("SET MOUNT TRACKING !!!!!!!!!!!!");
+//     return sendMountOKCommand(trackCmdMessage, "Setting tracking rate");
+// }
 
-    return sendMountOKCommand(trackCmdMessage, "Setting tracking rate");
-}
+// bool LFAST_Mount::SetTrackRate(double raRate, double deRate)
+// {
+//     LOG_INFO("SET TRACK RATE !!!!!!!!!!!!");
+//     return setMountTracking(true, raRate, deRate);
+// }
 
-bool LFAST_Mount::SetTrackRate(double raRate, double deRate)
-{
-    return setMountTracking(true, raRate, deRate);
-}
+// bool LFAST_Mount::SetTrackMode(uint8_t mode)
+// {
+//     bool isSidereal = (mode == TRACK_SIDEREAL);
+//     double dRA = 0, dDE = 0;
+// LOG_INFO("SET TRACK MODE !!!!!!!!!!!!");
+//     switch (mode)
+//     {
+// #if TRACK_SOLAR_ENABLED
+//     case TRACK_SOLAR:
+//         dRA = TRACKRATE_SOLAR;
+//         break;
+// #endif
+// #if TRACK_LUNAR_ENABLED
+//     case TRACK_LUNAR:
+//         dRA = TRACKRATE_LUNAR;
+//         break;
+// #endif
+// #if TRACK_CUSTOM_ENABLED
+//     case TRACK_CUSTOM:
+//         dRA = TrackRateN[LFAST::RA_AXIS].value;
+//         dDE = TrackRateN[LFAST::DEC_AXIS].value;
+//         break;
+// #endif
+// #if TRACK_ALT_AZ_ENABLED
+//     case TRACK_ALT_AZ:
+// #warning ALT AZ TRACKING NOT YET IMPLEMENTED.
+//         break;
+// #endif
+//     case TRACK_SIDEREAL:
+//     // Intentional fall-through
+//     default:
+//         dRA = TRACKRATE_SIDEREAL;
+//         break;
+//     }
 
-bool LFAST_Mount::SetTrackMode(uint8_t mode)
-{
-    bool isSidereal = (mode == TRACK_SIDEREAL);
-    double dRA = 0, dDE = 0;
+//     return setMountTracking(true, dRA, dDE);
+// }
 
-    switch (mode)
-    {
-#if TRACK_SOLAR_ENABLED
-    case TRACK_SOLAR:
-        dRA = TRACKRATE_SOLAR;
-        break;
-#endif
-#if TRACK_LUNAR_ENABLED
-    case TRACK_LUNAR:
-        dRA = TRACKRATE_LUNAR;
-        break;
-#endif
-#if TRACK_CUSTOM_ENABLED
-    case TRACK_CUSTOM:
-        dRA = TrackRateN[LFAST::RA_AXIS].value;
-        dDE = TrackRateN[LFAST::DEC_AXIS].value;
-        break;
-#endif
-#if TRACK_ALT_AZ_ENABLED
-    case TRACK_ALT_AZ:
-#warning ALT AZ TRACKING NOT YET IMPLEMENTED.
-        break;
-#endif
-    case TRACK_SIDEREAL:
-    // Intentional fall-through
-    default:
-        dRA = TRACKRATE_SIDEREAL;
-        break;
-    }
-
-    return setMountTracking(true, dRA, dDE);
-}
-
-bool LFAST_Mount::SetTrackEnabled(bool enabled)
-{
-    // On engaging track, we simply set the current track mode and it will take care of the rest including custom track rates.
-    if (enabled)
-        return SetTrackMode(IUFindOnSwitchIndex(&TrackModeSP));
-    else
-        // Otherwise, simply switch everything off
-        return setMountTracking(false, 0.0, 0.0);
-}
+// bool LFAST_Mount::SetTrackEnabled(bool enabled)
+// {
+//     // On engaging track, we simply set the current track mode and it will take care of the rest including custom track rates.
+//     if (enabled)
+//         return SetTrackMode(IUFindOnSwitchIndex(&TrackModeSP));
+//     else
+//         // Otherwise, simply switch everything off
+//         return setMountTracking(false, 0.0, 0.0);
+// }
 
 void LFAST_Mount::AltAzToRaDec(double alt, double az, double *ra, double *dec)
 {
