@@ -69,10 +69,7 @@ LFAST_Mount::LFAST_Mount()
     setVersion(0, 2);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_HAS_LOCATION 
-                        | TELESCOPE_CAN_PARK 
-                        | TELESCOPE_CAN_ABORT 
-                        | TELESCOPE_CAN_SYNC
+    scopeCapabilities = TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_PARK | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
                         // | TELESCOPE_HAS_TIME
                         // | TELESCOPE_HAS_LOCATION
                         | TELESCOPE_CAN_GOTO
@@ -116,6 +113,7 @@ LFAST_Mount::LFAST_Mount()
     // axisPrimary.setDegrees(90.0);
     // axisPrimary.TrackRate(Axis::SIDEREAL);
     // axisSecondary.setDegrees(90.0);
+    unparkRequested = false;
 }
 
 const char *LFAST_Mount::getDefaultName()
@@ -370,6 +368,10 @@ bool LFAST_Mount::getMountRaDec()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
+    static bool firstTime = true;
+    static unsigned int cmdCounter = 0;
+    const unsigned int maxTries = 10;
+
     if (isSimulation())
     {
         mountSim();
@@ -396,15 +398,41 @@ bool LFAST_Mount::ReadScopeStatus()
                 LOG_INFO("Slew is complete. Tracking...");
         }
         break;
-    case SCOPE_PARKING:
-        // Intentional fall-through
     case SCOPE_PARKED:
-        // Intentional fall-through
-    case SCOPE_IDLE:
-        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
+        if (unparkRequested)
+        {
+            if (!checkMountStatus("IsParked"))
+            {
+                SetParked(false);
+                unparkRequested = false;
+                cmdCounter = 0;
+            }
+            else
+            {
+                cmdCounter++;
+                if (cmdCounter >= maxTries)
+                {
+                    LOGF_ERROR("COULD NOT UNPARK SCOPE [%d]", cmdCounter);
+                    unparkRequested = false;
+                    cmdCounter = 0;
+                }
+            }
+        }
+        break;
+    case SCOPE_PARKING:
         if (checkMountStatus("IsParked"))
         {
             SetParked(true);
+        }
+        break;
+    case SCOPE_IDLE:
+        if (firstTime)
+        {
+            if (checkMountStatus("IsParked"))
+            {
+                SetParked(true);
+            }
+            firstTime = false;
         }
         break;
     }
@@ -549,11 +577,11 @@ bool LFAST_Mount::UnPark()
         return false;
     }
     // Confirm we unparked
-    if (checkMountStatus("IsParked"))
-        LOG_ERROR("Could not unpark for some reason.");
-    else
-        SetParked(false);
-
+    // if (checkMountStatus("IsParked"))
+    //     LOG_ERROR("Could not unpark for some reason.");
+    // else
+    //     SetParked(false);
+    unparkRequested = true;
     return true;
 }
 

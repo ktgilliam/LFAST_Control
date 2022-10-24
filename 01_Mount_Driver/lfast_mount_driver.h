@@ -139,6 +139,8 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
         IPState GuideWE(int32_t ms);
 
         LFAST::SLEW_MODE slewMode;
+
+        bool unparkRequested;
     private:
         void mountSim();
         bool getMountRaDec();
