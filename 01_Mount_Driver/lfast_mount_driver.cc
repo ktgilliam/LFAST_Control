@@ -62,6 +62,22 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+
+// clang-format off
+#define SCOPE_CAPABILITIES           \
+            ( TELESCOPE_CAN_GOTO     \
+            | TELESCOPE_CAN_PARK     \
+            | TELESCOPE_CAN_ABORT    \
+            | TELESCOPE_CAN_SYNC     \
+            | TELESCOPE_HAS_LOCATION \
+            )
+// | TELESCOPE_HAS_TIME 
+// | TELESCOPE_HAS_TRACK_MODE
+// | TELESCOPE_HAS_TRACK_RATE
+// | TELESCOPE_CAN_CONTROL_TRACK
+// | TELESCOPE_HAS_PIER_SID
+// clang-format on
+
 int scopeCapabilities;
 
 LFAST_Mount::LFAST_Mount()
@@ -69,15 +85,7 @@ LFAST_Mount::LFAST_Mount()
     setVersion(0, 2);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_PARK | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
-                        // | TELESCOPE_HAS_TIME
-                        // | TELESCOPE_HAS_LOCATION
-                        | TELESCOPE_CAN_GOTO
-        // | TELESCOPE_HAS_TRACK_MODE
-        // | TELESCOPE_HAS_TRACK_RATE
-        // | TELESCOPE_CAN_CONTROL_TRACK
-        // | TELESCOPE_HAS_PIER_SIDE
-        ;
+    scopeCapabilities = SCOPE_CAPABILITIES;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
@@ -188,6 +196,8 @@ bool LFAST_Mount::initProperties()
     /* Add debug controls so we may debug driver if necessary */
     addDebugControl();
 
+    addPollPeriodControl();
+
     double currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
     targetRA = currentRA;
@@ -243,12 +253,13 @@ bool LFAST_Mount::updateProperties()
         }
 
         defineProperty(&HomeSP);
+        // requestLocation();
     }
     else
     {
         // deleteProperty(TrackModeSP.name);
         deleteProperty(TrackRateNP.name);
-
+        deleteProperty(LocationNP.name);
         deleteProperty(JogRateNP.name);
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
@@ -269,8 +280,8 @@ bool LFAST_Mount::Handshake()
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    hsMsg.addArgument("latitude", LocationN[LOCATION_LATITUDE].value);
-    hsMsg.addArgument("longitude", LocationN[LOCATION_LONGITUDE].value);
+    // hsMsg.addArgument("latitude", LocationN[LOCATION_LATITUDE].value);
+    // hsMsg.addArgument("longitude", LocationN[LOCATION_LONGITUDE].value);
     auto commandStr = hsMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
     // pCMD[strlen(commandStr.c_str())] = '\0';
@@ -381,10 +392,11 @@ bool LFAST_Mount::ReadScopeStatus()
 
     if (newConnectionFlag)
     {
+        requestLocation();
         if (checkMountStatus("IsParked"))
-        {
             SyncParkStatus(true);
-        }
+        else
+            SyncParkStatus(false);
         newConnectionFlag = false;
     }
 
@@ -524,6 +536,70 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
 
     LOGF_ERROR("Error checking for %s. Invalid response: %s", parameter, pRES);
     return false;
+}
+
+bool LFAST_Mount::requestLocation()
+{
+    LOG_INFO("Requesting Local Coordinates from mount.");
+    LFAST::MessageGenerator mountParkStatusMsg("MountMessage");
+    mountParkStatusMsg.addArgument("RequestLatLonAlt", true);
+    auto commandStr = mountParkStatusMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
+
+    LOGF_DEBUG("\tCMD: %s", pCMD);
+
+    int rc = 0, nbytes_written = 0, nbytes_read = 0;
+    if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
+    {
+        LOGF_ERROR("Error writing RequestLatLonAlt to Mount TCP server. Result: %d", rc);
+        return false;
+    }
+
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    {
+        LOGF_ERROR("Error reading RequestLatLonAlt from Mount TCP server. Result: %d", rc);
+        return false;
+    }
+
+    LOGF_DEBUG("\tRES: %s", pRES);
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
+    {
+        LOGF_ERROR("%s: Error parsing received data <RequestLatLonAlt>", pRES);
+        return false;
+    }
+    else
+    {
+        double latitude, longitude, altitude;
+        bool latitudeGood = rxMsg.lookup<double>("LAT", &latitude);
+        bool longitudeGood = rxMsg.lookup<double>("LON", &longitude);
+        bool altitudeGood = rxMsg.lookup<double>("ALT", &altitude);
+        if (!(latitudeGood && longitudeGood && altitudeGood))
+        {
+            LOGF_ERROR("Failed to parse lat(%d)/lon(%d)/alt(%d): %s", latitudeGood, longitudeGood, altitudeGood, pRES);
+            LocationNP.s = IPS_ALERT;
+            return false;
+        }
+        return updateLocation(latitude, longitude, altitude);
+    }
+
+    LOGF_ERROR("Error checking for RequestLatLonAlt. Invalid response: %s", pRES);
+    return false;
+}
+
+bool LFAST_Mount::updateLocation(double latitude, double longitude, double elevation)
+{
+    LocationNP.np[LOCATION_LATITUDE].value = latitude;
+    LocationNP.np[LOCATION_LONGITUDE].value = longitude;
+    LocationNP.np[LOCATION_ELEVATION].value = elevation;
+    // LocationNP.s = IPS_OK;
+LocationNP.s = IPS_ALERT;
+
+    IDSetNumber(&LocationNP, nullptr);
+    saveConfig(false, "GEOGRAPHIC_COORD");
+
+    return true;
 }
 
 bool LFAST_Mount::Sync(double ra, double dec)

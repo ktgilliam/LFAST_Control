@@ -154,8 +154,9 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
         bool startOpenLoopMotion(uint8_t motion, uint16_t rate);
         bool stopOpenLoopMotion();
         bool setMountTracking(bool enable, double raRate, double decRate);
-
         void setTargetRaDec(double ra, double dec);
+        bool requestLocation();
+        bool updateLocation(double, double, double) override;
 
         void AltAzToRaDec(double alt, double az, double *ra, double *dec);
         void RaDecToAltAz(double ra, double dec, double *alt, double *az);
