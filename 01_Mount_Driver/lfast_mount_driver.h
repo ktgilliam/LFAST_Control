@@ -141,6 +141,7 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
         LFAST::SLEW_MODE slewMode;
 
         bool unparkRequested;
+        bool newConnectionFlag;
     private:
         void mountSim();
         bool getMountRaDec();

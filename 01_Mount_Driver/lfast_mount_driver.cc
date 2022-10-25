@@ -114,6 +114,7 @@ LFAST_Mount::LFAST_Mount()
     // axisPrimary.TrackRate(Axis::SIDEREAL);
     // axisSecondary.setDegrees(90.0);
     unparkRequested = false;
+    newConnectionFlag = false;
 }
 
 const char *LFAST_Mount::getDefaultName()
@@ -311,7 +312,7 @@ bool LFAST_Mount::Handshake()
         LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
         return false;
     }
-
+    newConnectionFlag = true;
     return true;
 }
 
@@ -368,7 +369,6 @@ bool LFAST_Mount::getMountRaDec()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
-    static bool firstTime = true;
     static unsigned int cmdCounter = 0;
     const unsigned int maxTries = 10;
 
@@ -378,6 +378,15 @@ bool LFAST_Mount::ReadScopeStatus()
         return true;
     }
     printScopeMode();
+
+    if (newConnectionFlag)
+    {
+        if (checkMountStatus("IsParked"))
+        {
+            SyncParkStatus(true);
+        }
+        newConnectionFlag = false;
+    }
 
     switch (TrackState)
     {
@@ -426,14 +435,6 @@ bool LFAST_Mount::ReadScopeStatus()
         }
         break;
     case SCOPE_IDLE:
-        if (firstTime)
-        {
-            if (checkMountStatus("IsParked"))
-            {
-                SetParked(true);
-            }
-            firstTime = false;
-        }
         break;
     }
 
@@ -1113,6 +1114,8 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             IDSetSwitch(&HomeSP, nullptr);
             return true;
         }
+
+        // if (!strcmp(ParkSP.name, name))
     }
 
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
