@@ -62,6 +62,22 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+
+// clang-format off
+#define SCOPE_CAPABILITIES           \
+            ( TELESCOPE_CAN_GOTO     \
+            | TELESCOPE_CAN_PARK     \
+            | TELESCOPE_CAN_ABORT    \
+            | TELESCOPE_CAN_SYNC     \
+            | TELESCOPE_HAS_LOCATION \
+            )
+// | TELESCOPE_HAS_TIME 
+// | TELESCOPE_HAS_TRACK_MODE
+// | TELESCOPE_HAS_TRACK_RATE
+// | TELESCOPE_CAN_CONTROL_TRACK
+// | TELESCOPE_HAS_PIER_SID
+// clang-format on
+
 int scopeCapabilities;
 
 LFAST_Mount::LFAST_Mount()
@@ -69,15 +85,7 @@ LFAST_Mount::LFAST_Mount()
     setVersion(0, 2);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
-    scopeCapabilities = TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_PARK | TELESCOPE_CAN_ABORT | TELESCOPE_CAN_SYNC
-                        // | TELESCOPE_HAS_TIME
-                        // | TELESCOPE_HAS_LOCATION
-                        | TELESCOPE_CAN_GOTO
-        // | TELESCOPE_HAS_TRACK_MODE
-        // | TELESCOPE_HAS_TRACK_RATE
-        // | TELESCOPE_CAN_CONTROL_TRACK
-        // | TELESCOPE_HAS_PIER_SIDE
-        ;
+    scopeCapabilities = SCOPE_CAPABILITIES;
 
     SetTelescopeCapability(scopeCapabilities, 9);
 
@@ -113,6 +121,8 @@ LFAST_Mount::LFAST_Mount()
     // axisPrimary.setDegrees(90.0);
     // axisPrimary.TrackRate(Axis::SIDEREAL);
     // axisSecondary.setDegrees(90.0);
+    unparkRequested = false;
+    newConnectionFlag = false;
 }
 
 const char *LFAST_Mount::getDefaultName()
@@ -186,6 +196,8 @@ bool LFAST_Mount::initProperties()
     /* Add debug controls so we may debug driver if necessary */
     addDebugControl();
 
+    addPollPeriodControl();
+
     double currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double currentDEC = LocationN[LOCATION_LATITUDE].value > 0 ? 90 : -90;
     targetRA = currentRA;
@@ -241,12 +253,13 @@ bool LFAST_Mount::updateProperties()
         }
 
         defineProperty(&HomeSP);
+        // requestLocation();
     }
     else
     {
         // deleteProperty(TrackModeSP.name);
         deleteProperty(TrackRateNP.name);
-
+        deleteProperty(LocationNP.name);
         deleteProperty(JogRateNP.name);
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
@@ -267,8 +280,8 @@ bool LFAST_Mount::Handshake()
     LFAST::MessageGenerator hsMsg("MountMessage");
     hsMsg.addArgument("Handshake", (unsigned int)0xDEAD);
     hsMsg.addArgument("time", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    hsMsg.addArgument("latitude", LocationN[LOCATION_LATITUDE].value);
-    hsMsg.addArgument("longitude", LocationN[LOCATION_LONGITUDE].value);
+    // hsMsg.addArgument("latitude", LocationN[LOCATION_LATITUDE].value);
+    // hsMsg.addArgument("longitude", LocationN[LOCATION_LONGITUDE].value);
     auto commandStr = hsMsg.getMessageStr();
     auto pCMD = commandStr.c_str();
     // pCMD[strlen(commandStr.c_str())] = '\0';
@@ -310,7 +323,7 @@ bool LFAST_Mount::Handshake()
         LOGF_ERROR("Handshake key didn't match. String result: %s, key result: %u", pRES, handshakeReturnVal);
         return false;
     }
-
+    newConnectionFlag = true;
     return true;
 }
 
@@ -367,12 +380,25 @@ bool LFAST_Mount::getMountRaDec()
 
 bool LFAST_Mount::ReadScopeStatus()
 {
+    static unsigned int cmdCounter = 0;
+    const unsigned int maxTries = 10;
+
     if (isSimulation())
     {
         mountSim();
         return true;
     }
     printScopeMode();
+
+    if (newConnectionFlag)
+    {
+        requestLocation();
+        if (checkMountStatus("IsParked"))
+            SyncParkStatus(true);
+        else
+            SyncParkStatus(false);
+        newConnectionFlag = false;
+    }
 
     switch (TrackState)
     {
@@ -393,45 +419,36 @@ bool LFAST_Mount::ReadScopeStatus()
                 LOG_INFO("Slew is complete. Tracking...");
         }
         break;
-    case SCOPE_PARKING:
-        // Intentional fall-through
     case SCOPE_PARKED:
-        // Intentional fall-through
-    case SCOPE_IDLE:
-        LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
+        if (unparkRequested)
+        {
+            if (!checkMountStatus("IsParked"))
+            {
+                SetParked(false);
+                unparkRequested = false;
+                cmdCounter = 0;
+            }
+            else
+            {
+                cmdCounter++;
+                if (cmdCounter >= maxTries)
+                {
+                    LOGF_ERROR("COULD NOT UNPARK SCOPE [%d]", cmdCounter);
+                    unparkRequested = false;
+                    cmdCounter = 0;
+                }
+            }
+        }
+        break;
+    case SCOPE_PARKING:
         if (checkMountStatus("IsParked"))
         {
             SetParked(true);
         }
         break;
+    case SCOPE_IDLE:
+        break;
     }
-
-    // if (TrackState == SCOPE_SLEWING)
-    // {
-    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF SLEWING");
-    //     // Check if Scope is done slewing
-    //     if (checkMountStatus("IsSlewComplete"))
-    //     {
-    //         TrackState = SCOPE_TRACKING;
-
-    //         if (HomeSP.s == IPS_BUSY)
-    //         {
-    //             IUResetSwitch(&HomeSP);
-    //             HomeSP.s = IPS_OK;
-    //             LOG_INFO("Finding home completed.");
-    //         }
-    //         else
-    //             LOG_INFO("Slew is complete. Tracking...");
-    //     }
-    // }
-    // else if (TrackState == SCOPE_PARKING)
-    // {
-    //     LOG_DEBUG("\tReadScopeStatus(): CHECKING IF PARKED");
-    //     if (checkMountStatus("IsParked"))
-    //     {
-    //         SetParked(true);
-    //     }
-    // }
 
     LOG_DEBUG("\tReadScopeStatus(): CHECKING Ra/Dec");
     if (!getMountRaDec())
@@ -521,6 +538,70 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
     return false;
 }
 
+bool LFAST_Mount::requestLocation()
+{
+    LOG_INFO("Requesting Local Coordinates from mount.");
+    LFAST::MessageGenerator mountParkStatusMsg("MountMessage");
+    mountParkStatusMsg.addArgument("RequestLatLonAlt", true);
+    auto commandStr = mountParkStatusMsg.getMessageStr();
+    auto pCMD = commandStr.c_str();
+
+    LOGF_DEBUG("\tCMD: %s", pCMD);
+
+    int rc = 0, nbytes_written = 0, nbytes_read = 0;
+    if ((rc = tty_write(PortFD, pCMD, std::strlen(pCMD), &nbytes_written)) != TTY_OK)
+    {
+        LOGF_ERROR("Error writing RequestLatLonAlt to Mount TCP server. Result: %d", rc);
+        return false;
+    }
+
+    char pRES[MAXRBUF] = {0};
+    if ((rc = tty_read_section(PortFD, pRES, '\0', LFAST_TIMEOUT, &nbytes_read)) != TTY_OK)
+    {
+        LOGF_ERROR("Error reading RequestLatLonAlt from Mount TCP server. Result: %d", rc);
+        return false;
+    }
+
+    LOGF_DEBUG("\tRES: %s", pRES);
+    LFAST::MessageParser rxMsg(pRES);
+    if (!rxMsg.succeeded())
+    {
+        LOGF_ERROR("%s: Error parsing received data <RequestLatLonAlt>", pRES);
+        return false;
+    }
+    else
+    {
+        double latitude, longitude, altitude;
+        bool latitudeGood = rxMsg.lookup<double>("LAT", &latitude);
+        bool longitudeGood = rxMsg.lookup<double>("LON", &longitude);
+        bool altitudeGood = rxMsg.lookup<double>("ALT", &altitude);
+        if (!(latitudeGood && longitudeGood && altitudeGood))
+        {
+            LOGF_ERROR("Failed to parse lat(%d)/lon(%d)/alt(%d): %s", latitudeGood, longitudeGood, altitudeGood, pRES);
+            LocationNP.s = IPS_ALERT;
+            return false;
+        }
+        return updateLocation(latitude, longitude, altitude);
+    }
+
+    LOGF_ERROR("Error checking for RequestLatLonAlt. Invalid response: %s", pRES);
+    return false;
+}
+
+bool LFAST_Mount::updateLocation(double latitude, double longitude, double elevation)
+{
+    LocationNP.np[LOCATION_LATITUDE].value = latitude;
+    LocationNP.np[LOCATION_LONGITUDE].value = longitude;
+    LocationNP.np[LOCATION_ELEVATION].value = elevation;
+    // LocationNP.s = IPS_OK;
+LocationNP.s = IPS_ALERT;
+
+    IDSetNumber(&LocationNP, nullptr);
+    saveConfig(false, "GEOGRAPHIC_COORD");
+
+    return true;
+}
+
 bool LFAST_Mount::Sync(double ra, double dec)
 {
     currentRA = ra;
@@ -549,7 +630,7 @@ bool LFAST_Mount::Park()
     mountParkCmdMsg.addArgument("Park", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
     // mountParkCmdMsg.addArgument("NoDisconnect", true);
 
-    LOG_DEBUG("SENDING PARK COMMAND...........");
+    LOG_INFO("SENDING PARK COMMAND.");
     if (!sendMountOKCommand(mountParkCmdMsg, "Parking mount"))
     {
         LOG_DEBUG("\tSENDING PARK COMMAND FAILED!");
@@ -566,17 +647,18 @@ bool LFAST_Mount::UnPark()
 {
     LFAST::MessageGenerator mountParkCmdMsg("MountMessage");
     mountParkCmdMsg.addArgument("Unpark", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
-    // LOG_DEBUG("LFAST_Mount::UnPark()");
+
+    LOG_INFO("SENDING UNPARK COMMAND.");
     if (!sendMountOKCommand(mountParkCmdMsg, "Unparking mount"))
     {
         return false;
     }
     // Confirm we unparked
-    if (checkMountStatus("IsParked"))
-        LOG_ERROR("Could not unpark for some reason.");
-    else
-        SetParked(false);
-
+    // if (checkMountStatus("IsParked"))
+    //     LOG_ERROR("Could not unpark for some reason.");
+    // else
+    //     SetParked(false);
+    unparkRequested = true;
     return true;
 }
 
@@ -586,7 +668,7 @@ bool LFAST_Mount::Abort()
     LFAST::MessageGenerator abortCmdMsg("MountMessage");
     abortCmdMsg.addArgument("AbortSlew", get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value));
 
-    LOG_INFO("Sending Abort Slew Command");
+    LOG_INFO("Sending ABORT Slew Command");
     // sendMountPassthroughCommand(abortCmdMsg, "Sending Abort Command");
     if (!sendMountOKCommand(abortCmdMsg, "Sending Abort Command"))
     {
@@ -718,7 +800,7 @@ bool LFAST_Mount::SetCurrentPark()
 {
     char pCMD[MAXRBUF] = {0};
 
-    strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
+    // strncpy(pCMD, "LFAST_Mount.SetParkPosition();", MAXRBUF);
     // if (!sendMountOKCommand(pCMD, "Setting Park Position"))
 
     LFAST::MessageGenerator setParkPosnMsg("MountMessage");
@@ -902,68 +984,69 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
     return IPS_BUSY;
 }
 
-bool LFAST_Mount::setMountTracking(bool enable, double raRate, double decRate)
-{
-    LFAST::MessageGenerator trackCmdMessage("MountMessage");
-    trackCmdMessage.addArgument("EnableTrack", enable);
-    trackCmdMessage.addArgument("raRate", raRate);
-    trackCmdMessage.addArgument("decRate", decRate);
+// bool LFAST_Mount::setMountTracking(bool enable, double raRate, double decRate)
+// {
+//     LFAST::MessageGenerator trackCmdMessage("MountMessage");
+//     trackCmdMessage.addArgument("EnableTrack", enable);
+//     trackCmdMessage.addArgument("raRate", raRate);
+//     trackCmdMessage.addArgument("decRate", decRate);
+// LOG_INFO("SET MOUNT TRACKING !!!!!!!!!!!!");
+//     return sendMountOKCommand(trackCmdMessage, "Setting tracking rate");
+// }
 
-    return sendMountOKCommand(trackCmdMessage, "Setting tracking rate");
-}
+// bool LFAST_Mount::SetTrackRate(double raRate, double deRate)
+// {
+//     LOG_INFO("SET TRACK RATE !!!!!!!!!!!!");
+//     return setMountTracking(true, raRate, deRate);
+// }
 
-bool LFAST_Mount::SetTrackRate(double raRate, double deRate)
-{
-    return setMountTracking(true, raRate, deRate);
-}
+// bool LFAST_Mount::SetTrackMode(uint8_t mode)
+// {
+//     bool isSidereal = (mode == TRACK_SIDEREAL);
+//     double dRA = 0, dDE = 0;
+// LOG_INFO("SET TRACK MODE !!!!!!!!!!!!");
+//     switch (mode)
+//     {
+// #if TRACK_SOLAR_ENABLED
+//     case TRACK_SOLAR:
+//         dRA = TRACKRATE_SOLAR;
+//         break;
+// #endif
+// #if TRACK_LUNAR_ENABLED
+//     case TRACK_LUNAR:
+//         dRA = TRACKRATE_LUNAR;
+//         break;
+// #endif
+// #if TRACK_CUSTOM_ENABLED
+//     case TRACK_CUSTOM:
+//         dRA = TrackRateN[LFAST::RA_AXIS].value;
+//         dDE = TrackRateN[LFAST::DEC_AXIS].value;
+//         break;
+// #endif
+// #if TRACK_ALT_AZ_ENABLED
+//     case TRACK_ALT_AZ:
+// #warning ALT AZ TRACKING NOT YET IMPLEMENTED.
+//         break;
+// #endif
+//     case TRACK_SIDEREAL:
+//     // Intentional fall-through
+//     default:
+//         dRA = TRACKRATE_SIDEREAL;
+//         break;
+//     }
 
-bool LFAST_Mount::SetTrackMode(uint8_t mode)
-{
-    bool isSidereal = (mode == TRACK_SIDEREAL);
-    double dRA = 0, dDE = 0;
+//     return setMountTracking(true, dRA, dDE);
+// }
 
-    switch (mode)
-    {
-#if TRACK_SOLAR_ENABLED
-    case TRACK_SOLAR:
-        dRA = TRACKRATE_SOLAR;
-        break;
-#endif
-#if TRACK_LUNAR_ENABLED
-    case TRACK_LUNAR:
-        dRA = TRACKRATE_LUNAR;
-        break;
-#endif
-#if TRACK_CUSTOM_ENABLED
-    case TRACK_CUSTOM:
-        dRA = TrackRateN[LFAST::RA_AXIS].value;
-        dDE = TrackRateN[LFAST::DEC_AXIS].value;
-        break;
-#endif
-#if TRACK_ALT_AZ_ENABLED
-    case TRACK_ALT_AZ:
-#warning ALT AZ TRACKING NOT YET IMPLEMENTED.
-        break;
-#endif
-    case TRACK_SIDEREAL:
-    // Intentional fall-through
-    default:
-        dRA = TRACKRATE_SIDEREAL;
-        break;
-    }
-
-    return setMountTracking(true, dRA, dDE);
-}
-
-bool LFAST_Mount::SetTrackEnabled(bool enabled)
-{
-    // On engaging track, we simply set the current track mode and it will take care of the rest including custom track rates.
-    if (enabled)
-        return SetTrackMode(IUFindOnSwitchIndex(&TrackModeSP));
-    else
-        // Otherwise, simply switch everything off
-        return setMountTracking(false, 0.0, 0.0);
-}
+// bool LFAST_Mount::SetTrackEnabled(bool enabled)
+// {
+//     // On engaging track, we simply set the current track mode and it will take care of the rest including custom track rates.
+//     if (enabled)
+//         return SetTrackMode(IUFindOnSwitchIndex(&TrackModeSP));
+//     else
+//         // Otherwise, simply switch everything off
+//         return setMountTracking(false, 0.0, 0.0);
+// }
 
 void LFAST_Mount::AltAzToRaDec(double alt, double az, double *ra, double *dec)
 {
@@ -1107,6 +1190,8 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             IDSetSwitch(&HomeSP, nullptr);
             return true;
         }
+
+        // if (!strcmp(ParkSP.name, name))
     }
 
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);

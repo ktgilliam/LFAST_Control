@@ -3,7 +3,7 @@
 if (POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
 endif (POLICY CMP0048)
-project(lfast-controller LANGUAGES C CXX VERSION 0.0.1)
+project(lfast_mount_controller LANGUAGES C CXX VERSION 0.0.1)
 cmake_minimum_required(VERSION 3.10)
 
 
