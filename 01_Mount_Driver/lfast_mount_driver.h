@@ -56,12 +56,13 @@ enum
     DEC_AXIS,
     NUM_AXES
 };
-enum
+
+enum GUIDE_DIRECTION
 {
-    NORTH,
-    SOUTH,
-    EAST,
-    WEST
+    GUIDE_NORTH = 0,
+    GUIDE_SOUTH = 1,
+    GUIDE_EAST = 2,
+    GUIDE_WEST = 3
 };
 
 #define TRACK_SOLAR_ENABLED 0

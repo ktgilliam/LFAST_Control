@@ -59,6 +59,9 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 #define GOTO_LIMIT 5.5 /* Move at GOTO_RATE until distance from target is GOTO_LIMIT degrees */
 #define SLEW_LIMIT 1   /* Move at SLEW_LIMIT until distance from target is SLEW_LIMIT degrees */
 
+#define EL_PARK_POSN_DEG -20.0
+#define AZ_PARK_POSN_DEG 0.0
+
 /* Preset Slew Speeds */
 #define SLEWMODES 9
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
@@ -79,6 +82,8 @@ const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256
 // clang-format on
 
 int scopeCapabilities;
+
+char lfastMountName[] = "LFAST_Mount";
 
 LFAST_Mount::LFAST_Mount()
 {
@@ -117,17 +122,14 @@ LFAST_Mount::LFAST_Mount()
 
     /* initialize random seed: */
     srand(static_cast<uint32_t>(time(nullptr)));
-    // initalise axis positions, for GEM pointing at pole, counterweight down
-    // axisPrimary.setDegrees(90.0);
-    // axisPrimary.TrackRate(Axis::SIDEREAL);
-    // axisSecondary.setDegrees(90.0);
+
     unparkRequested = false;
     newConnectionFlag = false;
 }
 
 const char *LFAST_Mount::getDefaultName()
 {
-    return "LFAST_Mount";
+    return lfastMountName;
 }
 
 bool LFAST_Mount::initProperties()
@@ -210,10 +212,14 @@ bool LFAST_Mount::initProperties()
 bool LFAST_Mount::updateProperties()
 {
     INDI::Telescope::updateProperties();
+    // static bool firstTime = true;
+    static unsigned int callCount = 0;
 
     if (isConnected())
     {
-
+        callCount++;
+        if (callCount > 0)
+            LOGF_INFO("updatePoperties Call Count: %d", callCount);
         defineProperty(&JogRateNP);
         defineProperty(&TrackRateNP);
 
@@ -234,10 +240,11 @@ bool LFAST_Mount::updateProperties()
             // Axis 1 is RA/AZ
             // Axis 2 is DEC/ALT
             SetAxis1Park(0);
-            SetAxis2Park(currentDEC);
+            SetAxis2Park(EL_PARK_POSN_DEG);
             SetAxis1ParkDefault(0);
-            SetAxis2ParkDefault(currentDEC);
+            SetAxis2ParkDefault(EL_PARK_POSN_DEG);
         }
+
         SetParked(checkMountStatus("IsParked"));
 
         if (checkMountStatus("IsTracking"))
@@ -540,6 +547,12 @@ bool LFAST_Mount::checkMountStatus(std::string parameter)
 
 bool LFAST_Mount::requestLocation()
 {
+
+    static unsigned int callCount = 0;
+    callCount++;
+    if (callCount > 0)
+        LOGF_INFO("requestLocation Call Count: %d", callCount);
+
     LOG_INFO("Requesting Local Coordinates from mount.");
     LFAST::MessageGenerator mountParkStatusMsg("MountMessage");
     mountParkStatusMsg.addArgument("RequestLatLonAlt", true);
@@ -593,8 +606,7 @@ bool LFAST_Mount::updateLocation(double latitude, double longitude, double eleva
     LocationNP.np[LOCATION_LATITUDE].value = latitude;
     LocationNP.np[LOCATION_LONGITUDE].value = longitude;
     LocationNP.np[LOCATION_ELEVATION].value = elevation;
-    // LocationNP.s = IPS_OK;
-LocationNP.s = IPS_ALERT;
+    LocationNP.s = IPS_OK;
 
     IDSetNumber(&LocationNP, nullptr);
     saveConfig(false, "GEOGRAPHIC_COORD");
@@ -604,17 +616,20 @@ LocationNP.s = IPS_ALERT;
 
 bool LFAST_Mount::Sync(double ra, double dec)
 {
-    currentRA = ra;
-    currentDEC = dec;
 
     LFAST::MessageGenerator syncDataMessage("MountMessage");
-    syncDataMessage.addArgument("syncRaPosn", currentRA);
-    syncDataMessage.addArgument("syncDecPosn", currentDEC);
+    syncDataMessage.addArgument("syncRaPosn", ra);
+    syncDataMessage.addArgument("syncDecPosn", dec);
     if (!sendMountOKCommand(syncDataMessage, "Syncing to target"))
+    {
+        EqNP.s = IPS_ALERT;
         return false;
+    }
 
-    LOG_INFO("Sync is successful.");
+    currentRA = ra;
+    currentDEC = dec;
     EqNP.s = IPS_OK;
+    LOG_INFO("Sync is successful.");
     NewRaDec(currentRA, currentDEC);
 
     return true;
@@ -694,6 +709,22 @@ bool LFAST_Mount::findHome()
     return true;
 }
 
+/*
+
+Mount directions in the Northern Hemisphere
+RA+ = Left (East or X+)
+RA- = Right (West or X-)
+Dec+ = Up (North or Y+)
+Dec- = Down (South or Y-)
+
+Mount directions in the Southern Hemisphere.
+RA+ = Right (West)
+RA- = Left (East)
+Dec+ = Up (South)
+Dec- = Down (North)
+
+*/
+
 bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
     if (TrackState == SCOPE_PARKED)
@@ -702,20 +733,19 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
         return false;
     }
 
-    int motion = (dir == DIRECTION_NORTH) ? LFAST::NORTH : LFAST::SOUTH;
-    // int rate   = IUFindOnSwitchIndex(&SlewRateSP);
-    int rate = slewspeeds[IUFindOnSwitchIndex(&SlewRateSP)];
+    int direction = (dir == DIRECTION_NORTH) ? LFAST::GUIDE_NORTH : LFAST::GUIDE_SOUTH;
+    int rateMult = slewspeeds[IUFindOnSwitchIndex(&SlewRateSP)];
 
     switch (command)
     {
     case MOTION_START:
-        if (!isSimulation() && !startOpenLoopMotion(motion, rate))
+        if (!isSimulation() && !startOpenLoopMotion(direction, rateMult))
         {
             LOG_ERROR("Error setting N/S motion direction.");
             return false;
         }
         else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST::NORTH) ? "North" : "South");
+            LOGF_INFO("Moving toward %s.", (direction == LFAST::GUIDE_NORTH) ? "North" : "South");
         break;
 
     case MOTION_STOP:
@@ -726,7 +756,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
         }
         else
             LOGF_INFO("Moving toward %s halted.",
-                      (motion == LFAST::NORTH) ? "North" : "South");
+                      (direction == LFAST::GUIDE_NORTH) ? "North" : "South");
         break;
     }
 
@@ -741,7 +771,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         return false;
     }
 
-    int motion = (dir == DIRECTION_WEST) ? LFAST::WEST : LFAST::EAST;
+    int motion = (dir == DIRECTION_WEST) ? LFAST::GUIDE_WEST : LFAST::GUIDE_EAST;
     int rate = IUFindOnSwitchIndex(&SlewRateSP);
 
     switch (command)
@@ -753,7 +783,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
             return false;
         }
         else
-            LOGF_INFO("Moving toward %s.", (motion == LFAST::WEST) ? "West" : "East");
+            LOGF_INFO("Moving toward %s.", (motion == LFAST::GUIDE_WEST) ? "West" : "East");
         break;
 
     case MOTION_STOP:
@@ -764,29 +794,57 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         }
         else
             LOGF_INFO("Movement toward %s halted.",
-                      (motion == LFAST::WEST) ? "West" : "East");
+                      (motion == LFAST::GUIDE_WEST) ? "West" : "East");
         break;
     }
 
     return true;
 }
 
-bool LFAST_Mount::startOpenLoopMotion(uint8_t motion, uint16_t rate)
+bool LFAST_Mount::startOpenLoopMotion(uint8_t direction, uint16_t rateMult)
 {
     char pCMD[MAXRBUF] = {0};
 
-    snprintf(pCMD, MAXRBUF, "LFAST_Mount.DoCommand(9,'%d|%d');", motion, rate);
-    // return sendMountOKCommand(pCMD, "Starting open loop motion");
-    return false;
+    LFAST::MessageGenerator moveCmdMsg("MountMessage");
+    moveCmdMsg.addArgument("GuideEnable", true);
+
+    switch (direction)
+    {
+    case LFAST::GUIDE_NORTH:
+        moveCmdMsg.addArgument("GuideDirection", "North");
+        break;
+    case LFAST::GUIDE_SOUTH:
+        moveCmdMsg.addArgument("GuideDirection", "South");
+        break;
+    case LFAST::GUIDE_EAST:
+        moveCmdMsg.addArgument("GuideDirection", "East");
+        break;
+    case LFAST::GUIDE_WEST:
+        moveCmdMsg.addArgument("GuideDirection", "West");
+        break;
+    default:
+        return false;
+        break;
+    }
+
+    moveCmdMsg.addArgument("GuideRate", rateMult);
+
+    if (!sendMountOKCommand(moveCmdMsg, "Sending Guide Command"))
+        return false;
+
+    return true;
 }
 
 bool LFAST_Mount::stopOpenLoopMotion()
 {
     char pCMD[MAXRBUF] = {0};
 
-    strncpy(pCMD, "LFAST_Mount.DoCommand(10,'');", MAXRBUF);
-    // return sendMountOKCommand(pCMD, "Stopping open loop motion");
-    return false;
+    LFAST::MessageGenerator moveCmdMsg("MountMessage");
+    moveCmdMsg.addArgument("GuideEnable", false);
+    if (!sendMountOKCommand(moveCmdMsg, "Sending Guide Command"))
+        return false;
+
+    return true;
 }
 
 bool LFAST_Mount::updateTime(ln_date *utc, double utc_offset)
@@ -949,7 +1007,6 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
     }
 
     // Movement in arcseconds
-    // Send async
     double dDec = GuideRateN[LFAST::DEC_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
     LFAST::MessageGenerator guideNSDataMessage("MountMessage");
     guideNSDataMessage.addArgument("dRA", 0.0);
