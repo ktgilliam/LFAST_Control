@@ -196,6 +196,9 @@ bool LFAST_Mount::initProperties()
     /* Add debug controls so we may debug driver if necessary */
     addDebugControl();
 
+    // Add alignment properties
+    InitAlignmentProperties(this);
+
     addPollPeriodControl();
 
     double currentRA = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
@@ -594,10 +597,12 @@ bool LFAST_Mount::updateLocation(double latitude, double longitude, double eleva
     LocationNP.np[LOCATION_LONGITUDE].value = longitude;
     LocationNP.np[LOCATION_ELEVATION].value = elevation;
     // LocationNP.s = IPS_OK;
-LocationNP.s = IPS_ALERT;
+    LocationNP.s = IPS_ALERT;
 
     IDSetNumber(&LocationNP, nullptr);
     saveConfig(false, "GEOGRAPHIC_COORD");
+    // INDI::AlignmentSubsystem
+    INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers::UpdateLocation(latitude, longitude, elevation);
 
     return true;
 }
@@ -612,6 +617,14 @@ bool LFAST_Mount::Sync(double ra, double dec)
     syncDataMessage.addArgument("syncDecPosn", currentDEC);
     if (!sendMountOKCommand(syncDataMessage, "Syncing to target"))
         return false;
+
+    
+    INDI::AlignmentSubsystem::AlignmentDatabaseEntry NewEntry;
+    NewEntry.ObservationJulianDate = ln_get_julian_from_sys();
+    NewEntry.RightAscension = ra;
+    NewEntry.Declination = dec;
+    NewEntry.TelescopeDirection = TelescopeDirectionVectorFromAltitudeAzimuth(AltAz);
+    NewEntry.PrivateDataSize = 0;
 
     LOG_INFO("Sync is successful.");
     EqNP.s = IPS_OK;
@@ -1195,6 +1208,28 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
     }
 
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
+}
+
+bool LFAST_Mount::ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n)
+{
+    if (strcmp(dev, getDeviceName()) == 0)
+    {
+        // Process alignment properties
+        ProcessBlobProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
+    }
+    // Pass it up the chain
+    return INDI::Telescope::ISNewBLOB(dev, name, sizes, blobsizes, blobs, formats, names, n);
+}
+
+bool LFAST_Mount::ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n)
+{
+    if(strcmp(dev,getDeviceName())==0)
+    {
+        // Process alignment properties
+        ProcessTextProperties(this, name, texts, names, n);
+    }
+    // Pass it up the chain
+    return INDI::Telescope::ISNewText(dev, name, texts, names, n);
 }
 
 void LFAST_Mount::mountSim()

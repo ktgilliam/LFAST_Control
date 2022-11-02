@@ -26,6 +26,7 @@
 #include "inditelescope.h"
 #include "inditimer.h"
 #include "indipropertyswitch.h"
+#include "alignment/AlignmentSubsystemForDrivers.h"
 
 #include "../00_Utils/lfast_comms.h"
 
@@ -86,12 +87,13 @@ typedef enum
 } SLEW_MODE;
 
 }
+
 #define JOG_RATE_MIN 0
 #define JOG_RATE_MAX 600
 #define JOG_RATE_STEP 60
 #define JOG_RATE_VALUE 30
 
-class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
+class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface, public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
 {
     public:
         LFAST_Mount();
@@ -105,7 +107,9 @@ class LFAST_Mount : public INDI::Telescope, public INDI::GuiderInterface
 
         virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
         virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
-
+        virtual bool ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n) override;
+        virtual bool ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n) override;
+        
     protected:
         virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
         virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
