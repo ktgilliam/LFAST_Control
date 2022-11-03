@@ -39,17 +39,17 @@ target_link_libraries(
   GTest::gtest_main
 )
 
-#### CANBUS tests
-add_executable(
-  can_bus_interface_tests
-  can_bus_interface_tests.cc
-)
+# #### CANBUS tests
+# add_executable(
+#   can_bus_interface_tests
+#   can_bus_interface_tests.cc
+# )
 
-target_link_libraries(
-  can_bus_interface_tests
-  can_bus_interface
-  GTest::gtest_main
-)
+# target_link_libraries(
+#   can_bus_interface_tests
+#   can_bus_interface
+#   GTest::gtest_main
+# )
 
 #### comms tests
 add_executable(

@@ -35,6 +35,8 @@ set(BUILD_TESTS true)
 message("Checking for INDI Library")
 #Require INDI 1.4 or later
 find_package(INDI 1.4 REQUIRED)
+find_package(Nova REQUIRED)
+find_package(Modbus REQUIRED)
 
 if(INDI_FOUND)
    include_directories(${INDI_INCLUDE_DIR})
@@ -53,7 +55,7 @@ if(INDI_FOUND)
    endif ()
 endif(INDI_FOUND)
 
-#find_package(Nova REQUIRED)
+
 #find_package(ZLIB REQUIRED)
 #find_package(GSL REQUIRED)
 
