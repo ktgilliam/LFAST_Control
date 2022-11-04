@@ -64,6 +64,28 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
 
     AltitudeAxis = new SlewDrive(altLabel);
     AzimuthAxis = new SlewDrive(azLabel);
+    initializeTimers();
+
+    // Set the driver interface to indicate that we can also do pulse guiding
+    setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
+}
+
+void LFAST_Mount::initializeTimers()
+{
+    m_NSTimer.setSingleShot(true);
+    m_WETimer.setSingleShot(true);
+    // Called when timer is up
+    m_NSTimer.callOnTimeout([this]()
+                            {
+        GuideNSNP.s = IPS_IDLE;
+        GuideNSN[0].value = GuideNSN[1].value = 0;
+        IDSetNumber(&GuideNSNP, nullptr); });
+
+    m_WETimer.callOnTimeout([this]()
+                            {
+        GuideWENP.s = IPS_IDLE;
+        GuideWEN[0].value = GuideWEN[1].value = 0;
+        IDSetNumber(&GuideWENP, nullptr); });
 }
 
 LFAST_Mount::~LFAST_Mount()
@@ -109,6 +131,20 @@ bool LFAST_Mount::initProperties()
         SetAxis2ParkDefault(default_park_posn_alt);
     }
 
+    // How fast do we guide compared to sidereal rate
+    GuideRateNP[AXIS_RA].fill("GUIDE_RATE_WE", "W/E Rate", "%.1f", 0, 1, 0.1, 0.5);
+    GuideRateNP[AXIS_DE].fill("GUIDE_RATE_NS", "N/S Rate", "%.1f", 0, 1, 0.1, 0.5);
+    GuideRateNP.fill(getDeviceName(), "GUIDE_RATE", "Guiding Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
+#if 0
+    // Since we have 4 slew rates, let's fill them out
+    SlewRateSP[SLEW_GUIDE].fill( "SLEW_GUIDE", "Guide", ISS_OFF);
+    SlewRateSP[SLEW_CENTERING].fill( "SLEW_CENTERING", "Centering", ISS_OFF);
+    SlewRateSP[SLEW_FIND].fill( "SLEW_FIND", "Find", ISS_OFF);
+    SlewRateSP[SLEW_MAX].fill( "SLEW_MAX", "Max", ISS_ON);
+    SlewRateSP.fill(getDeviceName(), "TELESCOPE_SLEW_RATE", "Slew Rate", MOTION_TAB, IP_RW, ISR_1OFMANY, 0, IPS_IDLE);
+#endif
+
     LOG_WARN("Initial position hardcoded to parking position");
     AltitudeAxis->syncPosition(default_park_posn_alt);
     AzimuthAxis->syncPosition(default_park_posn_az);
@@ -122,7 +158,7 @@ bool LFAST_Mount::initProperties()
     InitAlignmentProperties(this);
 
     // Create and update slew rates
-    deleteProperty(SlewRateSP.name);
+
     for (int ii = 0; ii < MountSlewRateSP.size(); ii++)
     {
         char label[10] = {0};
@@ -145,6 +181,10 @@ bool LFAST_Mount::initProperties()
     AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Altitude [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
     AzAltCoordsNP.fill(getDeviceName(), "ALT_AZ_COORDINATES", "Horizontal Coordinates", MAIN_CONTROL_TAB, IP_RO, 0, IPS_IDLE);
 
+    deleteProperty(SlewRateSP.name);
+    // deleteProperty(LANSearchSP.name);
+    // this->telescopeConnection
+
     return true;
 }
 
@@ -165,6 +205,10 @@ bool LFAST_Mount::updateProperties()
         defineProperty(&AbortSP);
 
         defineProperty(&MountSlewRateSP);
+
+        defineProperty(&GuideNSNP);
+        defineProperty(&GuideWENP);
+        defineProperty(&GuideRateNP);
     }
     else
     {
@@ -206,8 +250,8 @@ bool LFAST_Mount::Goto(double ra, double dec)
            AltAzCommand.azimuth);
 
     // TODO: Try/Catch
-    AltitudeAxis->gotoAndStop(AltAzCommand.altitude);
-    AzimuthAxis->gotoAndStop(AltAzCommand.azimuth);
+    AltitudeAxis->slewToTrack(AltAzCommand.altitude);
+    AzimuthAxis->slewToTrack(AltAzCommand.azimuth);
 
     TrackState = SCOPE_SLEWING;
 
@@ -359,6 +403,20 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
         ProcessAlignmentNumberProperties(this, name, values, names, n);
     }
 
+    // Guiding Rate
+    if (GuideRateNP.isNameMatch(name))
+    {
+        IUUpdateNumber(&GuideRateNP, values, names, n);
+        GuideRateNP.setState(IPS_OK);
+        IDSetNumber(&GuideRateNP, nullptr);
+        return true;
+    }
+    if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
+    {
+        processGuiderProperties(name, values, names, n);
+        return true;
+    }
+
     //  if we didn't process it, continue up the chain, let somebody else
     //  give it a shot
     return INDI::Telescope::ISNewNumber(dev, name, values, names, n);
@@ -475,8 +533,8 @@ bool LFAST_Mount::Park()
     // fs_sexa(RAStr, EquatorialCoordinates.rightascension, 2, 3600);
     // fs_sexa(DecStr, EquatorialCoordinates.declination, 2, 3600);
     // LOGF_INFO("Parked RA: %s Parked DEC: %s", RAStr, DecStr);
-    AltitudeAxis->gotoAndStop(default_park_posn_alt);
-    AzimuthAxis->gotoAndStop(default_park_posn_az);
+    AltitudeAxis->slewToStop(default_park_posn_alt);
+    AzimuthAxis->slewToStop(default_park_posn_az);
 
     // NewRaDec(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
     TrackState = SCOPE_PARKING;
@@ -563,6 +621,70 @@ bool LFAST_Mount::ReadScopeStatus()
     return true;
 }
 
+IPState LFAST_Mount::GuideNorth(uint32_t ms)
+{
+    return GuideNS(static_cast<int>(ms));
+}
+
+IPState LFAST_Mount::GuideSouth(uint32_t ms)
+{
+    return GuideNS(-static_cast<int>(ms));
+}
+
+IPState LFAST_Mount::GuideEast(uint32_t ms)
+{
+    return GuideWE(static_cast<int>(ms));
+}
+
+IPState LFAST_Mount::GuideWest(uint32_t ms)
+{
+    return GuideWE(static_cast<int>(ms));
+}
+
+IPState LFAST_Mount::GuideNS(int32_t ms)
+{
+    if (TrackState == SCOPE_PARKED)
+    {
+        LOG_ERROR("Please unpark the mount before issuing any motion commands.");
+        return IPS_ALERT;
+    }
+
+    // Movement in arcseconds
+    // Send async
+    // double dDec = GuideRateN[LFAST::DEC_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
+    // LFAST::MessageGenerator guideNSDataMessage("MountMessage");
+    // guideNSDataMessage.addArgument("dRA", 0.0);
+    // guideNSDataMessage.addArgument("dDEC", dDec);
+
+    // if (!sendMountOKCommand(guideNSDataMessage, "issuing NS guide command"))
+    //     return IPS_ALERT;
+
+    m_NSTimer.start(ms);
+
+    return IPS_BUSY;
+}
+
+IPState LFAST_Mount::GuideWE(int32_t ms)
+{
+    if (TrackState == SCOPE_PARKED)
+    {
+        LOG_ERROR("Please unpark the mount before issuing any motion commands.");
+        return IPS_ALERT;
+    }
+
+    // Movement in arcseconds
+    // Send async
+    // double dRA = GuideRateN[LFAST::RA_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
+    // LFAST::MessageGenerator guideNSDataMessage("MountMessage");
+    // guideNSDataMessage.addArgument("dRA", dRA);
+    // guideNSDataMessage.addArgument("dDEC", 0.0);
+    // if (!sendMountOKCommand(guideNSDataMessage, "issuing NS guide command"))
+    //     return IPS_ALERT;
+
+    m_WETimer.start(ms);
+
+    return IPS_BUSY;
+}
 ////////////////////////////////////////////////////////////////////////////////////////////?
 ////////////////////////////////////////////////////////////////////////////////////////////?
 ////////////////////////////////////////////////////////////////////////////////////////////?
@@ -604,7 +726,13 @@ void LFAST_Mount::TimerHit()
     SlewDriveMode_t altMode = AltitudeAxis->poll();
     SlewDriveMode_t azMode = AzimuthAxis->poll();
 
-    if (altMode == SLEWING || azMode == SLEWING)
+    if (TrackState == SCOPE_PARKING)
+    {
+        AltitudeAxis->updatePositionCommand(default_park_posn_alt);
+        AzimuthAxis->updatePositionCommand(default_park_posn_az);
+
+    }
+    if (altMode == SLEWING_TO_TRACK || azMode == SLEWING_TO_TRACK)
     {
         TrackState = SCOPE_SLEWING;
     }
@@ -991,6 +1119,12 @@ void LFAST_Mount::TimerHit()
 
     TraceThisTick = false;
 }
-void LFAST_Mount::mountSim()
+
+void LFAST_Mount::hexDump(char *buf, const char *data, int size)
 {
+    for (int i = 0; i < size; i++)
+        sprintf(buf + 3 * i, "%02X ", static_cast<uint8_t>(data[i]));
+
+    if (size > 0)
+        buf[3 * size - 1] = '\0';
 }

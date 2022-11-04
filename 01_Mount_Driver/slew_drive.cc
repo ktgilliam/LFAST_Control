@@ -10,9 +10,7 @@ SlewDrive::SlewDrive(const char *label)
 {
     axisLabel = label;
     // Initialize state variables
-    gotoCommandReceived = false;
-    trackCommandUpdateReceived = false;
-    abortCommandReceived = false;
+    activeCommand = NO_COMMAND;
     isEnabled = false;
 
     positionFeedback_deg = 0.0;
@@ -27,22 +25,26 @@ double SlewDrive::getPositionFeedback()
     return positionFeedback_deg;
 }
 
-void SlewDrive::gotoAndStop(double cmd)
+void SlewDrive::slewToTrack(double cmd)
 {
     positionCommand_deg = cmd;
-    gotoCommandReceived = true;
+    activeCommand = SLEW_TO_TRACK;
+}
+
+void SlewDrive::slewToStop(double cmd)
+{
+    positionCommand_deg = cmd;
+    activeCommand = SLEW_TO_STOP;
 }
 
 void SlewDrive::updatePositionCommand(double cmd)
 {
-    if (currentMode == SLEWING)
         positionCommand_deg = cmd;
 }
 void SlewDrive::updateTrackCommands(double pcmd, double rcmd)
 {
     if (currentMode == TRACKING)
     {
-        trackCommandUpdateReceived = true;
         positionCommand_deg = pcmd;
         rateCommand_dps = rcmd;
     }
@@ -50,7 +52,7 @@ void SlewDrive::updateTrackCommands(double pcmd, double rcmd)
 void SlewDrive::abortSlew()
 {
     rateCommand_dps = 0.0;
-    abortCommandReceived = true;
+    activeCommand = ABORT;
 }
 void SlewDrive::syncPosition(double posn)
 {
@@ -92,8 +94,10 @@ const char *SlewDrive::getModeString()
         return "IDLE";
     case STOPPING:
         return "STOPPING";
-    case SLEWING:
-        return "SLEWING";
+    case SLEWING_TO_TRACK:
+        return "SLEWING_TO_TRACK";
+    case SLEWING_TO_STOP:
+        return "SLEWING_TO_STOP";
     case TRACKING:
         return "TRACKING";
     case ERROR:
@@ -118,8 +122,11 @@ SlewDriveMode_t SlewDrive::poll()
     case STOPPING:
         nextMode = stoppingHandler();
         break;
-    case SLEWING:
-        nextMode = slewingHandler();
+    case SLEWING_TO_TRACK:
+        nextMode = slewingToTrackHandler();
+        break;
+    case SLEWING_TO_STOP:
+        nextMode = slewingToStopHandler();
         break;
     case TRACKING:
         nextMode = trackingHandler();
@@ -140,81 +147,159 @@ SlewDriveMode_t SlewDrive::initHandler()
 
     return IDLE;
 }
+
 SlewDriveMode_t SlewDrive::idleHandler()
 {
     SlewDriveMode_t nextState = IDLE;
     if (isEnabled)
     {
-        if (gotoCommandReceived)
+        switch (activeCommand)
         {
-            std::stringstream ss;
-            ss << axisLabel << ": Switching to slew mode.";
-            debugStrings.push_back(ss.str());
-
-            nextState = SLEWING;
-            gotoCommandReceived = false;
+        case SLEW_TO_TRACK:
+            nextState = SLEWING_TO_TRACK;
+            break;
+        case SLEW_TO_STOP:
+            nextState = SLEWING_TO_STOP;
+            break;
+        case ABORT:
+        case NO_COMMAND:
+        default:
+            break;
         }
-        else
-        {
-            std::stringstream ss;
-            ss << axisLabel << ": Goto command received while disabled.";
-            debugStrings.push_back(ss.str());
-        }
-    }
-    return nextState;
-}
-SlewDriveMode_t SlewDrive::stoppingHandler()
-{
-    rateCommand_dps = 0.0;
-    // If rate feedback is zero -> idle, otherwise still stopping.
-    abortCommandReceived = false;
-    return IDLE;
-}
-SlewDriveMode_t SlewDrive::slewingHandler()
-{
-    SlewDriveMode_t nextState = SLEWING;
-    if (abortCommandReceived)
-    {
-        nextState = STOPPING;
+        activeCommand = NO_COMMAND;
     }
     else
     {
-        double fastSlewThresh = fastSlewRate * 1.5 * 0.1;
-        double posnError = positionCommand_deg - positionFeedback_deg;
-        if (std::abs(posnError) < fastSlewThresh)
-        {
-            nextState = TRACKING;
-        }
-        else
-        {
-            int sign = std::signbit(posnError) ? -1 : 1;
-            rateCommand_dps = fastSlewRate * sign;
-        }
+        // Throw exception
     }
+    return nextState;
+}
+
+SlewDriveMode_t SlewDrive::slewingToTrackHandler()
+{
+    SlewDriveMode_t nextState = SLEWING_TO_TRACK;
+
+    if (isEnabled)
+    {
+        switch (activeCommand)
+        {
+        case SLEW_TO_STOP:
+            nextState = SLEWING_TO_STOP;
+            break;
+        case ABORT:
+            nextState = STOPPING;
+            break;
+        case SLEW_TO_TRACK:
+        case NO_COMMAND:
+        default:
+        {
+            double fastSlewThresh = fastSlewRate * 1.5 * 0.1;
+            double posnError = positionCommand_deg - positionFeedback_deg;
+            if (std::abs(posnError) < fastSlewThresh)
+            {
+                nextState = TRACKING;
+            }
+            else
+            {
+                int sign = std::signbit(posnError) ? -1 : 1;
+                rateCommand_dps = fastSlewRate * sign;
+            }
+        }
+        break;
+        }
+        activeCommand = NO_COMMAND;
+    }
+    else
+    {
+        // Throw exception
+    }
+
     return nextState;
 }
 
 SlewDriveMode_t SlewDrive::trackingHandler()
 {
     SlewDriveMode_t nextState = TRACKING;
-    if (abortCommandReceived)
+
+    if (isEnabled)
     {
-        nextState = STOPPING;
+        switch (activeCommand)
+        {
+        case SLEW_TO_STOP:
+            nextState = SLEWING_TO_STOP;
+            break;
+        case ABORT:
+            nextState = STOPPING;
+            break;
+        case SLEW_TO_TRACK:
+            // Reset integrators?
+            nextState = SLEWING_TO_TRACK;
+            break;
+        case NO_COMMAND:
+        default:
+        {
+            double posnError = positionCommand_deg - positionFeedback_deg;
+            int sign = std::signbit(posnError) ? -1 : 1;
+            rateCommand_dps = 0.004166667 * sign;
+        }
+        break;
+        }
+        activeCommand = NO_COMMAND;
     }
     else
     {
-        if (gotoCommandReceived)
-        {
-            nextState = SLEWING;
-            gotoCommandReceived = false;
-        }
-        double posnError = positionCommand_deg - positionFeedback_deg;
-
-        int sign = std::signbit(posnError) ? -1 : 1;
-        rateCommand_dps = 0.004166667 * sign;
-        // Closed loop behavior goes here.
+        // Throw exception
     }
+
     return nextState;
+}
+
+SlewDriveMode_t SlewDrive::slewingToStopHandler()
+{
+    SlewDriveMode_t nextState = SLEWING_TO_STOP;
+    if (isEnabled)
+    {
+        switch (activeCommand)
+        {
+        case SLEW_TO_STOP:
+            nextState = SLEWING_TO_STOP;
+            break;
+        case ABORT:
+            nextState = STOPPING;
+            break;
+        case SLEW_TO_TRACK:
+        case NO_COMMAND:
+        default:
+        {
+            double fastSlewThresh = fastSlewRate * 1.5 * 0.1;
+            double posnError = positionCommand_deg - positionFeedback_deg;
+            if (std::abs(posnError) < fastSlewThresh)
+            {
+                nextState = STOPPING;
+            }
+            else
+            {
+                int sign = std::signbit(posnError) ? -1 : 1;
+                rateCommand_dps = fastSlewRate * sign;
+            }
+        }
+        break;
+        }
+        activeCommand = NO_COMMAND;
+    }
+    else
+    {
+        // Throw exception
+    }
+
+    return nextState;
+}
+
+SlewDriveMode_t SlewDrive::stoppingHandler()
+{
+    rateCommand_dps = 0.0;
+    // If rate feedback is zero -> idle, otherwise still stopping.
+    return IDLE;
 }
 
 SlewDriveMode_t SlewDrive::errorHandler()
