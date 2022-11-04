@@ -3,14 +3,17 @@
 
 #include "indiguiderinterface.h"
 #include "inditelescope.h"
+#include "indipropertytext.h"
 #include "alignment/AlignmentSubsystemForDrivers.h"
+
+#include "slew_drive.h"
 
 class LFAST_Mount : public INDI::Telescope, public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
 {
 public:
     LFAST_Mount();
-
-protected:
+    virtual ~LFAST_Mount();
+protected: 
     /** \brief Called to initialize basic properties required all the time */
     virtual bool initProperties() override;
     /** \brief Called when connected state changes, to add/remove properties */
@@ -32,8 +35,10 @@ protected:
     bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
     bool ReadScopeStatus() override;
     bool Sync(double ra, double dec) override;
-    void TimerHit() override;
     bool updateLocation(double latitude, double longitude, double elevation) override;
+    
+    void TimerHit() override;
+    void mountSim();
 
     // Parking
     virtual bool Park() override;
@@ -42,38 +47,15 @@ protected:
     // virtual bool SetDefaultPark() override;
     // virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
 
+    void updateTrackingTarget(double ra, double dec);
+
+
+
 private:
     unsigned int DBG_SCOPE{0};
 
-    static constexpr long MICROSTEPS_PER_REVOLUTION{1000000};
-    static constexpr double MICROSTEPS_PER_DEGREE{MICROSTEPS_PER_REVOLUTION / 360.0};
-    static constexpr double DEFAULT_SLEW_RATE{MICROSTEPS_PER_DEGREE * 2.0};
-    static constexpr long MAX_DEC{(long)(90.0 * MICROSTEPS_PER_DEGREE)};
-    static constexpr long MIN_DEC{(long)(-90.0 * MICROSTEPS_PER_DEGREE)};
-
-    enum AxisStatus
-    {
-        STOPPED,
-        SLEWING,
-        SLEWING_TO
-    };
-    enum AxisDirection
-    {
-        FORWARD,
-        REVERSE
-    };
-
-    AxisStatus AxisStatusDEC{STOPPED};
-    AxisDirection AxisDirectionDEC{FORWARD};
-    double AxisSlewRateDEC{DEFAULT_SLEW_RATE};
-    long CurrentEncoderMicrostepsDEC{0};
-    long GotoTargetMicrostepsDEC{0};
-
-    AxisStatus AxisStatusRA{STOPPED};
-    AxisDirection AxisDirectionRA{FORWARD};
-    double AxisSlewRateRA{DEFAULT_SLEW_RATE};
-    long CurrentEncoderMicrostepsRA{0};
-    long GotoTargetMicrostepsRA{0};
+    SlewDrive *AltitudeAxis;
+    SlewDrive *AzimuthAxis;
 
     // Tracking
     INDI::IEquatorialCoordinates CurrentTrackingTarget{0, 0};
@@ -83,4 +65,28 @@ private:
     bool TraceThisTick{false};
 
     unsigned int DBG_SIMULATOR{0};
+
+    INDI::PropertyText NtpServerTP{1};
+
 };
+
+
+const std::string getDirString(INDI_DIR_NS dir)
+{
+    if(dir == DIRECTION_NORTH)
+            return "DIRECTION_NORTH";
+    else if(dir == DIRECTION_SOUTH)
+        return "DIRECTION_SOUTH";
+    else
+        return "DIRECTION_ERROR";
+}
+
+const std::string getDirString(INDI_DIR_WE dir)
+{
+    if(dir == DIRECTION_WEST)
+            return "DIRECTION_WEST";
+    else if(dir == DIRECTION_EAST)
+        return "DIRECTION_EAST";
+    else
+        return "DIRECTION_ERROR";
+}
