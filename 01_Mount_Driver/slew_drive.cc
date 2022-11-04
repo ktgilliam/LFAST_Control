@@ -179,7 +179,7 @@ SlewDriveMode_t SlewDrive::slewingHandler()
     }
     else
     {
-        double fastSlewThresh = fastSlewRate * 1.5;
+        double fastSlewThresh = fastSlewRate * 1.5 * 0.1;
         double posnError = positionCommand_deg - positionFeedback_deg;
         if (std::abs(posnError) < fastSlewThresh)
         {
@@ -206,6 +206,7 @@ SlewDriveMode_t SlewDrive::trackingHandler()
         if (gotoCommandReceived)
         {
             nextState = SLEWING;
+            gotoCommandReceived = false;
         }
         double posnError = positionCommand_deg - positionFeedback_deg;
 
