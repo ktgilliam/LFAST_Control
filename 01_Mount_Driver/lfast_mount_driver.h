@@ -13,7 +13,8 @@ class LFAST_Mount : public INDI::Telescope, public INDI::AlignmentSubsystem::Ali
 public:
     LFAST_Mount();
     virtual ~LFAST_Mount();
-protected: 
+
+protected:
     /** \brief Called to initialize basic properties required all the time */
     virtual bool initProperties() override;
     /** \brief Called when connected state changes, to add/remove properties */
@@ -36,7 +37,7 @@ protected:
     bool ReadScopeStatus() override;
     bool Sync(double ra, double dec) override;
     bool updateLocation(double latitude, double longitude, double elevation) override;
-    
+
     void TimerHit() override;
     void mountSim();
 
@@ -48,8 +49,7 @@ protected:
     // virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
 
     void updateTrackingTarget(double ra, double dec);
-
-
+    INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
 
 private:
     unsigned int DBG_SCOPE{0};
@@ -67,15 +67,13 @@ private:
     unsigned int DBG_SIMULATOR{0};
 
     INDI::PropertyText NtpServerTP{1};
-
 };
-
 
 const std::string getDirString(INDI_DIR_NS dir)
 {
-    if(dir == DIRECTION_NORTH)
-            return "DIRECTION_NORTH";
-    else if(dir == DIRECTION_SOUTH)
+    if (dir == DIRECTION_NORTH)
+        return "DIRECTION_NORTH";
+    else if (dir == DIRECTION_SOUTH)
         return "DIRECTION_SOUTH";
     else
         return "DIRECTION_ERROR";
@@ -83,9 +81,9 @@ const std::string getDirString(INDI_DIR_NS dir)
 
 const std::string getDirString(INDI_DIR_WE dir)
 {
-    if(dir == DIRECTION_WEST)
-            return "DIRECTION_WEST";
-    else if(dir == DIRECTION_EAST)
+    if (dir == DIRECTION_WEST)
+        return "DIRECTION_WEST";
+    else if (dir == DIRECTION_EAST)
         return "DIRECTION_EAST";
     else
         return "DIRECTION_ERROR";

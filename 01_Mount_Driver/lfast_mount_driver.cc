@@ -19,6 +19,8 @@
 
 #include "slew_drive.h"
 
+#define PRINT_DEBUG_STUFF 1
+
 // #include "mountConfig.h"
 
 // using namespace INDI::AlignmentSubsystem;
@@ -43,11 +45,15 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 
 const double constexpr default_park_posn_az = 0.0;
-const double constexpr default_park_posn_alt = -110.0;
+const double constexpr default_park_posn_alt = -20.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
 std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
+
+// Axis labels:
+const char azLabel[] = "Az. Axis";
+const char altLabel[] = "Alt. Axis";
 
 LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
@@ -58,8 +64,8 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
-    AltitudeAxis = new SlewDrive();
-    AzimuthAxis = new SlewDrive();
+    AltitudeAxis = new SlewDrive(altLabel);
+    AzimuthAxis = new SlewDrive(azLabel);
 }
 
 LFAST_Mount::~LFAST_Mount()
@@ -84,6 +90,15 @@ bool LFAST_Mount::initProperties()
     ScopeParametersN[2].value = 203;
     ScopeParametersN[3].value = 2000;
 
+    for (int ii = 0; ii < SlewRateSP.nsp - 1; ii++)
+    {
+        sprintf(SlewRateSP.sp[ii].label, "%.fx", slewspeeds[ii]);
+        SlewRateSP.sp[ii].aux = (void *)&slewspeeds[ii];
+    }
+
+    // Set 64x as default speed
+    SlewRateSP.sp[5].s = ISS_ON;
+
     TrackState = SCOPE_IDLE;
 
     // Set up parking info
@@ -105,6 +120,11 @@ bool LFAST_Mount::initProperties()
         SetAxis2ParkDefault(default_park_posn_alt);
     }
 
+    LOG_WARN("Initial position hardcoded to parking position");
+    AltitudeAxis->syncPosition(default_park_posn_alt);
+    AzimuthAxis->syncPosition(default_park_posn_az);
+
+    addPollPeriodControl();
     setDefaultPollingPeriod(defaultPollingPeriod);
     setCurrentPollingPeriod(defaultPollingPeriod);
 
@@ -158,73 +178,21 @@ bool LFAST_Mount::Handshake()
 
 bool LFAST_Mount::Goto(double ra, double dec)
 {
-
+    LOGF_INFO("Goto [RA/DEC]:%6.4f/%6.4f", ra, dec);
     updateTrackingTarget(ra, dec);
 
     // Call the alignment subsystem to translate the celestial reference frame coordinate
     // into a telescope reference frame coordinate
-    ALIGNMENT::TelescopeDirectionVector TDVCommand;
-    INDI::IHorizontalCoordinates AltAzCommand{0, 0};
-
-    if (TransformCelestialToTelescope(ra, dec, 0.0, TDVCommand))
-    {
-        // The alignment subsystem has successfully transformed my coordinate
-        AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, AltAzCommand);
-    }
-    else
-    {
-        // The alignment subsystem cannot transform the coordinate.
-        // Try some simple rotations using the stored observatory position if any
-
-        INDI::IEquatorialCoordinates EquatorialCoordinates{ra, dec};
-        INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys(), &AltAzCommand);
-        TDVCommand = TelescopeDirectionVectorFromAltitudeAzimuth(AltAzCommand);
-        switch (GetApproximateMountAlignment())
-        {
-        case ALIGNMENT::ZENITH:
-            break;
-
-        case ALIGNMENT::NORTH_CELESTIAL_POLE:
-            // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 minus
-            // the (positive)observatory latitude. The vector itself is rotated anticlockwise
-            TDVCommand.RotateAroundY(m_Location.latitude - 90.0);
-            break;
-
-        case ALIGNMENT::SOUTH_CELESTIAL_POLE:
-            // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 plus
-            // the (negative)observatory latitude. The vector itself is rotated clockwise
-            TDVCommand.RotateAroundY(m_Location.latitude + 90.0);
-            break;
-        }
-        AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, AltAzCommand);
-    }
-
-    if ((AltAzCommand.altitude > 90.0) || (AltAzCommand.altitude < -90.0))
-    {
-        DEBUG(DBG_SIMULATOR, "Goto - Altitude out of range");
-        // This should not happen
-        return false;
-    }
-
-    if ((AltAzCommand.azimuth > 360.0) || (AltAzCommand.azimuth < -360.0))
-    {
-        DEBUG(DBG_SIMULATOR, "Goto - Azimuth out of range");
-        // This should not happen
-        return false;
-    }
-
-    if (AltAzCommand.azimuth < 0.0)
-    {
-        DEBUG(DBG_SIMULATOR, "Goto - Azimuth negative");
-        AltAzCommand.azimuth = 360.0 + AltAzCommand.azimuth;
-    }
+    // ALIGNMENT::TelescopeDirectionVector TDVCommand;
+    // INDI::IHorizontalCoordinates AltAzCommand{0, 0};
+    INDI::IHorizontalCoordinates AltAzCommand = getTrackingTargetAltAzPosition();
 
     DEBUGF(DBG_SIMULATOR, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAzCommand.altitude,
            AltAzCommand.azimuth);
 
     // TODO: Try/Catch
-    AltitudeAxis->updatePositionCommand(AltAzCommand.altitude);
-    AzimuthAxis->updatePositionCommand(AltAzCommand.azimuth);
+    AltitudeAxis->gotoAndStop(AltAzCommand.altitude);
+    AzimuthAxis->gotoAndStop(AltAzCommand.azimuth);
 
     TrackState = SCOPE_SLEWING;
 
@@ -244,6 +212,69 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
         CurrentTrackingTarget.declination = dec;
         DEBUG(DBG_SIMULATOR, "Goto - tracking requested");
     }
+}
+
+INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
+{
+    double ra = CurrentTrackingTarget.rightascension;
+    double dec = CurrentTrackingTarget.declination;
+    ALIGNMENT::TelescopeDirectionVector TDVCommand;
+
+    INDI::IHorizontalCoordinates horizCoords{0, 0};
+    if (TransformCelestialToTelescope(ra, dec, 0.0, TDVCommand))
+    {
+        // The alignment subsystem has successfully transformed my coordinate
+        AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, horizCoords);
+    }
+    else
+    {
+        // The alignment subsystem cannot transform the coordinate.
+        // Try some simple rotations using the stored observatory position if any
+
+        INDI::IEquatorialCoordinates EquatorialCoordinates{ra, dec};
+        INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys(), &horizCoords);
+        TDVCommand = TelescopeDirectionVectorFromAltitudeAzimuth(horizCoords);
+        switch (GetApproximateMountAlignment())
+        {
+        case ALIGNMENT::ZENITH:
+            break;
+
+        case ALIGNMENT::NORTH_CELESTIAL_POLE:
+            // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 minus
+            // the (positive)observatory latitude. The vector itself is rotated anticlockwise
+            TDVCommand.RotateAroundY(m_Location.latitude - 90.0);
+            break;
+
+        case ALIGNMENT::SOUTH_CELESTIAL_POLE:
+            // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 plus
+            // the (negative)observatory latitude. The vector itself is rotated clockwise
+            TDVCommand.RotateAroundY(m_Location.latitude + 90.0);
+            break;
+        }
+        AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, horizCoords);
+    }
+
+    if ((horizCoords.altitude > 90.0) || (horizCoords.altitude < -90.0))
+    {
+        DEBUG(DBG_SIMULATOR, "Goto - Altitude out of range");
+        // This should not happen
+        // return false;
+    }
+
+    if ((horizCoords.azimuth > 360.0) || (horizCoords.azimuth < -360.0))
+    {
+        DEBUG(DBG_SIMULATOR, "Goto - Azimuth out of range");
+        // This should not happen
+        // return false;
+    }
+
+    if (horizCoords.azimuth < 0.0)
+    {
+        DEBUG(DBG_SIMULATOR, "Goto - Azimuth negative");
+        horizCoords.azimuth = 360.0 + horizCoords.azimuth;
+    }
+
+    return horizCoords;
 }
 
 bool LFAST_Mount::Abort()
@@ -361,6 +392,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
 bool LFAST_Mount::Sync(double ra, double dec)
 {
+    LOG_INFO("SYNC RA/DEC");
     ALIGNMENT::AlignmentDatabaseEntry NewEntry;
 
     double azFb, altFb;
@@ -373,6 +405,9 @@ bool LFAST_Mount::Sync(double ra, double dec)
     NewEntry.Declination = dec;
     NewEntry.TelescopeDirection = TelescopeDirectionVectorFromAltitudeAzimuth(AzAltFeedback);
     NewEntry.PrivateDataSize = 0;
+
+    AltitudeAxis->syncPosition(altFb);
+    AzimuthAxis->syncPosition(azFb);
 
     if (!CheckForDuplicateSyncPoint(NewEntry))
     {
@@ -412,7 +447,8 @@ bool LFAST_Mount::Park()
 }
 bool LFAST_Mount::UnPark()
 {
-    LOG_WARN("Unpark button not implemented.");
+    AltitudeAxis->enable();
+    AzimuthAxis->enable();
     SetParked(false);
     TrackState = SCOPE_IDLE;
     return true;
@@ -487,8 +523,11 @@ bool LFAST_Mount::ReadScopeStatus()
 ////////////////////////////////////////////////////////////////////////////////////////////?
 ////////////////////////////////////////////////////////////////////////////////////////////?
 ////////////////////////////////////////////////////////////////////////////////////////////?
+#include <vector>
+
 void LFAST_Mount::TimerHit()
 {
+
     TraceThisTickCount++;
     if (60 == TraceThisTickCount)
     {
@@ -516,6 +555,46 @@ void LFAST_Mount::TimerHit()
     dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
     ltv = tv;
 
+    SlewDriveMode_t altMode = AltitudeAxis->poll();
+    SlewDriveMode_t azMode = AzimuthAxis->poll();
+    if (altMode == SLEWING || azMode == SLEWING)
+    {
+        TrackState = SCOPE_SLEWING;
+    }
+
+    if (TrackState == SCOPE_SLEWING)
+    {
+        INDI::IHorizontalCoordinates altAzCmd = getTrackingTargetAltAzPosition();
+        AltitudeAxis->updatePositionCommand(altAzCmd.altitude);
+        AzimuthAxis->updatePositionCommand(altAzCmd.azimuth);
+    }
+
+#if SIM_MODE_ENABLED
+    LOGF_INFO("Az Mode: %s", AzimuthAxis->getModeString());
+    LOGF_INFO("Alt Mode: %s", AltitudeAxis->getModeString());
+    LOGF_INFO("dt: %6.4f", dt);
+    AltitudeAxis->simulate(dt);
+    AzimuthAxis->simulate(dt);
+#endif
+
+#if 0 // PRINT_DEBUG_STUFF
+    auto itr = AltitudeAxis->debugStrings.begin();
+    while (itr != AltitudeAxis->debugStrings.end())
+    {
+        auto s = *itr;
+        LOG_INFO(s.c_str());
+        AltitudeAxis->debugStrings.erase(itr);
+    }
+
+    itr = AzimuthAxis->debugStrings.begin();
+    while (itr != AzimuthAxis->debugStrings.end())
+    {
+        auto s = *itr;
+        LOG_INFO(s.c_str());
+        AzimuthAxis->debugStrings.erase(itr);
+    }
+#endif
+    INDI::Telescope::TimerHit();
     // // RA axis
     // long SlewSteps = dt * AxisSlewRateRA;
     // bool CompleteRevolution = SlewSteps >= MICROSTEPS_PER_REVOLUTION;

@@ -13,16 +13,16 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(slew_drive_control slew_drive.cc)
-add_executable(lfast_mount_driver lfast_mount_driver.cc)
+# add_library(slew_drive_control slew_drive.cc)
+add_executable(lfast_mount_driver lfast_mount_driver.cc slew_drive.cc)
 # add_executable(lfast_mount_driver_testable lfast_mount_driver.cc)
 
 target_link_libraries(lfast_mount_driver   
 			 ${INDI_LIBRARIES}
-			 ${NOVA_LIBRARIES}
-			 slew_drive_control)
-			#  lfast_comms)
+			 ${NOVA_LIBRARIES} )
 
+			#  lfast_comms)
+			add_compile_definitions(SIM_MODE_ENABLED=1)
 # tell cmake where to install our executable
 install(TARGETS lfast_mount_driver RUNTIME DESTINATION bin)
 
