@@ -13,7 +13,7 @@ typedef enum
 } SlewDriveMode_t;
 
 #define SIDEREAL_RATE_DPS 0.004166667
-#define DEFAULT_SLEW_MULT 512
+#define DEFAULT_SLEW_MULT 64
 class SlewDrive
 {
 

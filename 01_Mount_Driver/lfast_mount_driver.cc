@@ -41,8 +41,6 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 // clang-format on
 
 /* Preset Slew Speeds */
-#define SLEWMODES 9
-const double slewspeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
 
 const double constexpr default_park_posn_az = 0.0;
 const double constexpr default_park_posn_alt = -20.0;
@@ -60,7 +58,7 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
     // Set up the basic configuration for the mount
     setVersion(0, 3);
     setTelescopeConnection(CONNECTION_TCP);
-    SetTelescopeCapability(SCOPE_CAPABILITIES, SLEWMODES);
+    SetTelescopeCapability(SCOPE_CAPABILITIES, 4);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
@@ -90,15 +88,6 @@ bool LFAST_Mount::initProperties()
     ScopeParametersN[2].value = 203;
     ScopeParametersN[3].value = 2000;
 
-    for (int ii = 0; ii < SlewRateSP.nsp - 1; ii++)
-    {
-        sprintf(SlewRateSP.sp[ii].label, "%.fx", slewspeeds[ii]);
-        SlewRateSP.sp[ii].aux = (void *)&slewspeeds[ii];
-    }
-
-    // Set 64x as default speed
-    SlewRateSP.sp[5].s = ISS_ON;
-
     TrackState = SCOPE_IDLE;
 
     // Set up parking info
@@ -124,15 +113,28 @@ bool LFAST_Mount::initProperties()
     AltitudeAxis->syncPosition(default_park_posn_alt);
     AzimuthAxis->syncPosition(default_park_posn_az);
 
-    addPollPeriodControl();
+    addAuxControls();
+
     setDefaultPollingPeriod(defaultPollingPeriod);
     setCurrentPollingPeriod(defaultPollingPeriod);
 
-    /* Add debug controls so we may debug driver if necessary */
-    addDebugControl();
-
     // Add alignment properties
     InitAlignmentProperties(this);
+
+    // Create and update slew rates
+    deleteProperty(SlewRateSP.name);
+    for (int ii = 0; ii < MountSlewRateSP.size(); ii++)
+    {
+        char label[10] = {0};
+        sprintf(label, "%.fx", LFAST::slewspeeds[ii]);
+        MountSlewRateSP[ii].fill(label, label, ISS_OFF);
+        MountSlewRateSP[ii].aux = (void *)&LFAST::slewspeeds[ii];
+    }
+
+    // Set fastest default speed
+    MountSlewRateSP.fill(getDeviceName(), "MOUNT_SLEW_SPEED", "Slew Speed", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+    MountSlewRateSP[LFAST::DEFAULT_SLEW_IDX].s = ISS_ON;
+    SetSlewRate(LFAST::DEFAULT_SLEW_IDX);
 
     // NTP Server Address text field
     NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
@@ -161,6 +163,8 @@ bool LFAST_Mount::updateProperties()
         defineProperty(&AzAltCoordsNP);
 
         defineProperty(&AbortSP);
+
+        defineProperty(&MountSlewRateSP);
     }
     else
     {
@@ -223,6 +227,16 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
         CurrentTrackingTarget.declination = dec;
         DEBUG(DBG_SIMULATOR, "Goto - tracking requested");
     }
+}
+
+bool LFAST_Mount::SetSlewRate(int index)
+{
+    int mult = LFAST::slewspeeds[index];
+    double slewRate = mult * SIDEREAL_RATE_DPS;
+    LOGF_INFO("Setting slew rate to %dx Sidereal (%6.4f deg/s).", mult, slewRate);
+    AzimuthAxis->setSlewRate(slewRate);
+    AltitudeAxis->setSlewRate(slewRate);
+    return true;
 }
 
 INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
@@ -358,6 +372,23 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
         ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
 
+    if (MountSlewRateSP.isNameMatch(name))
+    {
+        int previousType = MountSlewRateSP.findOnSwitchIndex();
+        MountSlewRateSP.update(states, names, n);
+        IPState state = IPS_OK;
+        // Only update if already connected.
+        if (isConnected())
+        {
+            auto slewIdx = MountSlewRateSP.findOnSwitchIndex();
+            state = SetSlewRate(slewIdx) ? IPS_OK : IPS_ALERT;
+        }
+
+        MountSlewRateSP.setState(state);
+        MountSlewRateSP.apply();
+
+        return true;
+    }
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
 }
@@ -479,7 +510,7 @@ bool LFAST_Mount::ReadScopeStatus()
     AzAltCoordsNP[AXIS_AZ].setValue(azFb);
     AzAltCoordsNP[AXIS_ALT].setValue(altFb);
     AzAltCoordsNP.apply();
-    
+
     INDI::IHorizontalCoordinates AzAltFeedback{azFb, altFb};
 
     ALIGNMENT::TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(AzAltFeedback);

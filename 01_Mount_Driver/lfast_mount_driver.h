@@ -9,6 +9,14 @@
 
 #include "slew_drive.h"
 
+#define SIDEREAL_RATE_DPS 0.004166667
+
+namespace LFAST
+{
+    const double slewspeeds[] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
+constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
+}
 class LFAST_Mount : public INDI::Telescope, public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
 {
 public:
@@ -50,6 +58,8 @@ protected:
     // virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
 
     void updateTrackingTarget(double ra, double dec);
+    bool SetSlewRate(int index) override;
+
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
 
 private:
@@ -68,8 +78,9 @@ private:
     unsigned int DBG_SIMULATOR{0};
 
     INDI::PropertyText NtpServerTP{1};
-
     INDI::PropertyNumber AzAltCoordsNP{2};
+    INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
+    
 };
 
 const std::string getDirString(INDI_DIR_NS dir)
