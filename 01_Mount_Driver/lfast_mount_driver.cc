@@ -139,6 +139,10 @@ bool LFAST_Mount::initProperties()
     NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
     defineProperty(&NtpServerTP);
 
+    AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Azimuth [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
+    AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Altitude [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
+    AzAltCoordsNP.fill(getDeviceName(), "ALT_AZ_COORDINATES", "Horizontal Coordinates", MAIN_CONTROL_TAB, IP_RO, 0, IPS_IDLE);
+
     return true;
 }
 
@@ -150,6 +154,13 @@ bool LFAST_Mount::updateProperties()
     {
         LOG_WARN("Initial Park status hardcoded");
         SetParked(true);
+
+        // Delete this to redfine later (basically moving it to the bottom)
+        deleteProperty(AbortSP.name);
+
+        defineProperty(&AzAltCoordsNP);
+
+        defineProperty(&AbortSP);
     }
     else
     {
@@ -465,6 +476,10 @@ bool LFAST_Mount::ReadScopeStatus()
     double azFb, altFb;
     azFb = AzimuthAxis->getPositionFeedback();
     altFb = AltitudeAxis->getPositionFeedback();
+    AzAltCoordsNP[AXIS_AZ].setValue(azFb);
+    AzAltCoordsNP[AXIS_ALT].setValue(altFb);
+    AzAltCoordsNP.apply();
+    
     INDI::IHorizontalCoordinates AzAltFeedback{azFb, altFb};
 
     ALIGNMENT::TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(AzAltFeedback);
@@ -557,6 +572,7 @@ void LFAST_Mount::TimerHit()
 
     SlewDriveMode_t altMode = AltitudeAxis->poll();
     SlewDriveMode_t azMode = AzimuthAxis->poll();
+
     if (altMode == SLEWING || azMode == SLEWING)
     {
         TrackState = SCOPE_SLEWING;
@@ -570,9 +586,20 @@ void LFAST_Mount::TimerHit()
     }
 
 #if SIM_MODE_ENABLED
-    LOGF_INFO("Az Mode: %s", AzimuthAxis->getModeString());
-    LOGF_INFO("Alt Mode: %s", AltitudeAxis->getModeString());
-    LOGF_INFO("dt: %6.4f", dt);
+    static SlewDriveMode_t prevAltMode = INIT;
+    static SlewDriveMode_t prevAzMode = INIT;
+    if (prevAltMode != altMode)
+    {
+        LOGF_INFO("Alt Mode: %s", AltitudeAxis->getModeString());
+    }
+    if (prevAzMode != azMode)
+    {
+        LOGF_INFO("Az Mode: %s", AzimuthAxis->getModeString());
+    }
+    prevAltMode = altMode;
+    prevAzMode = azMode;
+
+    // LOGF_INFO("dt: %6.4f", dt);
     AltitudeAxis->simulate(dt);
     AzimuthAxis->simulate(dt);
 #endif

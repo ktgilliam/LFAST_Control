@@ -4,6 +4,7 @@
 #include "indiguiderinterface.h"
 #include "inditelescope.h"
 #include "indipropertytext.h"
+#include "indipropertynumber.h"
 #include "alignment/AlignmentSubsystemForDrivers.h"
 
 #include "slew_drive.h"
@@ -67,6 +68,8 @@ private:
     unsigned int DBG_SIMULATOR{0};
 
     INDI::PropertyText NtpServerTP{1};
+
+    INDI::PropertyNumber AzAltCoordsNP{2};
 };
 
 const std::string getDirString(INDI_DIR_NS dir)

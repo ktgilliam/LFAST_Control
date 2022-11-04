@@ -10,7 +10,7 @@ SlewDrive::SlewDrive(const char *label)
 {
     axisLabel = label;
     // Initialize state variables
-    gotoAndStopCommandReceived = false;
+    gotoCommandReceived = false;
     trackCommandUpdateReceived = false;
     abortCommandReceived = false;
     isEnabled = false;
@@ -30,7 +30,7 @@ double SlewDrive::getPositionFeedback()
 void SlewDrive::gotoAndStop(double cmd)
 {
     positionCommand_deg = cmd;
-    gotoAndStopCommandReceived = true;
+    gotoCommandReceived = true;
 }
 
 void SlewDrive::updatePositionCommand(double cmd)
@@ -49,7 +49,7 @@ void SlewDrive::updateTrackCommands(double pcmd, double rcmd)
 }
 void SlewDrive::abortSlew()
 {
-
+    rateCommand_dps = 0.0;
     abortCommandReceived = true;
 }
 void SlewDrive::syncPosition(double posn)
@@ -145,14 +145,14 @@ SlewDriveMode_t SlewDrive::idleHandler()
     SlewDriveMode_t nextState = IDLE;
     if (isEnabled)
     {
-        if (gotoAndStopCommandReceived)
+        if (gotoCommandReceived)
         {
             std::stringstream ss;
             ss << axisLabel << ": Switching to slew mode.";
             debugStrings.push_back(ss.str());
 
             nextState = SLEWING;
-            gotoAndStopCommandReceived = false;
+            gotoCommandReceived = false;
         }
         else
         {
@@ -167,6 +167,7 @@ SlewDriveMode_t SlewDrive::stoppingHandler()
 {
     rateCommand_dps = 0.0;
     // If rate feedback is zero -> idle, otherwise still stopping.
+    abortCommandReceived = false;
     return IDLE;
 }
 SlewDriveMode_t SlewDrive::slewingHandler()
@@ -202,9 +203,16 @@ SlewDriveMode_t SlewDrive::trackingHandler()
     }
     else
     {
-        rateCommand_dps = 0.0;
+        if (gotoCommandReceived)
+        {
+            nextState = SLEWING;
+        }
+        double posnError = positionCommand_deg - positionFeedback_deg;
+
+        int sign = std::signbit(posnError) ? -1 : 1;
+        rateCommand_dps = 0.004166667 * sign;
+        // Closed loop behavior goes here.
     }
-    // Closed loop behavior goes here.
     return nextState;
 }
 

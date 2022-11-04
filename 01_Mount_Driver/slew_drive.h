@@ -28,7 +28,7 @@ private:
 
     static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;
 
-    bool gotoAndStopCommandReceived;
+    bool gotoCommandReceived;
     bool trackCommandUpdateReceived;
     bool abortCommandReceived;
 
