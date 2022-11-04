@@ -39,18 +39,6 @@ target_link_libraries(
   GTest::gtest_main
 )
 
-#### CANBUS tests
-add_executable(
-  can_bus_interface_tests
-  can_bus_interface_tests.cc
-)
-
-target_link_libraries(
-  can_bus_interface_tests
-  can_bus_interface
-  GTest::gtest_main
-)
-
 #### comms tests
 add_executable(
   lfast_comms_tests
@@ -78,6 +66,5 @@ target_link_libraries(
 #### Bringing it all together
 include(GoogleTest)
 gtest_discover_tests(bash_wrapper_tests)
-# gtest_discover_tests(can_bus_interface_tests)
 gtest_discover_tests(lfast_comms_tests)
 

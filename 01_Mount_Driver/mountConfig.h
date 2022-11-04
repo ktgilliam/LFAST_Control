@@ -1,0 +1,7 @@
+
+#define AZ_SERVO_DRIVE_ID_A  0x01
+#define AZ_SERVO_DRIVE_ID_B  0x02
+#define ALT_SERVO_DRIVE_ID_A 0x03
+#define ALT_SERVO_DRIVE_ID_B 0x04
+
+
