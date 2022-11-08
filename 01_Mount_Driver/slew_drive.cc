@@ -58,7 +58,7 @@ void SlewDrive::enable()
 }
 
 #if SIM_MODE_ENABLED
-const double kp = 0.0;
+const double kp = 1.0;
 
 void SlewDrive::simulate(double dt)
 {
@@ -96,7 +96,7 @@ void SlewDrive::simulate(double dt)
 // const char *SlewDrive::getModeString()
 // {
 //     switch (currentMode)
-//     {
+//     {Goto(
 //     case INIT:
 //         return "INIT";
 //     case IDLE:

@@ -40,6 +40,8 @@ public:
     void abortSlew();
     void syncPosition(double posn);
     bool isSlewComplete();
+    void slowToStop(){}
+    bool isStopped(){return rateFeedback_dps == 0;}
     // SlewDriveMode_t poll();
     void setSlewRate(double slewRate);
     const char *getModeString();

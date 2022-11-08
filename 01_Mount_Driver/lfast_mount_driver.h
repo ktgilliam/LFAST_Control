@@ -10,6 +10,7 @@
 #include "inditimer.h"
 #include "slew_drive.h"
 
+// #include "indielapsedtimer.h"
 namespace LFAST
 {
     const double slewspeeds[] = {32.0, 64.0, 128.0, 256.0, 512.0};
@@ -121,7 +122,9 @@ private:
     SlewDrive *AzimuthAxis;
 
     // Tracking
-    INDI::IEquatorialCoordinates CurrentTrackingTarget{0, 0};
+    INDI::IEquatorialCoordinates m_SkyTrackingTarget{0, 0};
+    INDI::IEquatorialCoordinates m_SkyCurrentRADE{0, 0};
+    INDI::IHorizontalCoordinates m_MountAltAz{0, 0};
 
     // Tracing in timer tick
     int TraceThisTickCount{0};
@@ -134,13 +137,14 @@ private:
     INDI::PropertyNumber AzAltCoordsNP{4};
     INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
     INDI::PropertyNumber GuideRateNP{2};
-
+    bool gotoPending;
     ///////////////////////////////////////////////////////////////////////////////
     /// Class Variables
     ///////////////////////////////////////////////////////////////////////////////
     // IGeographicCoordinates m_GeographicLocation{0, 0};
     INDI::Timer m_NSTimer;
     INDI::Timer m_WETimer;
+    // INDI::ElapsedTimer m_TrackingRateTimer;
     unsigned int DBG_SIMULATOR{0};
 
     ///////////////////////////////////////////////////////////////////////////////
@@ -148,7 +152,7 @@ private:
     ///////////////////////////////////////////////////////////////////////////////
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
     INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
-    void updateEquatorialCoordinates(double alt, double az);
+    bool updatePointingCoordinates(double alt, double az);
     void printSlewDriveStates();
     INDI::IHorizontalCoordinates HorizontalRates_geocentric2(double ha, double dec, double lat);
 };
