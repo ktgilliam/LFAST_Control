@@ -51,6 +51,16 @@ target_link_libraries(
   GTest::gtest_main
 )
 
+
+add_executable(
+  math_util_tests
+  math_util_tests.cc
+)
+target_link_libraries(
+  math_util_tests
+  GTest::gtest_main
+)
+
 # #### mount driver tests
 # add_executable(
 #   lfast_mount_driver_tests

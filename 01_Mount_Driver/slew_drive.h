@@ -2,25 +2,8 @@
 
 #include <vector>
 #include <string>
-typedef enum
-{
-    INIT,
-    IDLE,
-    STOPPING,
-    SLEWING_TO_TRACK,
-    SLEWING_TO_STOP,
-    TRACKING,
-    ERROR
-} SlewDriveMode_t;
 
-typedef enum
-{
-    NO_COMMAND,
-    SLEW_TO_TRACK,
-    SLEW_TO_STOP,
-    ABORT,
-} SlewDriveCommand_t;
-
+#define SLEW_COMPLETE_THRESH 0.0005
 #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
 class SlewDrive
@@ -35,41 +18,29 @@ private:
         RATE_CONTROL
     };
 
-    static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;
-
-    SlewDriveCommand_t activeCommand;
-
     double positionFeedback_deg;
     double positionCommand_deg;
+    double rateFeedback_dps;
     double rateCommand_dps;
+    double rateRef_dps;
     double fastSlewRate;
     bool isEnabled;
-    // bool stopOnSlewComplete;
 
-    SlewDriveMode_t currentMode;
-
-    SlewDriveMode_t initHandler();
-    SlewDriveMode_t idleHandler();
-    SlewDriveMode_t stoppingHandler();
-    SlewDriveMode_t slewingToTrackHandler();
-    SlewDriveMode_t slewingToStopHandler();
-    SlewDriveMode_t trackingHandler();
-    SlewDriveMode_t errorHandler();
 
 public:
     SlewDrive(const char *);
     void enable();
 
-    double getPositionFeedback();
-    void slewToTrack(double cmd);
-    void slewToStop(double cmd);
+    double getPositionFeedback() { return positionFeedback_deg; }
+    double getVelocityFeedback() { return rateFeedback_dps; }
+    double getPositionCommand() { return positionCommand_deg; }
+    double getVelocityCommand() { return rateCommand_dps+rateRef_dps; }
 
-    void updatePositionCommand(double cmd);
-    void updateTrackCommands(double pcmd, double rcmd);
+    void updateTrackCommands(double pcmd, double rcmd = 0.0);
     void abortSlew();
     void syncPosition(double posn);
     bool isSlewComplete();
-    SlewDriveMode_t poll();
+    // SlewDriveMode_t poll();
     void setSlewRate(double slewRate);
     const char *getModeString();
 #if SIM_MODE_ENABLED

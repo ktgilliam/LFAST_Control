@@ -10,14 +10,19 @@
 #include "inditimer.h"
 #include "slew_drive.h"
 
-#define SIDEREAL_RATE_DPS 0.004166667
-
 namespace LFAST
 {
-    const double slewspeeds[] = {1.0, 2.0, 4.0, 8.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+    const double slewspeeds[] = {32.0, 64.0, 128.0, 256.0, 512.0};
     constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
     constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
+    static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;
 }
+
+enum
+{
+    AXIS_AZ_VEL = AXIS_AZ + 2,
+    AXIS_ALT_VEL = AXIS_ALT + 2
+};
 class LFAST_Mount : public INDI::Telescope,
                     public INDI::GuiderInterface,
                     public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
@@ -122,12 +127,11 @@ private:
     int TraceThisTickCount{0};
     bool TraceThisTick{false};
 
-
     ///////////////////////////////////////////////////////////////////////////////
     /// Additional Properties
     ///////////////////////////////////////////////////////////////////////////////
     INDI::PropertyText NtpServerTP{1};
-    INDI::PropertyNumber AzAltCoordsNP{2};
+    INDI::PropertyNumber AzAltCoordsNP{4};
     INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
     INDI::PropertyNumber GuideRateNP{2};
 
@@ -143,6 +147,10 @@ private:
     /// Helper Functions
     ///////////////////////////////////////////////////////////////////////////////
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
+    INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
+    void updateEquatorialCoordinates(double alt, double az);
+    void printSlewDriveStates();
+    INDI::IHorizontalCoordinates HorizontalRates_geocentric2(double ha, double dec, double lat);
 };
 
 const std::string getDirString(INDI_DIR_NS dir)

@@ -19,7 +19,8 @@ add_executable(lfast_mount_driver lfast_mount_driver.cc slew_drive.cc)
 
 target_link_libraries(lfast_mount_driver   
 			 ${INDI_LIBRARIES}
-			 ${NOVA_LIBRARIES} )
+			 ${NOVA_LIBRARIES} 
+			 astro_math )
 
 			#  lfast_comms)
 			add_compile_definitions(SIM_MODE_ENABLED=1)
