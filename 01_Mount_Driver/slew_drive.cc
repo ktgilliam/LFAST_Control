@@ -35,7 +35,7 @@ void SlewDrive::abortSlew()
     rateCommand_dps = 0.0;
 }
 
-void SlewDrive::syncPosition(double posn)
+void SlewDrive::setPosition(double posn)
 {
     rateCommand_dps = 0.0;
     positionCommand_deg = posn;
@@ -48,7 +48,7 @@ bool SlewDrive::isSlewComplete()
     return isComplete;
 }
 
-void SlewDrive::setSlewRate(double slewRate)
+void SlewDrive::slew(double slewRate)
 {
     fastSlewRate = slewRate;
 }
