@@ -22,6 +22,10 @@
 #include "indipropertyswitch.h"
 #include "alignment/AlignmentSubsystemForDrivers.h"
 
+// These values are in radians per second
+static constexpr double SIDEREALRATE{(2 * M_PI / 86164.09065)};
+static constexpr double LOW_SPEED_MARGIN{128.0 * SIDEREALRATE};
+static constexpr double SIDEREALRATE_DPS{(360 / 86164.09065)};
 typedef enum
 {
     PARK_COUNTERCLOCKWISE = 0,
@@ -102,6 +106,7 @@ protected:
     virtual bool UnPark() override;
     virtual bool SetCurrentPark() override;
     virtual bool SetDefaultPark() override;
+    virtual bool SetSlewRate(int index) override;
 
 private:
     unsigned int DBG_SCOPE{0};

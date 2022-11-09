@@ -58,7 +58,7 @@ static std::unique_ptr<LFAST_Mount> LFAST_MountPtr(new LFAST_Mount());
 
 /* Preset Slew Speeds */
 #define SLEWMODES 9
-static double SlewSpeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 600.0};
+static double SlewSpeeds[SLEWMODES] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0};
 
 const double constexpr default_park_posn_az = 00.0;
 const double constexpr default_park_posn_alt = 0.0;
@@ -404,7 +404,6 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
         //     SnapPortSP.apply();
         //     return true;
         // }
-
         ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
     // Pass it up the chain
@@ -554,7 +553,14 @@ bool LFAST_Mount::Goto(double ra, double dec)
 
     return true;
 }
-
+bool LFAST_Mount::SetSlewRate(int index)
+{
+    double mult = SlewSpeeds[index];
+    double rate = mult * SIDEREALRATE_DPS;
+    AzimuthAxis->setSlewRate(mult);
+    AltitudeAxis->setSlewRate(mult);
+    return true;
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////

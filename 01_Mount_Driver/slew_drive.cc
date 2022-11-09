@@ -5,9 +5,6 @@
 /////////////////////////////////////////////////////////////////////////
 ////////////////////// PUBLIC MEMBER FUNCTIONS //////////////////////////
 /////////////////////////////////////////////////////////////////////////
-#define MULT 1
-constexpr double MAX_RATE_CMD = 0.25 * MULT;
-constexpr double MIN_RATE_CMD = -0.25 * MULT;
 
 SlewDrive::SlewDrive(const char *label)
 {
@@ -17,7 +14,7 @@ SlewDrive::SlewDrive(const char *label)
 
     positionFeedback_deg = 0.0;
     positionCommand_deg = 0.0;
-    // rateCommandOffset_dps = 0.0;
+    rateCommandOffset_dps = 0.0;
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
     combinedRateCmd_dps = 0.0;
@@ -28,18 +25,18 @@ void SlewDrive::updateTrackCommands(double pcmd, double rcmd)
 {
     mode = POSITION_CONTROL;
     positionCommand_deg = pcmd;
-    // rateCommandOffset_dps = rcmd;
+    rateCommandOffset_dps = rcmd;
 }
 void SlewDrive::abortSlew()
 {
     positionCommand_deg = positionFeedback_deg;
     rateRef_dps = 0.0;
-    // rateCommandOffset_dps = 0.0;
+    rateCommandOffset_dps = 0.0;
 }
 
 void SlewDrive::setPosition(double posn)
 {
-    // rateCommandOffset_dps = 0.0;
+    rateCommandOffset_dps = 0.0;
     positionCommand_deg = posn;
     positionFeedback_deg = posn;
 }
@@ -53,8 +50,22 @@ bool SlewDrive::isSlewComplete()
 void SlewDrive::updateRateOffset(double slewRate)
 {
     mode = RATE_CONTROL;
-    // rateCommandOffset_dps = slewRate;
+    rateCommandOffset_dps = slewRate;
 }
+bool SlewDrive::setSlewRate(double rate)
+{
+    double newSlewRate = std::abs(rate) < MAX_SPEED ? rate : MAX_SPEED;
+    MAX_RATE_CMD = newSlewRate;
+    MIN_RATE_CMD = -1 * MAX_RATE_CMD;
+    return true;
+}
+// bool SlewDrive::setSlewRateMultiplier(double mult)
+// {
+//     MAX_RATE_CMD = 1.2727e-6 * mult;
+//     MIN_RATE_CMD = -1 * MAX_RATE_CMD;
+//     return true;
+// }
+
 void SlewDrive::enable()
 {
     isEnabled = true;
@@ -75,11 +86,10 @@ void SlewDrive::simulate(double dt)
         posnError -= 360.0 * errSign;
     }
 
-    double rateCommandOffset_dps = 0.0;
     switch (mode)
     {
     case STOPPED:
-        // rateCommandOffset_dps = 0.0;
+        rateCommandOffset_dps = 0.0;
         rateRef_dps = 0.0;
         combinedRateCmd_dps = 0.0;
         break;
@@ -89,9 +99,7 @@ void SlewDrive::simulate(double dt)
         break;
     case POSITION_CONTROL:
         rateRef_dps = posnError * kp;
-
-        combinedRateCmd_dps = saturate(rateRef_dps, MIN_RATE_CMD, MAX_RATE_CMD);
-        // combinedRateCmd_dps = saturate(rateRef_dps + rateCommandOffset_dps, MIN_RATE_CMD, MAX_RATE_CMD);
+        combinedRateCmd_dps = saturate(rateRef_dps + rateCommandOffset_dps, MIN_RATE_CMD, MAX_RATE_CMD);
         break;
     }
 
