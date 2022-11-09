@@ -86,7 +86,7 @@ protected:
     virtual bool saveConfigItems(FILE *fp) override;
     double GetSlewRate();
     double GetParkDeltaAz(ParkDirection_t target_direction, ParkPosition_t target_position);
-
+    void updateSim();
     /////////////////////////////////////////////////////////////////////////////////////
     /// Guiding
     /////////////////////////////////////////////////////////////////////////////////////
@@ -161,10 +161,14 @@ private:
     // };
     enum
     {
-        AXIS_AZ_VEL = AXIS_AZ + 2,
-        AXIS_ALT_VEL = AXIS_ALT + 2
+        COMMAND,
+        FEEDBACK
     };
-    INDI::PropertyNumber AzAltCoordsNP{4};
+    INDI::PropertyNumber AzPosnNP{2};
+    INDI::PropertyNumber AltPosnNP{2};
+
+    INDI::PropertyNumber AzRateNP{2};
+    INDI::PropertyNumber AltRateNP{2};
 
     ISwitch AxisOneStateS[6];
     ISwitchVectorProperty AxisOneStateSP;
@@ -188,10 +192,10 @@ private:
         DEGREES_FROM_INITIAL
     };
 
-    INumber AxisOneEncoderValuesN[2];
-    INumberVectorProperty AxisOneEncoderValuesNP;
-    INumber AxisTwoEncoderValuesN[2];
-    INumberVectorProperty AxisTwoEncoderValuesNP;
+    // INumber AxisOneEncoderValuesN[2];
+    // INumberVectorProperty AxisOneEncoderValuesNP;
+    // INumber AxisTwoEncoderValuesN[2];
+    // INumberVectorProperty AxisTwoEncoderValuesNP;
 
     ISwitch SlewModesS[2];
     ISwitchVectorProperty SlewModesSP;

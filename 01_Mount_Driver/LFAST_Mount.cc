@@ -101,7 +101,7 @@ bool LFAST_Mount::Handshake()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const char *LFAST_Mount::getDefaultName()
 {
-    return "Skywatcher Alt-Az";
+    return (const char *)"LFAST Mount Control";
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,8 +120,8 @@ bool LFAST_Mount::initProperties()
     strncpy(SlewRateSP.sp[SlewRateSP.nsp - 1].name, "SLEW_MAX", MAXINDINAME);
 
     AddTrackMode("TRACK_SIDEREAL", "Sidereal", true);
-    AddTrackMode("TRACK_SOLAR", "Solar");
-    AddTrackMode("TRACK_LUNAR", "Lunar");
+    // AddTrackMode("TRACK_SOLAR", "Solar");
+    // AddTrackMode("TRACK_LUNAR", "Lunar");
 
     // Add default properties
     addDebugControl();
@@ -150,12 +150,22 @@ bool LFAST_Mount::initProperties()
     // IUFillNumber(&AxisOneInfoN[MICROSTEPS_PER_WORM_REVOLUTION], "MICROSTEPS_PER_WORM_REVOLUTION",
     //              "Microsteps per worm revolution", "%.0f", 0, 0xFFFFFF, 1, 0);
 
-    AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
-    AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
-    AzAltCoordsNP[AXIS_AZ_VEL].fill("AZ_VEL_COORDINATE", "Az Rate [deg/s]", "%6.4f", 0, 10000, 0.0001, 0);
-    AzAltCoordsNP[AXIS_ALT_VEL].fill("ALT_VEL_COORDINATE", "Alt Rate [deg/s]", "%6.4f", 0, 10000, 0.0001, 0);
+    // MountInfoTab
+    AzPosnNP[COMMAND].fill("AZ_POSITION_COMMAND", "Az Posn Cmd [deg]", "%6.4f", 0, 360, 0.001, 0);
+    AzPosnNP[FEEDBACK].fill("AZ_POSITION_FEEDBACK", "Az Posn Fb [deg]", "%6.4f", 0, 360, 0.001, 0);
+    AzPosnNP.fill(getDeviceName(), "AZ_POSITION", "Az Posn", MountInfoTab, IP_RO, 60, IPS_IDLE);
 
-    AzAltCoordsNP.fill(getDeviceName(), "ALT_AZ_COORDINATES", "Horizontal Coordinates", MountInfoTab, IP_RO, 60, IPS_IDLE);
+    AltPosnNP[COMMAND].fill("ALT_POSITION_COMMAND", "Alt Posn Cmd [deg]", "%6.4f", -90, 90, 0.001, 0);
+    AltPosnNP[FEEDBACK].fill("ALT_POSITION_FEEDBACK", "Alt Posn Fb [deg]", "%6.4f", -90, 90, 0.001, 0);
+    AltPosnNP.fill(getDeviceName(), "ALT_POSITION", "Alt Posn", MountInfoTab, IP_RO, 60, IPS_IDLE);
+
+    AzRateNP[COMMAND].fill("AZ_RATE_COMMAND", "Az Rate Cmd [deg/s]", "%6.4f", -100000, 100000, 0.001, 0);
+    AzRateNP[FEEDBACK].fill("AZ_RATE_FEEDBACK", "Az Rate Fb [deg/s]", "%6.4f", -100000, 100000, 0.001, 0);
+    AzRateNP.fill(getDeviceName(), "AZ_RATE", "Az Rate", MountInfoTab, IP_RO, 60, IPS_IDLE);
+
+    AltRateNP[COMMAND].fill("ALT_RATE_COMMAND", "Alt Rate Cmd [deg/s]", "%6.4f", -100000, 100000, 0.001, 0);
+    AltRateNP[FEEDBACK].fill("ALT_RATE_FEEDBACK", "Alt Rate Fb [deg]/s", "%6.4f", -100000, 100000, 0.001, 0);
+    AltRateNP.fill(getDeviceName(), "ALT_RATE", "Alt Rate", MountInfoTab, IP_RO, 60, IPS_IDLE);
 
     // IUFillNumberVector(&AxisOneInfoNP, AxisOneInfoN, 4, getDeviceName(), "AXIS_ONE_INFO", "Axis one information",
     //                    MountInfoTab, IP_RO, 60, IPS_IDLE);
@@ -192,24 +202,24 @@ bool LFAST_Mount::initProperties()
     // IUFillNumber(&AxisOneEncoderValuesN[RAW_MICROSTEPS], "RAW_MICROSTEPS", "Raw Microsteps", "%.0f", 0, 0xFFFFFF, 1, 0);
     // IUFillNumber(&AxisOneEncoderValuesN[MICROSTEPS_PER_ARCSEC], "MICROSTEPS_PER_ARCSEC", "Microsteps/arcsecond",
     //              "%.4f", 0, 0xFFFFFF, 1, 0);
-    IUFillNumber(&AxisOneEncoderValuesN[OFFSET_FROM_INITIAL], "OFFSET_FROM_INITIAL", "Offset from initial", "%.0f", 0,
-                 0xFFFFFF, 1, 0);
-    IUFillNumber(&AxisOneEncoderValuesN[DEGREES_FROM_INITIAL], "DEGREES_FROM_INITIAL", "Degrees from initial", "%.2f",
-                 -1000.0, 1000.0, 1, 0);
+    // IUFillNumber(&AxisOneEncoderValuesN[OFFSET_FROM_INITIAL], "OFFSET_FROM_INITIAL", "Offset from initial", "%.0f", 0,
+    //              0xFFFFFF, 1, 0);
+    // IUFillNumber(&AxisOneEncoderValuesN[DEGREES_FROM_INITIAL], "DEGREES_FROM_INITIAL", "Degrees from initial", "%.2f",
+    //              -1000.0, 1000.0, 1, 0);
 
-    IUFillNumberVector(&AxisOneEncoderValuesNP, AxisOneEncoderValuesN, 4, getDeviceName(), "AXIS1_ENCODER_VALUES",
-                       "Axis 1 Encoder values", MountInfoTab, IP_RO, 60, IPS_IDLE);
+    // IUFillNumberVector(&AxisOneEncoderValuesNP, AxisOneEncoderValuesN, 4, getDeviceName(), "AXIS1_ENCODER_VALUES",
+    //                    "Axis 1 Encoder values", MountInfoTab, IP_RO, 60, IPS_IDLE);
 
     // IUFillNumber(&AxisTwoEncoderValuesN[RAW_MICROSTEPS], "RAW_MICROSTEPS", "Raw Microsteps", "%.0f", 0, 0xFFFFFF, 1, 0);
     // IUFillNumber(&AxisTwoEncoderValuesN[MICROSTEPS_PER_ARCSEC], "MICROSTEPS_PER_ARCSEC", "Microsteps/arcsecond",
     //              "%.4f", 0, 0xFFFFFF, 1, 0);
-    IUFillNumber(&AxisTwoEncoderValuesN[OFFSET_FROM_INITIAL], "OFFSET_FROM_INITIAL", "Offset from initial", "%.0f", 0,
-                 0xFFFFFF, 1, 0);
-    IUFillNumber(&AxisTwoEncoderValuesN[DEGREES_FROM_INITIAL], "DEGREES_FROM_INITIAL", "Degrees from initial", "%.2f",
-                 -1000.0, 1000.0, 1, 0);
+    // IUFillNumber(&AxisTwoEncoderValuesN[OFFSET_FROM_INITIAL], "OFFSET_FROM_INITIAL", "Offset from initial", "%.0f", 0,
+    //              0xFFFFFF, 1, 0);
+    // IUFillNumber(&AxisTwoEncoderValuesN[DEGREES_FROM_INITIAL], "DEGREES_FROM_INITIAL", "Degrees from initial", "%.2f",
+    //              -1000.0, 1000.0, 1, 0);
 
-    IUFillNumberVector(&AxisTwoEncoderValuesNP, AxisTwoEncoderValuesN, 4, getDeviceName(), "AXIS2_ENCODER_VALUES",
-                       "Axis 2 Encoder values", MountInfoTab, IP_RO, 60, IPS_IDLE);
+    // IUFillNumberVector(&AxisTwoEncoderValuesNP, AxisTwoEncoderValuesN, 4, getDeviceName(), "AXIS2_ENCODER_VALUES",
+    //                    "Axis 2 Encoder values", MountInfoTab, IP_RO, 60, IPS_IDLE);
     // Register any visible before connection properties
 
     // Slew modes
@@ -250,17 +260,17 @@ bool LFAST_Mount::initProperties()
     TrackFactorNP[AXIS_ALT].fill("AXIS_ALT", "Altitude", "%.2f", 0.1, 5, 0.1, 1);
     TrackFactorNP.fill(getDeviceName(), "TRACK_FACTOR", "Track Factor", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
-    tcpConnection->setDefaultHost("192.168.4.1");
-    tcpConnection->setDefaultPort(11880);
+    // tcpConnection->setDefaultHost("192.168.4.1");
+    // tcpConnection->setDefaultPort(11880);
     tcpConnection->setConnectionType(Connection::TCP::TYPE_UDP);
 
     if (strstr(getDeviceName(), "GTi"))
-    {
-        setActiveConnection(tcpConnection);
-        tcpConnection->setLANSearchEnabled(true);
-    }
+        // {
+        //     setActiveConnection(tcpConnection);
+        //     tcpConnection->setLANSearchEnabled(true);
+        // }
 
-    SetParkDataType(PARK_AZ_ALT_ENCODER);
+        SetParkDataType(PARK_AZ_ALT_ENCODER);
 
     // Guiding support
     initGuiderProperties(getDeviceName(), GUIDE_TAB);
@@ -419,6 +429,7 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Goto(double ra, double dec)
 {
+    LOG_INFO("LFAST_Mount::Goto");
     if (m_IterativeGOTOPending)
     {
         char RAStr[32], DecStr[32];
@@ -564,8 +575,8 @@ void LFAST_Mount::ISGetProperties(const char *dev)
         defineProperty(&AxisOneStateSP);
         // defineProperty(&AxisTwoInfoNP);
         defineProperty(&AxisTwoStateSP);
-        defineProperty(&AxisOneEncoderValuesNP);
-        defineProperty(&AxisTwoEncoderValuesNP);
+        // defineProperty(&AxisOneEncoderValuesNP);
+        // defineProperty(&AxisTwoEncoderValuesNP);
         defineProperty(&SlewModesSP);
         defineProperty(&SoftPECModesSP);
         defineProperty(&SoftPecNP);
@@ -598,8 +609,8 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     case MOTION_START:
         DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
         // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
-        AltitudeAxis->slew(speed);
-        AzimuthAxis->slew(speed);
+        AltitudeAxis->updateRateOffset(speed);
+        AzimuthAxis->updateRateOffset(speed);
         m_ManualMotionActive = true;
         break;
 
@@ -627,7 +638,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     case MOTION_START:
         DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
         // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
-        AzimuthAxis->slew(speed);
+        AzimuthAxis->updateRateOffset(speed);
         m_ManualMotionActive = true;
         break;
 
@@ -646,6 +657,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Park()
 {
+    LOG_INFO("LFAST_Mount::Park");
     // Move the telescope to the desired position
     // if (IUFindSwitch(&SlewModesSP, "SLEW_SILENT") != nullptr && IUFindSwitch(&SlewModesSP, "SLEW_SILENT")->s == ISS_ON)
     // {
@@ -695,28 +707,29 @@ bool LFAST_Mount::SetTrackEnabled(bool enabled)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::ReadScopeStatus()
 {
-    double azPosnFb, altPosnFb, azRateFb, altRateFb;
+    double azPosnFb, altPosnFb;
+    // double azPosnFb, altPosnFb, azRateFb, altRateFb;
     try
     {
         azPosnFb = AzimuthAxis->getPositionFeedback();
         altPosnFb = AltitudeAxis->getPositionFeedback();
-        azRateFb = AzimuthAxis->getVelocityFeedback();
-        altRateFb = AltitudeAxis->getVelocityFeedback();
+        // azRateFb = AzimuthAxis->getVelocityFeedback();
+        // altRateFb = AltitudeAxis->getVelocityFeedback();
     }
     catch (const std::exception &e)
     {
         LOG_ERROR(e.what());
     }
 
-    UpdateDetailedMountInformation(true);
-
     bool resetTrackingTimers = false;
 
     // Calculate new RA DEC
-    INDI::IHorizontalCoordinates AltAz{0, 0};
+    INDI::IHorizontalCoordinates AltAzFB{0, 0};
+    AltAzFB.altitude = altPosnFb;
+    AltAzFB.azimuth = azPosnFb;
 
-    AltAz.azimuth = azPosnFb;
-    AltAz.altitude = altPosnFb;
+    AltAzFB.azimuth = azPosnFb;
+    AltAzFB.altitude = altPosnFb;
 
     // DEBUGF(INDI::AlignmentSubsystem::DBG_ALIGNMENT, "Axis1 encoder %ld (Zero %ld) -> AZ %lf°",
     //        CurrentEncoders[AXIS1], ZeroPositionEncoders[AXIS1], AltAz.azimuth);
@@ -724,10 +737,10 @@ bool LFAST_Mount::ReadScopeStatus()
     //        CurrentEncoders[AXIS2], ZeroPositionEncoders[AXIS2], AltAz.altitude);
 
     // Update current horizontal coords.
-    m_MountAltAz = AltAz;
+    m_MountAltAz = AltAzFB;
 
     // Get equatorial coords.
-    getCurrentRADE(AltAz, m_SkyCurrentRADE);
+    getCurrentRADE(AltAzFB, m_SkyCurrentRADE);
     char RAStr[32], DecStr[32];
     fs_sexa(RAStr, m_SkyCurrentRADE.rightascension, 2, 3600);
     fs_sexa(DecStr, m_SkyCurrentRADE.declination, 2, 3600);
@@ -764,6 +777,7 @@ bool LFAST_Mount::ReadScopeStatus()
     {
         if (AzimuthAxis->isStopped() && AltitudeAxis->isStopped())
         {
+            LOG_INFO("PARK DONE.");
             AltitudeAxis->slowStop();
             AzimuthAxis->slowStop();
             SetParked(true);
@@ -774,6 +788,7 @@ bool LFAST_Mount::ReadScopeStatus()
         resetTracking();
 
     NewRaDec(m_SkyCurrentRADE.rightascension, m_SkyCurrentRADE.declination);
+    UpdateDetailedMountInformation(true);
     return true;
 }
 
@@ -853,7 +868,7 @@ bool LFAST_Mount::saveConfigItems(FILE *fp)
 bool LFAST_Mount::Sync(double ra, double dec)
 {
     DEBUG(INDI::AlignmentSubsystem::DBG_ALIGNMENT, "LFAST_Mount::Sync");
-
+    LOG_INFO("LFAST_Mount::Sync");
     double azPosnFb, altPosnFb;
     try
     {
@@ -998,23 +1013,6 @@ void LFAST_Mount::TimerHit()
             TelescopeDirectionVector TDV;
             INDI::IHorizontalCoordinates AltAz{0, 0};
 
-            // We modify the SkyTrackingTarget for non-sidereal objects (Moon or Sun)
-            // FIXME: This was not tested.
-            if (TrackModeS[TRACK_LUNAR].s == ISS_ON)
-            {
-                // TRACKRATE_LUNAR how many arcsecs the Moon moved in one second.
-                // TRACKRATE_SIDEREAL how many arcsecs the Sky moved in one second.
-                double dRA = (TRACKRATE_LUNAR - TRACKRATE_SIDEREAL) * m_TrackingRateTimer.elapsed() / 1000.0;
-                m_SkyTrackingTarget.rightascension += (dRA / 3600.0) * 15.0;
-                m_TrackingRateTimer.restart();
-            }
-            else if (TrackModeS[TRACK_SOLAR].s == ISS_ON)
-            {
-                double dRA = (TRACKRATE_SOLAR - TRACKRATE_SIDEREAL) * m_TrackingRateTimer.elapsed() / 1000.0;
-                m_SkyTrackingTarget.rightascension += (dRA / 3600.0) * 15.0;
-                m_TrackingRateTimer.restart();
-            }
-
             if (TransformCelestialToTelescope(m_SkyTrackingTarget.rightascension, m_SkyTrackingTarget.declination,
                                               0, TDV))
             {
@@ -1028,7 +1026,8 @@ void LFAST_Mount::TimerHit()
                 EquatorialCoordinates.declination = m_SkyTrackingTarget.declination;
                 INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys(), &AltAz);
             }
-
+            AltitudeAxis->updateTrackCommands(AltAz.altitude);
+            AzimuthAxis->updateTrackCommands(AltAz.azimuth);
             // DEBUGF(DBG_SCOPE,
             //        "Tracking AXIS1 CurrentEncoder %ld OldTrackingTarget %ld AXIS2 CurrentEncoder %ld OldTrackingTarget "
             //        "%ld",
@@ -1184,6 +1183,35 @@ void LFAST_Mount::TimerHit()
         GuidingPulses.clear();
         break;
     }
+    updateSim();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void LFAST_Mount::updateSim()
+{
+    static struct timeval ltv
+    {
+        0, 0
+    }; // previous system time
+    struct timeval tv
+    {
+        0, 0
+    }; // new system time
+
+    double dt; // Elapsed time in seconds since last tick
+
+    gettimeofday(&tv, nullptr);
+
+    if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
+        ltv = tv;
+
+    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
+    ltv = tv;
+    // LOGF_INFO("dt: %10.8f", dt);
+    AltitudeAxis->simulate(dt);
+    AzimuthAxis->simulate(dt);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1222,8 +1250,8 @@ bool LFAST_Mount::updateProperties()
         defineProperty(&AxisOneStateSP);
         // defineProperty(&AxisTwoInfoNP);
         defineProperty(&AxisTwoStateSP);
-        defineProperty(&AxisOneEncoderValuesNP);
-        defineProperty(&AxisTwoEncoderValuesNP);
+        // defineProperty(&AxisOneEncoderValuesNP);
+        // defineProperty(&AxisTwoEncoderValuesNP);
         defineProperty(&SlewModesSP);
         defineProperty(&SoftPECModesSP);
         defineProperty(&SoftPecNP);
@@ -1231,7 +1259,10 @@ bool LFAST_Mount::updateProperties()
         defineProperty(&GuideNSNP);
         defineProperty(&GuideWENP);
         defineProperty(&TrackFactorNP);
-
+        defineProperty(&AzPosnNP);
+        defineProperty(&AltPosnNP);
+        defineProperty(&AzRateNP);
+        defineProperty(&AltRateNP);
         // if (HasAuxEncoders())
         // {
         //     LOG_WARN("AUX encoders detected. Turning off...");
@@ -1271,8 +1302,8 @@ bool LFAST_Mount::updateProperties()
         deleteProperty(AxisOneStateSP.name);
         // deleteProperty(AxisTwoInfoNP.name);
         deleteProperty(AxisTwoStateSP.name);
-        deleteProperty(AxisOneEncoderValuesNP.name);
-        deleteProperty(AxisTwoEncoderValuesNP.name);
+        // deleteProperty(AxisOneEncoderValuesNP.name);
+        // deleteProperty(AxisTwoEncoderValuesNP.name);
         deleteProperty(SlewModesSP.name);
         deleteProperty(SoftPECModesSP.name);
         deleteProperty(SoftPecNP.name);
@@ -1439,173 +1470,22 @@ LFAST_Mount::TelescopeDirectionVectorFromSkywatcherMicrosteps(long Axis1Microste
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void LFAST_Mount::UpdateDetailedMountInformation(bool InformClient)
 {
-    // bool BasicMountInfoHasChanged = false;
 
-    // if (std::string(BasicMountInfoT[MOTOR_CONTROL_FIRMWARE_VERSION].text) != std::to_string(MCVersion))
-    // {
-    //     IUSaveText(&BasicMountInfoT[MOTOR_CONTROL_FIRMWARE_VERSION], std::to_string(MCVersion).c_str());
-    //     BasicMountInfoHasChanged = true;
-    // }
-    // if (std::string(BasicMountInfoT[MOUNT_CODE].text) != std::to_string(MountCode))
-    // {
-    //     IUSaveText(&BasicMountInfoT[MOUNT_CODE], std::to_string(MountCode).c_str());
-    //     SetApproximateMountAlignmentFromMountType(ALTAZ);
-    //     BasicMountInfoHasChanged = true;
-    // }
-    // if (std::string(BasicMountInfoT[IS_DC_MOTOR].text) != std::to_string(IsDCMotor))
-    // {
-    //     IUSaveText(&BasicMountInfoT[IS_DC_MOTOR], std::to_string(IsDCMotor).c_str());
-    //     BasicMountInfoHasChanged = true;
-    // }
-    // if (BasicMountInfoHasChanged && InformClient)
-    //     IDSetText(&BasicMountInfoTP, nullptr);
+    AzPosnNP[FEEDBACK].setValue(m_MountAltAz.azimuth);
+    AzPosnNP[COMMAND].setValue(AzimuthAxis->getPositionCommand());
+    AzPosnNP.apply();
 
-    // IUSaveText(&BasicMountInfoT[MOUNT_NAME], mountTypeToString(MountCode));
+    AltPosnNP[FEEDBACK].setValue(m_MountAltAz.altitude);
+    AltPosnNP[COMMAND].setValue(AltitudeAxis->getPositionCommand());
+    AltPosnNP.apply();
 
-    // bool AxisOneInfoHasChanged = false;
+    AzRateNP[COMMAND].setValue(AzimuthAxis->getVelocityCommand());
+    AzRateNP[FEEDBACK].setValue(AzimuthAxis->getVelocityFeedback());
+    AzRateNP.apply();
 
-    // if (AxisOneInfoN[MICROSTEPS_PER_REVOLUTION].value != MicrostepsPerRevolution[0])
-    // {
-    //     AxisOneInfoN[MICROSTEPS_PER_REVOLUTION].value = MicrostepsPerRevolution[0];
-    //     AxisOneInfoHasChanged = true;
-    // }
-    // if (AxisOneInfoN[STEPPER_CLOCK_FREQUENCY].value != StepperClockFrequency[0])
-    // {
-    //     AxisOneInfoN[STEPPER_CLOCK_FREQUENCY].value = StepperClockFrequency[0];
-    //     AxisOneInfoHasChanged = true;
-    // }
-    // if (AxisOneInfoN[HIGH_SPEED_RATIO].value != HighSpeedRatio[0])
-    // {
-    //     AxisOneInfoN[HIGH_SPEED_RATIO].value = HighSpeedRatio[0];
-    //     AxisOneInfoHasChanged = true;
-    // }
-    // if (AxisOneInfoN[MICROSTEPS_PER_WORM_REVOLUTION].value != MicrostepsPerWormRevolution[0])
-    // {
-    //     AxisOneInfoN[MICROSTEPS_PER_WORM_REVOLUTION].value = MicrostepsPerWormRevolution[0];
-    //     AxisOneInfoHasChanged = true;
-    // }
-    // if (AxisOneInfoHasChanged && InformClient)
-    //     IDSetNumber(&AxisOneInfoNP, nullptr);
-
-    // bool AxisOneStateHasChanged = false;
-    // if (AxisOneStateS[FULL_STOP].s != (AxesStatus[0].FullStop ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[FULL_STOP].s = AxesStatus[0].FullStop ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateS[SLEWING].s != (AxesStatus[0].Slewing ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[SLEWING].s = AxesStatus[0].Slewing ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateS[SLEWING_TO].s != (AxesStatus[0].SlewingTo ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[SLEWING_TO].s = AxesStatus[0].SlewingTo ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateS[SLEWING_FORWARD].s != (AxesStatus[0].SlewingForward ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[SLEWING_FORWARD].s = AxesStatus[0].SlewingForward ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateS[HIGH_SPEED].s != (AxesStatus[0].HighSpeed ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[HIGH_SPEED].s = AxesStatus[0].HighSpeed ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateS[NOT_INITIALISED].s != (AxesStatus[0].NotInitialized ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisOneStateS[NOT_INITIALISED].s = AxesStatus[0].NotInitialized ? ISS_ON : ISS_OFF;
-    //     AxisOneStateHasChanged = true;
-    // }
-    // if (AxisOneStateHasChanged && InformClient)
-    //     IDSetSwitch(&AxisOneStateSP, nullptr);
-
-    // bool AxisTwoInfoHasChanged = false;
-    // if (AxisTwoInfoN[MICROSTEPS_PER_REVOLUTION].value != MicrostepsPerRevolution[1])
-    // {
-    //     AxisTwoInfoN[MICROSTEPS_PER_REVOLUTION].value = MicrostepsPerRevolution[1];
-    //     AxisTwoInfoHasChanged = true;
-    // }
-    // if (AxisTwoInfoN[STEPPER_CLOCK_FREQUENCY].value != StepperClockFrequency[1])
-    // {
-    //     AxisTwoInfoN[STEPPER_CLOCK_FREQUENCY].value = StepperClockFrequency[1];
-    //     AxisTwoInfoHasChanged = true;
-    // }
-    // if (AxisTwoInfoN[HIGH_SPEED_RATIO].value != HighSpeedRatio[1])
-    // {
-    //     AxisTwoInfoN[HIGH_SPEED_RATIO].value = HighSpeedRatio[1];
-    //     AxisTwoInfoHasChanged = true;
-    // }
-    // if (AxisTwoInfoN[MICROSTEPS_PER_WORM_REVOLUTION].value != MicrostepsPerWormRevolution[1])
-    // {
-    //     AxisTwoInfoN[MICROSTEPS_PER_WORM_REVOLUTION].value = MicrostepsPerWormRevolution[1];
-    //     AxisTwoInfoHasChanged = true;
-    // }
-    // if (AxisTwoInfoHasChanged && InformClient)
-    //     IDSetNumber(&AxisTwoInfoNP, nullptr);
-
-    // bool AxisTwoStateHasChanged = false;
-    // if (AxisTwoStateS[FULL_STOP].s != (AxesStatus[1].FullStop ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[FULL_STOP].s = AxesStatus[1].FullStop ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateS[SLEWING].s != (AxesStatus[1].Slewing ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[SLEWING].s = AxesStatus[1].Slewing ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateS[SLEWING_TO].s != (AxesStatus[1].SlewingTo ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[SLEWING_TO].s = AxesStatus[1].SlewingTo ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateS[SLEWING_FORWARD].s != (AxesStatus[1].SlewingForward ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[SLEWING_FORWARD].s = AxesStatus[1].SlewingForward ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateS[HIGH_SPEED].s != (AxesStatus[1].HighSpeed ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[HIGH_SPEED].s = AxesStatus[1].HighSpeed ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateS[NOT_INITIALISED].s != (AxesStatus[1].NotInitialized ? ISS_ON : ISS_OFF))
-    // {
-    //     AxisTwoStateS[NOT_INITIALISED].s = AxesStatus[1].NotInitialized ? ISS_ON : ISS_OFF;
-    //     AxisTwoStateHasChanged = true;
-    // }
-    // if (AxisTwoStateHasChanged && InformClient)
-    //     IDSetSwitch(&AxisTwoStateSP, nullptr);
-
-    // bool AxisOneEncoderValuesHasChanged = false;
-    // if ((AxisOneEncoderValuesN[RAW_MICROSTEPS].value != CurrentEncoders[AXIS1]) ||
-    //     (AxisOneEncoderValuesN[OFFSET_FROM_INITIAL].value != CurrentEncoders[AXIS1] - ZeroPositionEncoders[AXIS1]))
-    // {
-    //     AxisOneEncoderValuesN[RAW_MICROSTEPS].value = CurrentEncoders[AXIS1];
-    //     AxisOneEncoderValuesN[MICROSTEPS_PER_ARCSEC].value = MicrostepsPerDegree[AXIS1] / 3600.0;
-    //     AxisOneEncoderValuesN[OFFSET_FROM_INITIAL].value = CurrentEncoders[AXIS1] - ZeroPositionEncoders[AXIS1];
-    //     AxisOneEncoderValuesN[DEGREES_FROM_INITIAL].value =
-    //         MicrostepsToDegrees(AXIS1, CurrentEncoders[AXIS1] - ZeroPositionEncoders[AXIS1]);
-    //     AxisOneEncoderValuesHasChanged = true;
-    // }
-    // if (AxisOneEncoderValuesHasChanged && InformClient)
-    //     IDSetNumber(&AxisOneEncoderValuesNP, nullptr);
-
-    // bool AxisTwoEncoderValuesHasChanged = false;
-    // if ((AxisTwoEncoderValuesN[RAW_MICROSTEPS].value != CurrentEncoders[AXIS2]) ||
-    //     (AxisTwoEncoderValuesN[OFFSET_FROM_INITIAL].value != CurrentEncoders[AXIS2] - ZeroPositionEncoders[AXIS2]))
-    // {
-    //     AxisTwoEncoderValuesN[RAW_MICROSTEPS].value = CurrentEncoders[AXIS2];
-    //     AxisTwoEncoderValuesN[MICROSTEPS_PER_ARCSEC].value = MicrostepsPerDegree[AXIS2] / 3600.0;
-    //     AxisTwoEncoderValuesN[OFFSET_FROM_INITIAL].value = CurrentEncoders[AXIS2] - ZeroPositionEncoders[AXIS2];
-    //     AxisTwoEncoderValuesN[DEGREES_FROM_INITIAL].value =
-    //         MicrostepsToDegrees(AXIS2, CurrentEncoders[AXIS2] - ZeroPositionEncoders[AXIS2]);
-    //     AxisTwoEncoderValuesHasChanged = true;
-    // }
-    // if (AxisTwoEncoderValuesHasChanged && InformClient)
-    //     IDSetNumber(&AxisTwoEncoderValuesNP, nullptr);
+    AltRateNP[COMMAND].setValue(AltitudeAxis->getVelocityCommand());
+    AltRateNP[FEEDBACK].setValue(AltitudeAxis->getVelocityFeedback());
+    AltRateNP.apply();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

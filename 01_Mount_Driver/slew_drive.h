@@ -4,7 +4,7 @@
 #include <string>
 #include <cmath>
 
-#define SLEW_COMPLETE_THRESH 0.0005
+#define SLEW_COMPLETE_THRESH 0.0000005
 #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
 
@@ -19,19 +19,23 @@ class SlewDrive
 private:
     const char *axisLabel;
 
-    enum controlMode
+    typedef enum 
     {
+        STOPPED,
         POSITION_CONTROL,
-        RATE_CONTROL
-    };
+        RATE_CONTROL,
+
+    } ControlMode_t;
 
     double positionFeedback_deg;
     double positionCommand_deg;
     double rateFeedback_dps;
-    double rateCommand_dps;
+    // double rateCommandOffset_dps;
+    double combinedRateCmd_dps;
     double rateRef_dps;
     double fastSlewRate;
     bool isEnabled;
+    ControlMode_t mode;
 
 public:
     SlewDrive(const char *);
@@ -40,16 +44,17 @@ public:
     double getPositionFeedback() { return positionFeedback_deg; }
     double getVelocityFeedback() { return rateFeedback_dps; }
     double getPositionCommand() { return positionCommand_deg; }
-    double getVelocityCommand() { return rateCommand_dps + rateRef_dps; }
+        double getVelocityCommand() { return combinedRateCmd_dps; }
+    // double getVelocityCommand() { return rateCommandOffset_dps + rateRef_dps; }
 
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
     void abortSlew();
     void setPosition(double posn);
     bool isSlewComplete();
-    void slowStop() {}
+    void slowStop() {abortSlew();}
     bool isStopped() { return rateFeedback_dps == 0; }
     // SlewDriveMode_t poll();
-    void slew(double slewRate);
+    void updateRateOffset(double slewRate);
     const char *getModeString();
 #if SIM_MODE_ENABLED
     void simulate(double dt);
