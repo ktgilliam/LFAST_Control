@@ -11,7 +11,7 @@
 
 */
 
-#include "lfast_mount_driver.h"
+#include "LFAST_Mount.h"
 
 #include "indicom.h"
 #include <libnova/julian_day.h>
@@ -471,8 +471,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
 bool LFAST_Mount::Abort()
 {
     gotoPending = false;
-    AltitudeAxis->slowToStop();
-    AzimuthAxis->slowToStop();
+    AltitudeAxis->abortSlew();
+    AzimuthAxis->abortSlew();
 
     if (MovementNSSP.s == IPS_BUSY)
     {
