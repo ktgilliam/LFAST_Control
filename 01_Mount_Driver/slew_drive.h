@@ -21,29 +21,30 @@ private:
     double positionFeedback_deg;
     double positionCommand_deg;
     double rateFeedback_dps;
-    double rateCommand_dps;
+    double rateCommandOffset_dps;
     double rateRef_dps;
-    double fastSlewRate;
     bool isEnabled;
-
+    double rateLim;
 
 public:
     SlewDrive(const char *);
     void enable();
 
-    double getPositionFeedback() { return positionFeedback_deg; }
-    double getVelocityFeedback() { return rateFeedback_dps; }
     double getPositionCommand() { return positionCommand_deg; }
-    double getVelocityCommand() { return rateCommand_dps+rateRef_dps; }
+    double getPositionFeedback() { return positionFeedback_deg; }
+
+    double getVelocityCommand() { return rateCommandOffset_dps+rateRef_dps; }
+    double getVelocityFeedback() { return rateFeedback_dps; }
 
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
     void abortSlew();
     void syncPosition(double posn);
     bool isSlewComplete();
-    void slowToStop(){}
+    void slowStop(){abortSlew();}
     bool isStopped(){return rateFeedback_dps == 0;}
     // SlewDriveMode_t poll();
-    void setSlewRate(double slewRate);
+    void updateRateOffset(double rate);
+    void updateSlewRate(double slewRate);
     const char *getModeString();
 #if SIM_MODE_ENABLED
     void simulate(double dt);

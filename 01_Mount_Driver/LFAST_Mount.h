@@ -13,10 +13,19 @@
 // #include "indielapsedtimer.h"
 namespace LFAST
 {
-    const double slewspeeds[] = {32.0, 64.0, 128.0, 256.0, 512.0};
-    constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
+    enum
+    {
+        SLEW_GUIDE,
+        SLEW_CENTERING,
+        SLEW_MAX,
+        SLEW_FIND,
+        NUM_SLEW_SPEEDS
+    };
+    const double slewspeeds[NUM_SLEW_SPEEDS] = {32.0, 64.0, 128.0, 256.0};
     constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
-    static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;
+    // const double slewspeeds[] = {32.0, 64.0, 128.0, 256.0, 512.0};
+    // constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
+    // static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;
 }
 
 enum
@@ -24,6 +33,7 @@ enum
     AXIS_AZ_VEL = AXIS_AZ + 2,
     AXIS_ALT_VEL = AXIS_ALT + 2
 };
+
 class LFAST_Mount : public INDI::Telescope,
                     public INDI::GuiderInterface,
                     public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
@@ -133,11 +143,30 @@ private:
     ///////////////////////////////////////////////////////////////////////////////
     /// Additional Properties
     ///////////////////////////////////////////////////////////////////////////////
+
+    // static constexpr const char *DetailedMountInfoPage { "Detailed Mount Information" };
+
     INDI::PropertyText NtpServerTP{1};
     INDI::PropertyNumber AzAltCoordsNP{4};
-    INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
+    // INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
     INDI::PropertyNumber GuideRateNP{2};
     bool gotoPending;
+    // INDI::PropertyText TrackStateTP{1};
+
+    // INDI::PropertyLight TrackStateLP{5};
+    INDI::PropertySwitch TrackStateSP{6};
+
+    // enum
+    // {
+    //     FULL_STOP,
+    //     SLEWING,
+    //     SLEWING_TO,
+    //     SLEWING_FORWARD,
+    //     HIGH_SPEED,
+    //     NOT_INITIALISED
+    // };
+    // ISwitch AxisOneStateS[6];
+    // ISwitchVectorProperty AxisOneStateSP;
     ///////////////////////////////////////////////////////////////////////////////
     /// Class Variables
     ///////////////////////////////////////////////////////////////////////////////
@@ -155,6 +184,8 @@ private:
     bool updatePointingCoordinates(double alt, double az);
     void printSlewDriveStates();
     INDI::IHorizontalCoordinates HorizontalRates_geocentric2(double ha, double dec, double lat);
+    double GetSlewRate();
+    void updateSim();
 };
 
 const std::string getDirString(INDI_DIR_NS dir)
