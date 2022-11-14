@@ -46,7 +46,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
-const double constexpr default_park_posn_alt = 0.0;
+const double constexpr default_park_posn_alt = -10.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
@@ -62,9 +62,9 @@ const char altLabel[] = "Alt. Axis";
 LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
     // Set up the basic configuration for the mount
-    setVersion(0, 3);
+    setVersion(0, 4);
     setTelescopeConnection(CONNECTION_TCP);
-    SetTelescopeCapability(SCOPE_CAPABILITIES, 9);
+    SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST::NUM_SLEW_SPEEDS);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
@@ -193,9 +193,10 @@ bool LFAST_Mount::initProperties()
     // SetSlewRate(LFAST::DEFAULT_SLEW_IDX);
 
     // NTP Server Address text field
-    NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
-    NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
-    defineProperty(&NtpServerTP);
+    // NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
+    // NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
+
+    // defineProperty(&NtpServerTP);
 
     AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
     AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
@@ -218,16 +219,6 @@ bool LFAST_Mount::initProperties()
     TrackStateSP[SCOPE_PARKED].fill("STATE_PARKED", "PARKED", ISS_OFF);
     TrackStateSP[SCOPE_IDLE].fill("STATE_INIT", "IDLE", ISS_ON);
     TrackStateSP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MAIN_CONTROL_TAB, IP_RO, ISR_1OFMANY, 60, IPS_IDLE);
-
-    // IUFillSwitch(&AxisOneStateS[FULL_STOP], "FULL_STOP", "FULL_STOP", ISS_OFF);
-    // IUFillSwitch(&AxisOneStateS[SLEWING], "SLEWING", "SLEWING", ISS_OFF);
-    // IUFillSwitch(&AxisOneStateS[SLEWING_TO], "SLEWING_TO", "SLEWING_TO", ISS_OFF);
-    // IUFillSwitch(&AxisOneStateS[SLEWING_FORWARD], "SLEWING_FORWARD", "SLEWING_FORWARD", ISS_OFF);
-    // IUFillSwitch(&AxisOneStateS[HIGH_SPEED], "HIGH_SPEED", "HIGH_SPEED", ISS_OFF);
-    // IUFillSwitch(&AxisOneStateS[NOT_INITIALISED], "NOT_INITIALISED", "NOT_INITIALISED", ISS_ON);
-    // IUFillSwitchVector(&AxisOneStateSP, AxisOneStateS, 6, getDeviceName(), "AXIS_ONE_STATE", "Axis one state",
-    //                    DetailedMountInfoPage, IP_RO, ISR_NOFMANY, 60, IPS_IDLE);
-    // TrackStateLP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MAIN_CONTROL_TAB, IPS_IDLE);
 
     // Force the alignment system to always be on
     getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE")->sp[0].s = ISS_ON;
@@ -307,11 +298,11 @@ bool LFAST_Mount::Goto(double ra, double dec)
 {
     // if (gotoPending)
     // {
-        char RAStr[32], DecStr[32];
-        fs_sexa(RAStr, m_SkyCurrentRADE.rightascension, 2, 3600);
-        fs_sexa(DecStr, m_SkyCurrentRADE.declination, 2, 3600);
-        LOGF_DEBUG("Iterative GOTO RA %lf DEC %lf (Current Sky RA %s DE %s)", ra, dec, RAStr,
-                   DecStr);
+    char RAStr[32], DecStr[32];
+    fs_sexa(RAStr, m_SkyCurrentRADE.rightascension, 2, 3600);
+    fs_sexa(DecStr, m_SkyCurrentRADE.declination, 2, 3600);
+    LOGF_DEBUG("Iterative GOTO RA %lf DEC %lf (Current Sky RA %s DE %s)", ra, dec, RAStr,
+               DecStr);
     // }
     // else
     // {
@@ -684,7 +675,7 @@ bool LFAST_Mount::ISNewBLOB(const char *dev, const char *name, int sizes[], int 
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // Process alignment properties
-        ProcessAlignmentBLOBProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
+        AlignmentSubsystemForDrivers::ProcessAlignmentBLOBProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewBLOB(dev, name, sizes, blobsizes, blobs, formats, names, n);
@@ -700,7 +691,7 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // Process alignment properties
-        ProcessAlignmentNumberProperties(this, name, values, names, n);
+        AlignmentSubsystemForDrivers::ProcessAlignmentNumberProperties(this, name, values, names, n);
     }
 
     // Guiding Rate
@@ -730,7 +721,7 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // Process alignment properties
-        ProcessAlignmentSwitchProperties(this, name, states, names, n);
+        AlignmentSubsystemForDrivers::ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
@@ -744,7 +735,7 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // Process alignment properties
-        ProcessAlignmentTextProperties(this, name, texts, names, n);
+        AlignmentSubsystemForDrivers::ProcessAlignmentTextProperties(this, name, texts, names, n);
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewText(dev, name, texts, names, n);
@@ -1180,9 +1171,7 @@ void LFAST_Mount::TimerHit()
         TraceThisTick = true;
         TraceThisTickCount = 0;
     }
-    // Simulate mount movement
 
-    updateSim();
 
     std::string stateStr = {0};
     INDI::IHorizontalCoordinates altAzPosn{0, 0};
@@ -1191,12 +1180,22 @@ void LFAST_Mount::TimerHit()
     switch (TrackState)
     {
     case SCOPE_SLEWING:
-        // TODO: RESET GUIDE PULSES
-        // SEE skywatcherAPIMount
+        m_SkyGuideOffset = {0, 0};
+        altAzPosn = getTrackingTargetAltAzPosition();
+        AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
+        AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
+
         if (AltitudeAxis->isSlewComplete() && AzimuthAxis->isSlewComplete())
         {
             LOG_INFO("SLEW COMPLETE.");
-            TrackState = SCOPE_TRACKING;
+            if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
+            {
+                TrackState = SCOPE_TRACKING;
+            }
+            else
+            {
+                TrackState = SCOPE_IDLE;
+            }
         }
         break;
 
@@ -1205,14 +1204,8 @@ void LFAST_Mount::TimerHit()
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
         // altAzRates = getTrackingTargetAltAzRates();
-
         AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
         AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
-
-        // AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
-        // AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
-        // printSlewDriveStates();
-        // LOGF_INFO("ALT/AZ Rate Commands: %10.8f, %10.8f",altAzRates.altitude, altAzRates.azimuth );
         break;
     case SCOPE_PARKING:
         if (!AzimuthAxis->isSlewComplete() && !AltitudeAxis->isSlewComplete())
@@ -1223,9 +1216,9 @@ void LFAST_Mount::TimerHit()
         }
         else
         {
-            AzimuthAxis->slowStop();
-            AltitudeAxis->slowStop();
             SetParked(true);
+            // AzimuthAxis->slowStop();
+            // AltitudeAxis->slowStop();
             // LOG_DEBUG("Scope Parked");
             TrackState = SCOPE_PARKED;
         }
@@ -1233,6 +1226,9 @@ void LFAST_Mount::TimerHit()
     case SCOPE_PARKED:
         break;
     }
+
+    // Simulate mount movement
+    updateSim();
 
 #if 0 // PRINT_DEBUG_STUFF
     auto itr = AltitudeAxis->debugStrings.begin();
