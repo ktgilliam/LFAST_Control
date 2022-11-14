@@ -74,7 +74,7 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
 
     // Set the driver interface to indicate that we can also do pulse guiding
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
-    gotoPending = false;
+    // gotoPending = false;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -305,22 +305,22 @@ bool LFAST_Mount::Handshake()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Goto(double ra, double dec)
 {
-    if (gotoPending)
-    {
+    // if (gotoPending)
+    // {
         char RAStr[32], DecStr[32];
         fs_sexa(RAStr, m_SkyCurrentRADE.rightascension, 2, 3600);
         fs_sexa(DecStr, m_SkyCurrentRADE.declination, 2, 3600);
         LOGF_DEBUG("Iterative GOTO RA %lf DEC %lf (Current Sky RA %s DE %s)", ra, dec, RAStr,
                    DecStr);
-    }
-    else
-    {
-        if (TrackState != SCOPE_IDLE)
-        {
-            Abort();
-            return false;
-        }
-    }
+    // }
+    // else
+    // {
+    //     if (TrackState != SCOPE_IDLE)
+    //     {
+    //         Abort();
+    //         return false;
+    //     }
+    // }
 
     updateTrackingTarget(ra, dec);
 
@@ -328,14 +328,14 @@ bool LFAST_Mount::Goto(double ra, double dec)
     // into a telescope reference frame coordinate
     // ALIGNMENT::TelescopeDirectionVector TDVCommand;
     // INDI::IHorizontalCoordinates AltAzCommand{0, 0};
-    INDI::IHorizontalCoordinates AltAzCommand = getTrackingTargetAltAzPosition();
+    // INDI::IHorizontalCoordinates AltAzCommand = getTrackingTargetAltAzPosition();
 
-    DEBUGF(DBG_SIMULATOR, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAzCommand.altitude,
-           AltAzCommand.azimuth);
+    // DEBUGF(DBG_SIMULATOR, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAzCommand.altitude,
+    //        AltAzCommand.azimuth);
 
-    // TODO: Try/Catch
-    AltitudeAxis->updateTrackCommands(AltAzCommand.altitude);
-    AzimuthAxis->updateTrackCommands(AltAzCommand.azimuth);
+    // // TODO: Try/Catch
+    // AltitudeAxis->updateTrackCommands(AltAzCommand.altitude);
+    // AzimuthAxis->updateTrackCommands(AltAzCommand.azimuth);
 
     TrackState = SCOPE_SLEWING;
 
@@ -347,8 +347,10 @@ bool LFAST_Mount::Goto(double ra, double dec)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void LFAST_Mount::updateTrackingTarget(double ra, double dec)
 {
+
     DEBUGF(DBG_SIMULATOR, "Goto - Celestial reference frame target right ascension %lf(%lf) declination %lf",
            ra * 360.0 / 24.0, ra, dec);
+    m_SkyGuideOffset = {0, 0};
     if (IUFindSwitch(&CoordSP, "TRACK")->s == ISS_ON || IUFindSwitch(&CoordSP, "SLEW")->s == ISS_ON)
     {
         char RAStr[32], DecStr[32];
@@ -621,68 +623,14 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-/// Tracking Rates V1
-//////////////////////////////////////////////////////////////////////////////////////////////////
-// INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
-// {
-//     double ra = m_SkyTrackingTarget.rightascension;
-//     double dec = m_SkyTrackingTarget.declination;
-//     ALIGNMENT::TelescopeDirectionVector TDVCommand;
-//     INDI::IHorizontalCoordinates hzTrackRates{0, 0};
-
-//     //  INDI::IEquatorialCoordinates eqTrackRates{0,0};
-//     //  eqTrackRates.rightascension = SIDEREAL_RATE_DPS;
-
-//     if (TransformCelestialToTelescope(SIDEREAL_RATE_DPS, 0.0, 0.0, TDVCommand))
-//     {
-//         // LOG_INFO("RATE CMD TRANSFORM GOOD");
-
-//         // The alignment subsystem has successfully transformed my coordinate
-//         AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, hzTrackRates);
-//     }
-//     else
-//     {
-//         // The alignment subsystem cannot transform the coordinate.
-//         // Try some simple rotations using the stored observatory position if any
-//         // LOG_INFO("RATE CMD TRANSFORM BAD");
-//         INDI::IEquatorialCoordinates EquatorialCoordinates{0, 0};
-//         EquatorialCoordinates.rightascension = SIDEREAL_RATE_DPS;
-//         EquatorialCoordinates.declination = 0.0;
-//         INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys(), &hzTrackRates);
-//         TDVCommand = TelescopeDirectionVectorFromAltitudeAzimuth(hzTrackRates);
-
-//         switch (GetApproximateMountAlignment())
-//         {
-//         case ALIGNMENT::ZENITH:
-//             break;
-
-//         case ALIGNMENT::NORTH_CELESTIAL_POLE:
-//             // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 minus
-//             // the (positive)observatory latitude. The vector itself is rotated anticlockwise
-//             // TDVCommand.RotateAroundY(m_Location.latitude - 90.0);
-//             break;
-
-//         case ALIGNMENT::SOUTH_CELESTIAL_POLE:
-//             // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 plus
-//             // the (negative)observatory latitude. The vector itself is rotated clockwise
-//             // TDVCommand.RotateAroundY(m_Location.latitude + 90.0);
-//             break;
-//         }
-//         AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, hzTrackRates);
-//     }
-
-//     LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
-//     return hzTrackRates;
-// }
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Abort()
 {
-    gotoPending = false;
+    // gotoPending = false;
     AltitudeAxis->abortSlew();
     AzimuthAxis->abortSlew();
+    m_SkyGuideOffset = {0, 0};
 
     if (MovementNSSP.s == IPS_BUSY)
     {
@@ -913,6 +861,7 @@ bool LFAST_Mount::Sync(double ra, double dec)
 
     LOGF_INFO("SYNC'D RA/DEC: %6.4f, %6.4f", ra, dec);
     TraceThisTick = true;
+
     return false;
 }
 
@@ -930,6 +879,8 @@ bool LFAST_Mount::Park()
     // fs_sexa(DecStr, EquatorialCoordinates.declination, 2, 3600);
     // LOGF_INFO("Parked RA: %s Parked DEC: %s", RAStr, DecStr);
     // gotoPending = true;
+
+    m_SkyGuideOffset = {0, 0};
     AltitudeAxis->updateTrackCommands(default_park_posn_alt);
     AzimuthAxis->updateTrackCommands(default_park_posn_az);
 
@@ -1002,15 +953,15 @@ bool LFAST_Mount::ReadScopeStatus()
     {
         if ((AzimuthAxis->isStopped()) && (AltitudeAxis->isStopped()))
         {
-            // If iterative GOTO was already engaged, stop it.
-            if (gotoPending)
-                gotoPending = false;
+            // // If iterative GOTO was already engaged, stop it.
+            // if (gotoPending)
+            //     gotoPending = false;
             // If not, then perform the iterative GOTO once more.
-            else
-            {
-                gotoPending = true;
-                return Goto(m_SkyTrackingTarget.rightascension, m_SkyTrackingTarget.declination);
-            }
+            // else
+            // {
+            //     gotoPending = true;
+            //     return Goto(m_SkyTrackingTarget.rightascension, m_SkyTrackingTarget.declination);
+            // }
 
             if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
             {
@@ -1135,8 +1086,8 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-// SIDEREAL_RATE_DPS
-// constexpr double tm = TRACKRATE_SIDEREAL;
+    // SIDEREAL_RATE_DPS
+    // constexpr double tm = TRACKRATE_SIDEREAL;
     // Movement in arcseconds
     // Send async
     double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
@@ -1268,13 +1219,13 @@ void LFAST_Mount::TimerHit()
         {
             AltitudeAxis->updateTrackCommands(default_park_posn_alt);
             AzimuthAxis->updateTrackCommands(default_park_posn_az);
-            // SetParked(true);
             // LOG_DEBUG("Scope Parking");
         }
         else
         {
             AzimuthAxis->slowStop();
             AltitudeAxis->slowStop();
+            SetParked(true);
             // LOG_DEBUG("Scope Parked");
             TrackState = SCOPE_PARKED;
         }
