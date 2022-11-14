@@ -64,7 +64,7 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
     // Set up the basic configuration for the mount
     setVersion(0, 3);
     setTelescopeConnection(CONNECTION_TCP);
-    SetTelescopeCapability(SCOPE_CAPABILITIES, 4);
+    SetTelescopeCapability(SCOPE_CAPABILITIES, 9);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
@@ -150,11 +150,12 @@ bool LFAST_Mount::initProperties()
         SetAxis2ParkDefault(default_park_posn_alt);
     }
 
+    initGuiderProperties(getDeviceName(), MOTION_TAB);
+
     // How fast do we guide compared to sidereal rate
     GuideRateNP[AXIS_RA].fill("GUIDE_RATE_WE", "W/E Rate", "%.1f", 0, 1, 0.1, 0.5);
     GuideRateNP[AXIS_DE].fill("GUIDE_RATE_NS", "N/S Rate", "%.1f", 0, 1, 0.1, 0.5);
     GuideRateNP.fill(getDeviceName(), "GUIDE_RATE", "Guiding Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
-
 #if 0
     // Since we have 4 slew rates, let's fill them out
     SlewRateSP[SLEW_GUIDE].fill( "SLEW_GUIDE", "Guide", ISS_OFF);
@@ -216,7 +217,7 @@ bool LFAST_Mount::initProperties()
     TrackStateSP[SCOPE_PARKING].fill("STATE_PARKING", "PARKING", ISS_OFF);
     TrackStateSP[SCOPE_PARKED].fill("STATE_PARKED", "PARKED", ISS_OFF);
     TrackStateSP[SCOPE_IDLE].fill("STATE_INIT", "IDLE", ISS_ON);
-    TrackStateSP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MOTION_TAB, IP_RO, ISR_1OFMANY, 60, IPS_IDLE);
+    TrackStateSP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MAIN_CONTROL_TAB, IP_RO, ISR_1OFMANY, 60, IPS_IDLE);
 
     // IUFillSwitch(&AxisOneStateS[FULL_STOP], "FULL_STOP", "FULL_STOP", ISS_OFF);
     // IUFillSwitch(&AxisOneStateS[SLEWING], "SLEWING", "SLEWING", ISS_OFF);
@@ -251,15 +252,16 @@ bool LFAST_Mount::updateProperties()
         // Delete this to redfine later (basically moving it to the bottom)
         deleteProperty(AbortSP.name);
 
+        defineProperty(&TrackStateSP);
         defineProperty(&AzAltCoordsNP);
 
         defineProperty(&AbortSP);
 
-        defineProperty(&TrackStateSP);
         // defineProperty(&MountSlewRateSP);
         defineProperty(&GuideNSNP);
         defineProperty(&GuideWENP);
         defineProperty(&GuideRateNP);
+
         // defineProperty(&AxisOneStateSP);
     }
     else
@@ -363,8 +365,9 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
 {
-    double ra = m_SkyTrackingTarget.rightascension;
-    double dec = m_SkyTrackingTarget.declination;
+
+    double ra = m_SkyTrackingTarget.rightascension + m_SkyGuideOffset.rightascension;
+    double dec = m_SkyTrackingTarget.declination + m_SkyGuideOffset.declination;
     ALIGNMENT::TelescopeDirectionVector TDVCommand;
 
     INDI::IHorizontalCoordinates horizCoords{0, 0};
@@ -440,26 +443,30 @@ bool LFAST_Mount::SetSlewRate(int index)
 
     double mult = 1;
 
-    switch (index)
-    {
-    case SLEW_GUIDE:
-        raVal = GuideRateNP[AXIS_RA].getValue();
-        deVal = GuideRateNP[AXIS_DE].getValue();
-        LOGF_INFO("Guide Rate Updated. RA: %6.4f, Dec: %6.4f", raVal, deVal);
-        LOG_WARN("Guide rates not correctly transformed to az/el.");
-        mult = 1.0 + ((raVal + deVal) * 0.5); // Temporary placeholder
-        break;
-    case SLEW_CENTERING:
-        LOG_WARN("Slew centering not implemented");
-        break;
-    case SLEW_MAX:
-        mult = LFAST::slewspeeds[LFAST::NUM_SLEW_SPEEDS - 1];
-        break;
-    case SLEW_FIND:
-        mult = LFAST::slewspeeds[index];
-        break;
-    }
+    // switch (index)
+    // {
+    // case SLEW_GUIDE:
+    //     raVal = GuideRateNP[AXIS_RA].getValue();
+    //     deVal = GuideRateNP[AXIS_DE].getValue();
+    //     LOGF_INFO("Guide Rate Updated. RA: %6.4f, Dec: %6.4f", raVal, deVal);
+    //     LOG_WARN("Guide rates not correctly transformed to az/el.");
 
+    //     m_SkyGuideRate.declination = deVal;
+    //     m_SkyGuideRate.rightascension = raVal;
+
+    //     mult = ((raVal + deVal) * 0.5); // Temporary placeholder
+    //     break;
+    // case SLEW_CENTERING:
+    //     LOG_WARN("Slew centering not implemented");
+    //     break;
+    // case SLEW_MAX:
+    //     mult = LFAST::slewspeeds[LFAST::NUM_SLEW_SPEEDS - 1];
+    //     break;
+    // case SLEW_FIND:
+    //     mult = LFAST::slewspeeds[index];
+    //     break;
+    // }
+    mult = LFAST::slewspeeds[index];
     slewRateTmp = mult * SIDEREAL_RATE_DPS;
     azVal = slewRateTmp;
     altVal = slewRateTmp;
@@ -469,17 +476,17 @@ bool LFAST_Mount::SetSlewRate(int index)
     AltitudeAxis->updateSlewRate(altVal);
     return true;
 }
-
+#if 0
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha, double dec, double lat)
 {
 
-    LOG_INFO("=================");
-    LOGF_INFO("2HA: %6.4f", ha);
-    LOGF_INFO("2DEC: %6.4f", dec);
-    LOGF_INFO("2LAT: %6.4f", lat);
+    LOG_DEBUG("\n=================");
+    LOGF_DEBUG("RATES: 2HA: %6.4f", ha);
+    LOGF_DEBUG("RATES: 2DEC: %6.4f", dec);
+    LOGF_DEBUG("RATES: 2LAT: %6.4f", lat);
     // double ha_rad = hrs2rad(ha);
     // double cHA = rad2deg(std::cos(ha_rad));
     // double sHA = rad2deg(std::sin(ha_rad));
@@ -503,7 +510,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha,
 
     // double alt = atan2d(sALT, cALT);
     double alt = rad2deg(std::asin(deg2rad(sALT)));
-    LOGF_INFO("2ALT: %6.4f", alt);
+    LOGF_DEBUG("2ALT: %6.4f", alt);
 
     // Azimuth Angle
     double azY = -1.0 * sHA * cDEC;
@@ -513,7 +520,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha,
     double sAZ = azY / azDen;
 
     double az = rad2deg(std::atan2(deg2rad(sAZ), deg2rad(cAZ)));
-    LOGF_INFO("2AZ: %6.4f", az);
+    LOGF_DEBUG("2AZ: %6.4f", az);
 
     // double azAngle_deg = atan2d(azNum, azDen);
     // double cAZ = cosd(azAngle_deg);
@@ -548,28 +555,125 @@ INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha,
     vHz.azimuth = azRate_dps * -1;
     return vHz;
 }
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
+#endif
+INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric3()
 {
+
+    LOG_DEBUG("\n=================");
+
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
-    ALIGNMENT::TelescopeDirectionVector TDVCommand;
-    INDI::IHorizontalCoordinates altAzVel{0, 0};
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
-    double ha = lst - ra;
-    // The alignment subsystem has successfully transformed my coordinate
-    LOGF_INFO("ha: %6.4f", ha);
-    // LOGF_INFO("dec: %6.4f", dec);
-    // LOGF_INFO("lat1: %6.4f", LocationN[LOCATION_LATITUDE].value);
-    // LOGF_INFO("lat2: %6.4f", m_Location.latitude);
-    altAzVel = HorizontalRates_geocentric2(ha, dec, LocationN[LOCATION_LATITUDE].value);
+    double ha = hrs2rad(lst - ra);
+    LOGF_DEBUG("HA: %6.5f", rad2deg(ha));
 
-    return altAzVel;
+    double cHA = std::cos(ha);
+    double sHA = std::sin(ha);
+
+    double cDEC = std::cos(deg2rad(dec));
+    double sDEC = std::sin(deg2rad(dec));
+
+    double lat = deg2rad(LocationN[LOCATION_LATITUDE].value);
+    double cLAT = std::cos(lat);
+    double sLAT = std::sin(lat);
+
+    double alt = deg2rad(m_MountAltAz.altitude);
+    LOGF_DEBUG("ALT: %6.5f", rad2deg(alt));
+    double sALT = std::sin(alt);
+    double cALT = std::cos(alt);
+
+    double az = deg2rad(m_MountAltAz.azimuth);
+    LOGF_DEBUG("AZ: %6.5f", rad2deg(az));
+    double sAZ = std::sin(az);
+    double cAZ = std::cos(az);
+
+    double sPAR = sHA * cLAT / cALT;
+    double PAR = std::asin(sPAR);
+    LOGF_DEBUG("PAR: %6.5f", rad2deg(PAR));
+    double cPAR = std::cos(PAR);
+
+    double sum = PAR + ha + M_PI_2 - az;
+    LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
+    // LOGF_DEBUG("ANGLE SUM (rad): %6.4f",(sum));
+
+    double azRate_dps = LFAST::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
+    double altRate_dps = LFAST::SiderealRate_degpersec * (cDEC * cPAR / cALT + 0.0);
+
+    INDI::IHorizontalCoordinates vHz{0, 0};
+    vHz.altitude = altRate_dps;
+    vHz.azimuth = azRate_dps;
+    return vHz;
 }
+// //////////////////////////////////////////////////////////////////////////////////////////////////
+// /// Tracking Rates V0
+// //////////////////////////////////////////////////////////////////////////////////////////////////
+INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
+{
+
+    ALIGNMENT::TelescopeDirectionVector TDVCommand;
+    INDI::IHorizontalCoordinates hzTrackRates{0, 0};
+
+    hzTrackRates = HorizontalRates_geocentric3();
+    LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
+
+    return hzTrackRates;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+/// Tracking Rates V1
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
+// {
+//     double ra = m_SkyTrackingTarget.rightascension;
+//     double dec = m_SkyTrackingTarget.declination;
+//     ALIGNMENT::TelescopeDirectionVector TDVCommand;
+//     INDI::IHorizontalCoordinates hzTrackRates{0, 0};
+
+//     //  INDI::IEquatorialCoordinates eqTrackRates{0,0};
+//     //  eqTrackRates.rightascension = SIDEREAL_RATE_DPS;
+
+//     if (TransformCelestialToTelescope(SIDEREAL_RATE_DPS, 0.0, 0.0, TDVCommand))
+//     {
+//         // LOG_INFO("RATE CMD TRANSFORM GOOD");
+
+//         // The alignment subsystem has successfully transformed my coordinate
+//         AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, hzTrackRates);
+//     }
+//     else
+//     {
+//         // The alignment subsystem cannot transform the coordinate.
+//         // Try some simple rotations using the stored observatory position if any
+//         // LOG_INFO("RATE CMD TRANSFORM BAD");
+//         INDI::IEquatorialCoordinates EquatorialCoordinates{0, 0};
+//         EquatorialCoordinates.rightascension = SIDEREAL_RATE_DPS;
+//         EquatorialCoordinates.declination = 0.0;
+//         INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys(), &hzTrackRates);
+//         TDVCommand = TelescopeDirectionVectorFromAltitudeAzimuth(hzTrackRates);
+
+//         switch (GetApproximateMountAlignment())
+//         {
+//         case ALIGNMENT::ZENITH:
+//             break;
+
+//         case ALIGNMENT::NORTH_CELESTIAL_POLE:
+//             // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 minus
+//             // the (positive)observatory latitude. The vector itself is rotated anticlockwise
+//             // TDVCommand.RotateAroundY(m_Location.latitude - 90.0);
+//             break;
+
+//         case ALIGNMENT::SOUTH_CELESTIAL_POLE:
+//             // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 plus
+//             // the (negative)observatory latitude. The vector itself is rotated clockwise
+//             // TDVCommand.RotateAroundY(m_Location.latitude + 90.0);
+//             break;
+//         }
+//         AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, hzTrackRates);
+//     }
+
+//     LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
+//     return hzTrackRates;
+// }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -654,10 +758,6 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     // Guiding Rate
     if (GuideRateNP.isNameMatch(name))
     {
-        // for (int ii = 0; ii < n; ii++)
-        // {
-        //     LOGF_INFO("[%d] %6.4f", ii, values[ii]);
-        // }
         IUUpdateNumber(&GuideRateNP, values, names, n);
         GuideRateNP.setState(IPS_OK);
         IDSetNumber(&GuideRateNP, nullptr);
@@ -769,23 +869,34 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Sync(double ra, double dec)
 {
-
-    ALIGNMENT::AlignmentDatabaseEntry NewEntry;
-
     double azFb, altFb;
     azFb = AzimuthAxis->getPositionFeedback();
     altFb = AltitudeAxis->getPositionFeedback();
     m_MountAltAz.azimuth = azFb;
     m_MountAltAz.altitude = altFb;
 
+    // INDI::IHorizontalCoordinates newAltAz{0, 0};
+    // INDI::IEquatorialCoordinates syncRaDec{0, 0};
+    // syncRaDec.declination = dec;
+    // syncRaDec.rightascension = ra;
+    // INDI::EquatorialToHorizontal(&syncRaDec, &m_Location, ln_get_julian_from_sys(), &newAltAz);
+    // AltitudeAxis->syncPosition(newAltAz.altitude);
+    // AzimuthAxis->syncPosition(newAltAz.azimuth);
+
+    // Syncing is treated specially when the telescope position is known in park position to spare
+    // "a huge-jump point" in the alignment model.
+    if (isParked())
+    {
+        // GetAlignmentDatabase().clear();
+        return false;
+    }
+
+    ALIGNMENT::AlignmentDatabaseEntry NewEntry;
     NewEntry.ObservationJulianDate = ln_get_julian_from_sys();
     NewEntry.RightAscension = ra;
     NewEntry.Declination = dec;
     NewEntry.TelescopeDirection = TelescopeDirectionVectorFromAltitudeAzimuth(m_MountAltAz);
     NewEntry.PrivateDataSize = 0;
-
-    AltitudeAxis->syncPosition(altFb);
-    AzimuthAxis->syncPosition(azFb);
 
     if (!CheckForDuplicateSyncPoint(NewEntry))
     {
@@ -913,21 +1024,6 @@ bool LFAST_Mount::ReadScopeStatus()
             }
         }
     }
-    // else if (TrackState == SCOPE_PARKING)
-    // {
-    //     if (!AzimuthAxis->isSlewComplete() && !AltitudeAxis->isSlewComplete())
-    //     {
-    //         AzimuthAxis->slowStop();
-    //         AltitudeAxis->slowStop();
-    //         // SetParked(true);
-    //         // LOG_DEBUG("Scope Parking");
-    //     }
-    //     else
-    //     {
-    //         // LOG_DEBUG("Scope Parked");
-    //         // TrackState = SCOPE_PARKED;
-    //     }
-    // }
 
     return true;
 }
@@ -1033,15 +1129,21 @@ IPState LFAST_Mount::GuideWest(uint32_t ms)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 IPState LFAST_Mount::GuideNS(int32_t ms)
 {
+    LOG_DEBUG("LFAST_Mount::GuideNS");
     if (TrackState == SCOPE_PARKED)
     {
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-
+// SIDEREAL_RATE_DPS
+// constexpr double tm = TRACKRATE_SIDEREAL;
     // Movement in arcseconds
     // Send async
-    // double dDec = GuideRateN[LFAST::DEC_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
+    double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    // double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+
+    m_SkyGuideOffset.declination += dDec;
+    // m_SkyGuideOffset.rightascension += dRA;
     // LFAST::MessageGenerator guideNSDataMessage("MountMessage");
     // guideNSDataMessage.addArgument("dRA", 0.0);
     // guideNSDataMessage.addArgument("dDEC", dDec);
@@ -1059,12 +1161,18 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 IPState LFAST_Mount::GuideWE(int32_t ms)
 {
+    LOG_DEBUG("LFAST_Mount::GuideWE");
     if (TrackState == SCOPE_PARKED)
     {
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
 
+    // double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+
+    // m_SkyGuideOffset.declination += dDec;
+    m_SkyGuideOffset.rightascension += dRA;
     // Movement in arcseconds
     // Send async
     // double dRA = GuideRateN[LFAST::RA_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
@@ -1149,6 +1257,9 @@ void LFAST_Mount::TimerHit()
 
         AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
         AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
+
+        // AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
+        // AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
         // printSlewDriveStates();
         // LOGF_INFO("ALT/AZ Rate Commands: %10.8f, %10.8f",altAzRates.altitude, altAzRates.azimuth );
         break;
@@ -1560,7 +1671,17 @@ void LFAST_Mount::updateSim()
     dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
     ltv = tv;
     // LOGF_INFO("dt: %6.4f", dt);
-    AltitudeAxis->simulate(dt);
-    AzimuthAxis->simulate(dt);
+    // if (TrackState == SCOPE_TRACKING)
+    // {
+    //     AltitudeAxis->simulate(dt, RATE_CONTROL);
+    //     AzimuthAxis->simulate(dt, RATE_CONTROL);
+    // }
+    // else
+    // {
+    //     AltitudeAxis->simulate(dt, POSITION_CONTROL);
+    //     AzimuthAxis->simulate(dt, POSITION_CONTROL);
+    // }
+    AltitudeAxis->simulate(dt, POSITION_CONTROL);
+    AzimuthAxis->simulate(dt, POSITION_CONTROL);
 #endif
 }

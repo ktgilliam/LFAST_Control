@@ -91,10 +91,10 @@ void SlewDrive::enable()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #if SIM_MODE_ENABLED
 
-void SlewDrive::simulate(double dt)
+void SlewDrive::simulate(double dt, ControlMode_t mode)
 {
     const double kp = 1.0;
-    // rateFeedback_dps = rateCommand_dps;
+    rateFeedback_dps = rateCommandOffset_dps;
 
     double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
@@ -105,9 +105,20 @@ void SlewDrive::simulate(double dt)
 
     rateRef_dps = posnError * kp;
     // rateRef_dps = 0;
-    double combinedRateCmd_dps = saturate(rateRef_dps + rateCommandOffset_dps, -1 * rateLim, rateLim);
 
-    double combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1*SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
+    double combinedRateCmd_dps{0};
+
+    if (mode == POSITION_CONTROL)
+    {
+        combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim);
+        // combinedRateCmd_dps = saturate(rateRef_dps + rateCommandOffset_dps, -1 * rateLim, rateLim);
+    }
+    else if (mode == RATE_CONTROL)
+    {
+        combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
+    }
+
+    double combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
 
     rateFeedback_dps = combinedRateCmd_dps;
     double deltaPos = rateFeedback_dps * dt;

@@ -26,7 +26,7 @@
 #endif
 
 constexpr double INV_PI    = 1/M_PI; //0.31830988618379067153776752674502
-constexpr double INV_2_PI  = 1/M_2_PI; //0.15915494309189533576888376337251
+constexpr double INV_2_PI  = 0.5/M_PI; //0.15915494309189533576888376337251
 constexpr double INV_180 = 1/180.0; //0.00555555555555555555555555555556
 constexpr double INV_360  =  1/360.0; //0.00277777777777777777777777777778
 constexpr double INV_3600  = 1/3600.0; //0.00027777777777777777777777777778
@@ -69,7 +69,7 @@ inline int sign(T val)
 template <typename T>
 inline double hrs2rad(T val)
 {
-    constexpr double mult = M_2_PI * INV_24;
+    constexpr double mult = 2*M_PI * INV_24;
     return val * mult;
 }
 

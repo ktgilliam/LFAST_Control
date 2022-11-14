@@ -133,8 +133,11 @@ private:
 
     // Tracking
     INDI::IEquatorialCoordinates m_SkyTrackingTarget{0, 0};
+    INDI::IEquatorialCoordinates m_SkyGuideOffset{0, 0};
     INDI::IEquatorialCoordinates m_SkyCurrentRADE{0, 0};
     INDI::IHorizontalCoordinates m_MountAltAz{0, 0};
+
+    INDI::IEquatorialCoordinates m_SkyGuideRate{0, 0};
 
     // Tracing in timer tick
     int TraceThisTickCount{0};
@@ -183,7 +186,7 @@ private:
     INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
     bool updatePointingCoordinates(double alt, double az);
     void printSlewDriveStates();
-    INDI::IHorizontalCoordinates HorizontalRates_geocentric2(double ha, double dec, double lat);
+    INDI::IHorizontalCoordinates HorizontalRates_geocentric3();
     double GetSlewRate();
     void updateSim();
 };
