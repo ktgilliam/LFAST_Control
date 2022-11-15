@@ -24,6 +24,7 @@ SlewDrive::SlewDrive(const char *label)
     rateCommandOffset_dps = 0.0;
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
+    combinedRateCmdSaturated_dps = 0.0;
     rateLim = MAX_RATE_CMD;
 }
 
@@ -85,13 +86,11 @@ void SlewDrive::enable()
 {
     isEnabled = true;
 }
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#if SIM_MODE_ENABLED
 
-void SlewDrive::simulate(double dt, ControlMode_t mode)
+void SlewDrive::generateCommands(double dt, ControlMode_t mode)
 {
     const double kp = 1.0;
  
@@ -119,8 +118,16 @@ void SlewDrive::simulate(double dt, ControlMode_t mode)
         // combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
     }
 
-    double combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
+    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);    
+}
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+#if SIM_MODE_ENABLED
+
+void SlewDrive::simulate(double dt, ControlMode_t mode)
+{
     rateFeedback_dps = combinedRateCmdSaturated_dps;
     double deltaPos = rateFeedback_dps * dt;
 

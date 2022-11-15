@@ -179,7 +179,7 @@ private:
     INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
     bool updatePointingCoordinates();
     void printSlewDriveStates();
-    INDI::IHorizontalCoordinates HorizontalRates_geocentric3();
+    INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
     void updateSim();
 };

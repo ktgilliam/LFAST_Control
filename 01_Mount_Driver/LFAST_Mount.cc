@@ -22,7 +22,8 @@
 #include <exception>
 
 #include "slew_drive.h"
-#include "../00_Utils/astro_math.h"
+#include "../00_Utils/math_util.h"
+#include "lfast_constants.h"
 
 #define PRINT_DEBUG_STUFF 1
 
@@ -437,31 +438,8 @@ bool LFAST_Mount::SetSlewRate(int index)
 
     double mult = 1;
 
-    // switch (index)
-    // {
-    // case SLEW_GUIDE:
-    //     raVal = GuideRateNP[AXIS_RA].getValue();
-    //     deVal = GuideRateNP[AXIS_DE].getValue();
-    //     LOGF_INFO("Guide Rate Updated. RA: %6.4f, Dec: %6.4f", raVal, deVal);
-    //     LOG_WARN("Guide rates not correctly transformed to az/el.");
-
-    //     m_SkyGuideRate.declination = deVal;
-    //     m_SkyGuideRate.rightascension = raVal;
-
-    //     mult = ((raVal + deVal) * 0.5); // Temporary placeholder
-    //     break;
-    // case SLEW_CENTERING:
-    //     LOG_WARN("Slew centering not implemented");
-    //     break;
-    // case SLEW_MAX:
-    //     mult = LFAST::slewspeeds[LFAST::NUM_SLEW_SPEEDS - 1];
-    //     break;
-    // case SLEW_FIND:
-    //     mult = LFAST::slewspeeds[index];
-    //     break;
-    // }
     mult = LFAST::slewspeeds[index];
-    slewRateTmp = mult * SIDEREAL_RATE_DPS;
+    slewRateTmp = mult * LFAST_CONSTANTS::SiderealRate_degpersec;
     azVal = slewRateTmp;
     altVal = slewRateTmp;
 
@@ -470,91 +448,10 @@ bool LFAST_Mount::SetSlewRate(int index)
     AltitudeAxis->updateSlewRate(altVal);
     return true;
 }
-#if 0
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha, double dec, double lat)
+
+INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
-
     LOG_DEBUG("\n=================");
-    LOGF_DEBUG("RATES: 2HA: %6.4f", ha);
-    LOGF_DEBUG("RATES: 2DEC: %6.4f", dec);
-    LOGF_DEBUG("RATES: 2LAT: %6.4f", lat);
-    // double ha_rad = hrs2rad(ha);
-    // double cHA = rad2deg(std::cos(ha_rad));
-    // double sHA = rad2deg(std::sin(ha_rad));
-
-    double cHA = std::cos(deg2rad(ha));
-    double sHA = std::sin(deg2rad(ha));
-
-    double cDEC = std::cos(deg2rad(dec));
-    double sDEC = std::sin(deg2rad(dec));
-    double cLAT = std::cos(deg2rad(lat));
-    double sLAT = std::sin(deg2rad(lat));
-
-    //
-    // Angular Positions
-    //
-    // Altitude Angle
-    double altTerm1 = sDEC * sLAT;
-    double altTerm2 = cDEC * cLAT * cHA;
-    double sALT = altTerm1 + altTerm2;
-    double cALT = std::sqrt(1 - sALT * sALT);
-
-    // double alt = atan2d(sALT, cALT);
-    double alt = rad2deg(std::asin(deg2rad(sALT)));
-    LOGF_DEBUG("2ALT: %6.4f", alt);
-
-    // Azimuth Angle
-    double azY = -1.0 * sHA * cDEC;
-    double azX = sDEC * cLAT - cDEC * sLAT * cHA;
-    double azDen = (azY * azY) + (azX * azX);
-    double cAZ = azX / azDen;
-    double sAZ = azY / azDen;
-
-    double az = rad2deg(std::atan2(deg2rad(sAZ), deg2rad(cAZ)));
-    LOGF_DEBUG("2AZ: %6.4f", az);
-
-    // double azAngle_deg = atan2d(azNum, azDen);
-    // double cAZ = cosd(azAngle_deg);
-
-    // Parallactic Angle
-    double parY = sHA * cLAT;
-    double parX = sLAT * cDEC - sDEC * cLAT * cHA;
-    double parDen = (parY * parY) + (parX * parX);
-    double cPAR = parX / parDen;
-    double sPAR = parY / parDen;
-
-    //
-    // Angular Rates
-    // Note: For now disregarding non-sidereal targets (proper motion terms are ignored).
-
-    // Altitude Rate
-    double altArg1 = cLAT * sAZ;
-    // double altArg2 = (proper motion derivative of non-sidereal target);
-    double altRate_dps = LFAST::SiderealRate_degpersec * altArg1;
-
-    // Azimuth Rate
-    double azArg1 = cDEC * cPAR / cALT;
-    // double azArg2 = (proper motion derivative of non-sidereal target);
-    double azRate_dps = LFAST::SiderealRate_degpersec * azArg1;
-
-    // // Parallactic Rate
-    // double parArg1 = -1.0 * cLAT * cAZ / cALT;
-    // // double parArg2 = (proper motion derivative of non-sidereal target);
-    // azRate_radpersec = LFAST::SiderealRate_degpersec * parArg1;
-    INDI::IHorizontalCoordinates vHz{0, 0};
-    vHz.altitude = altRate_dps;
-    vHz.azimuth = azRate_dps * -1;
-    return vHz;
-}
-#endif
-INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric3()
-{
-
-    LOG_DEBUG("\n=================");
-
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
 
@@ -591,8 +488,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric3()
     LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
     // LOGF_DEBUG("ANGLE SUM (rad): %6.4f",(sum));
 
-    double azRate_dps = LFAST::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
-    double altRate_dps = LFAST::SiderealRate_degpersec * (cDEC * cPAR / cALT + 0.0);
+    double azRate_dps = LFAST_CONSTANTS::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
+    double altRate_dps = LFAST_CONSTANTS::SiderealRate_degpersec * (cDEC * cPAR / cALT + 0.0);
 
     INDI::IHorizontalCoordinates vHz{0, 0};
     vHz.altitude = altRate_dps;
@@ -608,7 +505,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
     ALIGNMENT::TelescopeDirectionVector TDVCommand;
     INDI::IHorizontalCoordinates hzTrackRates{0, 0};
 
-    hzTrackRates = HorizontalRates_geocentric3();
+    hzTrackRates = getHorizontalRates();
     // LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
 
     return hzTrackRates;
@@ -1082,12 +979,12 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-    // SIDEREAL_RATE_DPS
+    // LFAST_CONSTANTS::SiderealRate_degpersec
     // constexpr double tm = TRACKRATE_SIDEREAL;
     // Movement in arcseconds
     // Send async
-    double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
-    // double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
+    // double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
 
     m_SkyGuideOffset.declination += dDec;
     // m_SkyGuideOffset.rightascension += dRA;
@@ -1115,8 +1012,8 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
         return IPS_ALERT;
     }
 
-    // double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
-    double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    // double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
+    double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
 
     // m_SkyGuideOffset.declination += dDec;
     m_SkyGuideOffset.rightascension += dRA;

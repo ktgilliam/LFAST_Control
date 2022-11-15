@@ -5,7 +5,7 @@
 #include <cmath>
 
 #define SLEW_COMPLETE_THRESH 0.0005
-#define SIDEREAL_RATE_DPS 0.004166667
+// #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
 
 typedef enum
@@ -25,6 +25,7 @@ private:
     double rateFeedback_dps;
     double rateCommandOffset_dps;
     double rateRef_dps;
+    double combinedRateCmdSaturated_dps;
     bool isEnabled;
     double rateLim;
 
@@ -49,6 +50,7 @@ public:
     void updateRateOffset(double rate);
     void updateSlewRate(double slewRate);
     const char *getModeString();
+    void generateCommands(double dt, ControlMode_t mode);
 #if SIM_MODE_ENABLED
     void simulate(double dt, ControlMode_t mode);
 #endif
