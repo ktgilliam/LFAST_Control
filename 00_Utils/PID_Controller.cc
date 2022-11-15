@@ -1,5 +1,6 @@
 #include "PID_Controller.h"
 #include "math_util.h"
+#include "df2_filter.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -9,7 +10,8 @@ PID_Controller::PID_Controller(double _kp, double _ki, double _kd) : Kp(_kp),
                                                                      Kd(_kd),
                                                                      limit_integrator(false),
                                                                      limit_output(false),
-                                                                     outputSaturatedFlag(false)
+                                                                     outputSaturatedFlag(false),
+                                                                     prevE(0)
 {
     configureCompMode();
 }
@@ -97,15 +99,25 @@ void PID_Controller::update(double e, double dt, double *uC)
 
     if (compensationMode & DIGITAL_CONTROL::I_BIT)
     {
-        integratorState += e * Ki;
+        integratorState += e * Ki * dt;
         if (limit_integrator)
             int_term = saturate(integratorState, integrator_limits.llim, integrator_limits.ulim);
         else
             int_term = integratorState;
     }
 
-    // if (compensationMode & DIGITAL_CONTROL::D_BIT)
-    //     diff_term = e * Kd;
+    static bool firstTime = true;
+    if (compensationMode & DIGITAL_CONTROL::D_BIT)
+    {
+        double diff = 0;
+        if (!firstTime)
+        {
+            diff = e-prevE;
+        }
+        prevE = e;
+        firstTime = false;
+        diff_term = diff * Kd;
+    }
 
     *uC = 0.0;
 }

@@ -50,7 +50,7 @@ private:
     double Kd;
 
     double integratorState;
-    
+    double prevE;
     bool outputSaturatedFlag;
 
     struct limits integrator_limits
