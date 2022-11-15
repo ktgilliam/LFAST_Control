@@ -94,7 +94,7 @@ void SlewDrive::enable()
 void SlewDrive::simulate(double dt, ControlMode_t mode)
 {
     const double kp = 1.0;
-    rateFeedback_dps = rateCommandOffset_dps;
+ 
 
     double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
@@ -105,22 +105,23 @@ void SlewDrive::simulate(double dt, ControlMode_t mode)
 
     rateRef_dps = posnError * kp;
     // rateRef_dps = 0;
+   rateFeedback_dps = rateCommandOffset_dps+rateRef_dps;
 
     double combinedRateCmd_dps{0};
 
     if (mode == POSITION_CONTROL)
     {
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim);
-        // combinedRateCmd_dps = saturate(rateRef_dps + rateCommandOffset_dps, -1 * rateLim, rateLim);
     }
     else if (mode == RATE_CONTROL)
     {
-        combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
+        combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandOffset_dps;
+        // combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
     }
 
     double combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
 
-    rateFeedback_dps = combinedRateCmd_dps;
+    rateFeedback_dps = combinedRateCmdSaturated_dps;
     double deltaPos = rateFeedback_dps * dt;
 
     if ((std::abs(deltaPos) <= SLEW_COMPLETE_THRESH) && std::abs(rateCommandOffset_dps) == 0.0)

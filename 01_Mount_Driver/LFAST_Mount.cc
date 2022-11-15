@@ -15,6 +15,7 @@
 
 #include "indicom.h"
 #include "alignment/DriverCommon.h"
+#include "config.h"
 
 #include <libnova/julian_day.h>
 #include <memory>
@@ -62,7 +63,7 @@ const char altLabel[] = "Alt. Axis";
 LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
     // Set up the basic configuration for the mount
-    setVersion(0, 4);
+    setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
     setTelescopeConnection(CONNECTION_TCP);
     SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST::NUM_SLEW_SPEEDS);
 
@@ -608,7 +609,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
     INDI::IHorizontalCoordinates hzTrackRates{0, 0};
 
     hzTrackRates = HorizontalRates_geocentric3();
-    LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
+    // LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
 
     return hzTrackRates;
 }
@@ -910,18 +911,6 @@ bool LFAST_Mount::updateLocation(double latitude, double longitude, double eleva
 bool LFAST_Mount::ReadScopeStatus()
 {
     LOG_DEBUG("LFAST_Mount::ReadScopeStatus");
-    double azPosnFb, altPosnFb, azRateFb, altRateFb;
-    try
-    {
-        azPosnFb = AzimuthAxis->getPositionFeedback();
-        altPosnFb = AltitudeAxis->getPositionFeedback();
-        azRateFb = AzimuthAxis->getVelocityFeedback();
-        altRateFb = AltitudeAxis->getVelocityFeedback();
-    }
-    catch (const std::exception &e)
-    {
-        LOG_ERROR(e.what());
-    }
 
     // Update the state switch
     int stateIndex = IUFindOnSwitchIndex(&TrackStateSP);
@@ -930,13 +919,9 @@ bool LFAST_Mount::ReadScopeStatus()
     IDSetSwitch(&TrackStateSP, nullptr);
 
     // Calculate new RA DEC
-    if (updatePointingCoordinates(altPosnFb, azPosnFb))
+    if (updatePointingCoordinates())
     {
-        NewRaDec(m_SkyCurrentRADE.rightascension, m_SkyCurrentRADE.declination);
-        AzAltCoordsNP[AXIS_AZ].setValue(m_MountAltAz.azimuth);
-        AzAltCoordsNP[AXIS_ALT].setValue(m_MountAltAz.altitude);
-        AzAltCoordsNP[AXIS_AZ_VEL].setValue(azRateFb);
-        AzAltCoordsNP[AXIS_ALT_VEL].setValue(altRateFb);
+
         AzAltCoordsNP.apply();
     }
 
@@ -973,12 +958,26 @@ bool LFAST_Mount::ReadScopeStatus()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-bool LFAST_Mount::updatePointingCoordinates(double alt, double az)
+bool LFAST_Mount::updatePointingCoordinates()
 {
     LOG_DEBUG("LFAST_Mount::updatePointingCoordinates");
     bool successFlag = true;
-    m_MountAltAz.altitude = alt;
-    m_MountAltAz.azimuth = az;
+    double azPosnFb, altPosnFb, azRateFb, altRateFb;
+    try
+    {
+        azPosnFb = AzimuthAxis->getPositionFeedback();
+        altPosnFb = AltitudeAxis->getPositionFeedback();
+        azRateFb = AzimuthAxis->getVelocityFeedback();
+        altRateFb = AltitudeAxis->getVelocityFeedback();
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR(e.what());
+    }
+
+    m_MountAltAz.altitude = altPosnFb;
+    m_MountAltAz.azimuth = azPosnFb;
+
     // LOGF_INFO("updateEquatorialCoordinates: ALT=%6.4f, AZ=%6.4f", alt, az)
     ALIGNMENT::TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(m_MountAltAz);
     // LOGF_DEBUG("TDV x %lf y %lf z %lf", TDV.x, TDV.y, TDV.z);
@@ -1030,6 +1029,12 @@ bool LFAST_Mount::updatePointingCoordinates(double alt, double az)
 
     m_SkyCurrentRADE.rightascension = RightAscension;
     m_SkyCurrentRADE.declination = Declination;
+    NewRaDec(m_SkyCurrentRADE.rightascension, m_SkyCurrentRADE.declination);
+
+    AzAltCoordsNP[AXIS_AZ].setValue(m_MountAltAz.azimuth);
+    AzAltCoordsNP[AXIS_ALT].setValue(m_MountAltAz.altitude);
+    AzAltCoordsNP[AXIS_AZ_VEL].setValue(azRateFb);
+    AzAltCoordsNP[AXIS_ALT_VEL].setValue(altRateFb);
 
     return successFlag;
 }
@@ -1172,7 +1177,6 @@ void LFAST_Mount::TimerHit()
         TraceThisTickCount = 0;
     }
 
-
     std::string stateStr = {0};
     INDI::IHorizontalCoordinates altAzPosn{0, 0};
     INDI::IHorizontalCoordinates altAzRates{0, 0};
@@ -1203,7 +1207,7 @@ void LFAST_Mount::TimerHit()
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
-        // altAzRates = getTrackingTargetAltAzRates();
+        altAzRates = getTrackingTargetAltAzRates();
         AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
         AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
         break;
@@ -1618,17 +1622,17 @@ void LFAST_Mount::updateSim()
     dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
     ltv = tv;
     // LOGF_INFO("dt: %6.4f", dt);
-    // if (TrackState == SCOPE_TRACKING)
-    // {
-    //     AltitudeAxis->simulate(dt, RATE_CONTROL);
-    //     AzimuthAxis->simulate(dt, RATE_CONTROL);
-    // }
-    // else
-    // {
-    //     AltitudeAxis->simulate(dt, POSITION_CONTROL);
-    //     AzimuthAxis->simulate(dt, POSITION_CONTROL);
-    // }
-    AltitudeAxis->simulate(dt, POSITION_CONTROL);
-    AzimuthAxis->simulate(dt, POSITION_CONTROL);
+    if (TrackState == SCOPE_TRACKING)
+    {
+        AltitudeAxis->simulate(dt, RATE_CONTROL);
+        AzimuthAxis->simulate(dt, RATE_CONTROL);
+    }
+    else
+    {
+        AltitudeAxis->simulate(dt, POSITION_CONTROL);
+        AzimuthAxis->simulate(dt, POSITION_CONTROL);
+    }
+    // AltitudeAxis->simulate(dt, POSITION_CONTROL);
+    // AzimuthAxis->simulate(dt, POSITION_CONTROL);
 #endif
 }
