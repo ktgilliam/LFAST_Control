@@ -13,7 +13,7 @@
 #define MULT 1
 constexpr double MAX_RATE_CMD = 0.25 * MULT;
 constexpr double MIN_RATE_CMD = -0.25 * MULT;
-double SLEW_DRIVE_MAX_SPEED_DPS = 500;
+double FAKE_SLEW_DRIVE_MAX_SPEED_DPS = 500;
 
 namespace lfc = LFAST_CONSTANTS;
 
@@ -46,10 +46,6 @@ SlewDrive::SlewDrive(const char *label)
             DIGITAL_CONTROL::lpf_3_a,
             2));
 #endif
-    //  driveModelPtr = new DF2_IIR<double>(
-    //         DIGITAL_CONTROL::lpf_30_b,
-    //          DIGITAL_CONTROL::lpf_30_a,
-    //          2);
 
     updateSlewRate(MAX_RATE_CMD);
     pid->reset();
@@ -99,7 +95,7 @@ bool SlewDrive::isSlewComplete()
     {
         posnError -= 360.0 * errSign;
     }
-    bool isComplete = (std::abs(posnError) <= SLEW_COMPLETE_THRESH_POSN ) &&
+    bool isComplete = (std::abs(posnError) <= SLEW_COMPLETE_THRESH_POSN) &&
                       (std::abs(combinedRateCmdSaturated_dps) < SLEW_COMPLETE_THRESH_RATE);
     return isComplete;
 }
@@ -162,8 +158,11 @@ void SlewDrive::updateControl(double dt, ControlMode_t mode)
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandOffset_dps;
         // combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
     }
-
+#if SIM_MODE_ENABLED
+    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * FAKE_SLEW_DRIVE_MAX_SPEED_DPS, FAKE_SLEW_DRIVE_MAX_SPEED_DPS);
+#else
     combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
