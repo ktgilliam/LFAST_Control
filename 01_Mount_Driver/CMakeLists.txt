@@ -20,7 +20,8 @@ add_executable(LFAST_Mount LFAST_Mount.cc slew_drive.cc)
 target_link_libraries(LFAST_Mount   
 			 ${INDI_LIBRARIES}
 			 ${NOVA_LIBRARIES} 
-			 PID_Controller )
+			 PID_Controller 
+			 )
 
 			#  lfast_comms)
 			add_compile_definitions(SIM_MODE_ENABLED=1)

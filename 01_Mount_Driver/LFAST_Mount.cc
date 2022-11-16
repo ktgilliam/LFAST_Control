@@ -199,6 +199,7 @@ bool LFAST_Mount::initProperties()
     // NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
     // NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
 
+    // modbusCommPortTP{1};
     // defineProperty(&NtpServerTP);
 
     AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);

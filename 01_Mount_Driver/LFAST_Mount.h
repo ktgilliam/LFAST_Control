@@ -141,6 +141,7 @@ private:
 
     // static constexpr const char *DetailedMountInfoPage { "Detailed Mount Information" };
 
+    INDI::PropertyText modbusCommPortTP{1};
     // INDI::PropertyText NtpServerTP{1};
     INDI::PropertyNumber AzAltCoordsNP{4};
     // INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
