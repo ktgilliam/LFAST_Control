@@ -24,12 +24,17 @@ namespace LFAST_CONSTANTS
     const unsigned int GEAR_BOX_RATIO = 60;
     const unsigned int SLEW_DRIVE_RATIO = 100;
     constexpr unsigned int TOTAL_GEAR_RATIO = GEAR_BOX_RATIO * SLEW_DRIVE_RATIO;
-    constexpr double INV_TOTAL_GEAR_RATIO = 1.0/(double)TOTAL_GEAR_RATIO;
+    constexpr double INV_TOTAL_GEAR_RATIO = 1.0 / (double)TOTAL_GEAR_RATIO;
 
-
-    constexpr double MOTOR_MAX_SPEED_DPS = 3000*6; // 1 RPM = 6deg/s 
-    const double DERATE_RATIO = 0.5;
+    constexpr double MOTOR_MAX_SPEED_DPS = 3000 * 6; // 1 RPM = 6deg/s
+    constexpr double DERATE_RATIO = 0.5;
     constexpr double SLEW_DRIVE_MAX_SPEED_DPS = MOTOR_MAX_SPEED_DPS * INV_TOTAL_GEAR_RATIO * DERATE_RATIO;
+
+    const double slewspeeds[] = {16.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+    constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
+    constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
+
+     constexpr double max_slew = SLEW_DRIVE_MAX_SPEED_DPS/ SiderealRate_degpersec;
 }
 
 // INDI::IHorizontalCoordinates HorizontalRates_geocentric(double ha, double dec, double lat);

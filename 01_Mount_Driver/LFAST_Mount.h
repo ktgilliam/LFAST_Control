@@ -14,9 +14,7 @@
 // #include "indielapsedtimer.h"
 namespace LFAST
 {
-    const double slewspeeds[] = {16.0, 32.0, 64.0, 128.0, 256.0, 512.0};
-    constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
-    constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
+
     // const double slewspeeds[] = {32.0, 64.0, 128.0, 256.0, 512.0};
     // constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
     // static constexpr double FAST_SLEW_DEFAULT_DPS = SIDEREAL_RATE_DPS * DEFAULT_SLEW_MULT;

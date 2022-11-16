@@ -66,7 +66,7 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
     // Set up the basic configuration for the mount
     setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
     setTelescopeConnection(CONNECTION_TCP);
-    SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST::NUM_SLEW_SPEEDS);
+    SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST_CONSTANTS::NUM_SLEW_SPEEDS);
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
@@ -157,6 +157,7 @@ bool LFAST_Mount::initProperties()
     GuideRateNP[AXIS_RA].fill("GUIDE_RATE_WE", "W/E Rate", "%.1f", 0, 1, 0.1, 0.5);
     GuideRateNP[AXIS_DE].fill("GUIDE_RATE_NS", "N/S Rate", "%.1f", 0, 1, 0.1, 0.5);
     GuideRateNP.fill(getDeviceName(), "GUIDE_RATE", "Guiding Rate", MOTION_TAB, IP_RW, 0, IPS_IDLE);
+
 #if 0
     // Since we have 4 slew rates, let's fill them out
     SlewRateSP[SLEW_GUIDE].fill( "SLEW_GUIDE", "Guide", ISS_OFF);
@@ -165,6 +166,17 @@ bool LFAST_Mount::initProperties()
     SlewRateSP[SLEW_MAX].fill( "SLEW_MAX", "Max", ISS_ON);
     SlewRateSP.fill(getDeviceName(), "TELESCOPE_SLEW_RATE", "Slew Rate", MOTION_TAB, IP_RW, ISR_1OFMANY, 0, IPS_IDLE);
 #endif
+
+    // Create and update slew rates
+    for (int i = 0; i < SlewRateSP.nsp; i++)
+    {
+        sprintf(SlewRateSP.sp[i].label, "%.fx", LFAST_CONSTANTS::slewspeeds[i]);
+        SlewRateSP.sp[i].aux = (void *)&LFAST_CONSTANTS::slewspeeds[i];
+        SlewRateSP.sp[i].s = ISS_OFF;
+    }
+
+    // Set default speed
+    SlewRateSP.sp[LFAST_CONSTANTS::DEFAULT_SLEW_IDX].s = ISS_ON;
 
     LOG_WARN("Initial position hardcoded to parking position");
     AltitudeAxis->syncPosition(default_park_posn_alt);
@@ -177,16 +189,6 @@ bool LFAST_Mount::initProperties()
 
     // Add alignment properties
     InitAlignmentProperties(this);
-
-    // Create and update slew rates
-
-    // for (int ii = 0; ii < SlewRateSP.size(); ii++)
-    // {
-    //     char label[10] = {0};
-    //     sprintf(label, "%.fx", LFAST::slewspeeds[ii]);
-    //     SlewRateSP[ii].fill(label, label, ISS_OFF);
-    //     SlewRateSP[ii].aux = (void *)&LFAST::slewspeeds[ii];
-    // }
 
     // // Set fastest default speed
     // MountSlewRateSP.fill(getDeviceName(), "MOUNT_SLEW_SPEED", "Fast Slew", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -437,7 +439,7 @@ bool LFAST_Mount::SetSlewRate(int index)
 
     double mult = 1;
 
-    mult = LFAST::slewspeeds[index];
+    mult = LFAST_CONSTANTS::slewspeeds[index];
     slewRateTmp = mult * LFAST_CONSTANTS::SiderealRate_degpersec;
     azVal = slewRateTmp;
     altVal = slewRateTmp;
