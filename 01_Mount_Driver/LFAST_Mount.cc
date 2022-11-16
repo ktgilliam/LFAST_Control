@@ -70,8 +70,9 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
-    AltitudeAxis = new SlewDrive(altLabel);
-    AzimuthAxis = new SlewDrive(azLabel);
+    AzimuthAxis = std::unique_ptr<SlewDrive>(new SlewDrive(azLabel));
+    AltitudeAxis = std::unique_ptr<SlewDrive>(new SlewDrive(altLabel));
+
     initializeTimers();
 
     // Set the driver interface to indicate that we can also do pulse guiding
@@ -105,8 +106,6 @@ void LFAST_Mount::initializeTimers()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 LFAST_Mount::~LFAST_Mount()
 {
-    delete AltitudeAxis;
-    delete AzimuthAxis;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

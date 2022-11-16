@@ -46,10 +46,6 @@ SlewDrive::SlewDrive(const char *label)
             DIGITAL_CONTROL::lpf_3_a,
             2));
 #endif
-    //  driveModelPtr = new DF2_IIR<double>(
-    //         DIGITAL_CONTROL::lpf_30_b,
-    //          DIGITAL_CONTROL::lpf_30_a,
-    //          2);
 
     updateSlewRate(MAX_RATE_CMD);
     pid->reset();
