@@ -15,13 +15,15 @@
 
 #include "indicom.h"
 #include "alignment/DriverCommon.h"
+#include "config.h"
 
 #include <libnova/julian_day.h>
 #include <memory>
 #include <exception>
 
 #include "slew_drive.h"
-#include "../00_Utils/astro_math.h"
+#include "../00_Utils/math_util.h"
+#include "lfast_constants.h"
 
 #define PRINT_DEBUG_STUFF 1
 
@@ -62,7 +64,7 @@ const char altLabel[] = "Alt. Axis";
 LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
     // Set up the basic configuration for the mount
-    setVersion(0, 4);
+    setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
     setTelescopeConnection(CONNECTION_TCP);
     SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST::NUM_SLEW_SPEEDS);
 
@@ -179,12 +181,12 @@ bool LFAST_Mount::initProperties()
 
     // Create and update slew rates
 
-    // for (int ii = 0; ii < MountSlewRateSP.size(); ii++)
+    // for (int ii = 0; ii < SlewRateSP.size(); ii++)
     // {
     //     char label[10] = {0};
     //     sprintf(label, "%.fx", LFAST::slewspeeds[ii]);
-    //     MountSlewRateSP[ii].fill(label, label, ISS_OFF);
-    //     MountSlewRateSP[ii].aux = (void *)&LFAST::slewspeeds[ii];
+    //     SlewRateSP[ii].fill(label, label, ISS_OFF);
+    //     SlewRateSP[ii].aux = (void *)&LFAST::slewspeeds[ii];
     // }
 
     // // Set fastest default speed
@@ -436,31 +438,8 @@ bool LFAST_Mount::SetSlewRate(int index)
 
     double mult = 1;
 
-    // switch (index)
-    // {
-    // case SLEW_GUIDE:
-    //     raVal = GuideRateNP[AXIS_RA].getValue();
-    //     deVal = GuideRateNP[AXIS_DE].getValue();
-    //     LOGF_INFO("Guide Rate Updated. RA: %6.4f, Dec: %6.4f", raVal, deVal);
-    //     LOG_WARN("Guide rates not correctly transformed to az/el.");
-
-    //     m_SkyGuideRate.declination = deVal;
-    //     m_SkyGuideRate.rightascension = raVal;
-
-    //     mult = ((raVal + deVal) * 0.5); // Temporary placeholder
-    //     break;
-    // case SLEW_CENTERING:
-    //     LOG_WARN("Slew centering not implemented");
-    //     break;
-    // case SLEW_MAX:
-    //     mult = LFAST::slewspeeds[LFAST::NUM_SLEW_SPEEDS - 1];
-    //     break;
-    // case SLEW_FIND:
-    //     mult = LFAST::slewspeeds[index];
-    //     break;
-    // }
     mult = LFAST::slewspeeds[index];
-    slewRateTmp = mult * SIDEREAL_RATE_DPS;
+    slewRateTmp = mult * LFAST_CONSTANTS::SiderealRate_degpersec;
     azVal = slewRateTmp;
     altVal = slewRateTmp;
 
@@ -469,91 +448,10 @@ bool LFAST_Mount::SetSlewRate(int index)
     AltitudeAxis->updateSlewRate(altVal);
     return true;
 }
-#if 0
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric2(double ha, double dec, double lat)
+
+INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
-
     LOG_DEBUG("\n=================");
-    LOGF_DEBUG("RATES: 2HA: %6.4f", ha);
-    LOGF_DEBUG("RATES: 2DEC: %6.4f", dec);
-    LOGF_DEBUG("RATES: 2LAT: %6.4f", lat);
-    // double ha_rad = hrs2rad(ha);
-    // double cHA = rad2deg(std::cos(ha_rad));
-    // double sHA = rad2deg(std::sin(ha_rad));
-
-    double cHA = std::cos(deg2rad(ha));
-    double sHA = std::sin(deg2rad(ha));
-
-    double cDEC = std::cos(deg2rad(dec));
-    double sDEC = std::sin(deg2rad(dec));
-    double cLAT = std::cos(deg2rad(lat));
-    double sLAT = std::sin(deg2rad(lat));
-
-    //
-    // Angular Positions
-    //
-    // Altitude Angle
-    double altTerm1 = sDEC * sLAT;
-    double altTerm2 = cDEC * cLAT * cHA;
-    double sALT = altTerm1 + altTerm2;
-    double cALT = std::sqrt(1 - sALT * sALT);
-
-    // double alt = atan2d(sALT, cALT);
-    double alt = rad2deg(std::asin(deg2rad(sALT)));
-    LOGF_DEBUG("2ALT: %6.4f", alt);
-
-    // Azimuth Angle
-    double azY = -1.0 * sHA * cDEC;
-    double azX = sDEC * cLAT - cDEC * sLAT * cHA;
-    double azDen = (azY * azY) + (azX * azX);
-    double cAZ = azX / azDen;
-    double sAZ = azY / azDen;
-
-    double az = rad2deg(std::atan2(deg2rad(sAZ), deg2rad(cAZ)));
-    LOGF_DEBUG("2AZ: %6.4f", az);
-
-    // double azAngle_deg = atan2d(azNum, azDen);
-    // double cAZ = cosd(azAngle_deg);
-
-    // Parallactic Angle
-    double parY = sHA * cLAT;
-    double parX = sLAT * cDEC - sDEC * cLAT * cHA;
-    double parDen = (parY * parY) + (parX * parX);
-    double cPAR = parX / parDen;
-    double sPAR = parY / parDen;
-
-    //
-    // Angular Rates
-    // Note: For now disregarding non-sidereal targets (proper motion terms are ignored).
-
-    // Altitude Rate
-    double altArg1 = cLAT * sAZ;
-    // double altArg2 = (proper motion derivative of non-sidereal target);
-    double altRate_dps = LFAST::SiderealRate_degpersec * altArg1;
-
-    // Azimuth Rate
-    double azArg1 = cDEC * cPAR / cALT;
-    // double azArg2 = (proper motion derivative of non-sidereal target);
-    double azRate_dps = LFAST::SiderealRate_degpersec * azArg1;
-
-    // // Parallactic Rate
-    // double parArg1 = -1.0 * cLAT * cAZ / cALT;
-    // // double parArg2 = (proper motion derivative of non-sidereal target);
-    // azRate_radpersec = LFAST::SiderealRate_degpersec * parArg1;
-    INDI::IHorizontalCoordinates vHz{0, 0};
-    vHz.altitude = altRate_dps;
-    vHz.azimuth = azRate_dps * -1;
-    return vHz;
-}
-#endif
-INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric3()
-{
-
-    LOG_DEBUG("\n=================");
-
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
 
@@ -590,8 +488,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::HorizontalRates_geocentric3()
     LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
     // LOGF_DEBUG("ANGLE SUM (rad): %6.4f",(sum));
 
-    double azRate_dps = LFAST::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
-    double altRate_dps = LFAST::SiderealRate_degpersec * (cDEC * cPAR / cALT + 0.0);
+    double azRate_dps = LFAST_CONSTANTS::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
+    double altRate_dps = LFAST_CONSTANTS::SiderealRate_degpersec * (cDEC * cPAR / cALT + 0.0);
 
     INDI::IHorizontalCoordinates vHz{0, 0};
     vHz.altitude = altRate_dps;
@@ -607,8 +505,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
     ALIGNMENT::TelescopeDirectionVector TDVCommand;
     INDI::IHorizontalCoordinates hzTrackRates{0, 0};
 
-    hzTrackRates = HorizontalRates_geocentric3();
-    LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
+    hzTrackRates = getHorizontalRates();
+    // LOGF_INFO("Rate Commands: dAlt = %6.4f, dAz = %6.4f", hzTrackRates.altitude, hzTrackRates.azimuth);
 
     return hzTrackRates;
 }
@@ -910,18 +808,6 @@ bool LFAST_Mount::updateLocation(double latitude, double longitude, double eleva
 bool LFAST_Mount::ReadScopeStatus()
 {
     LOG_DEBUG("LFAST_Mount::ReadScopeStatus");
-    double azPosnFb, altPosnFb, azRateFb, altRateFb;
-    try
-    {
-        azPosnFb = AzimuthAxis->getPositionFeedback();
-        altPosnFb = AltitudeAxis->getPositionFeedback();
-        azRateFb = AzimuthAxis->getVelocityFeedback();
-        altRateFb = AltitudeAxis->getVelocityFeedback();
-    }
-    catch (const std::exception &e)
-    {
-        LOG_ERROR(e.what());
-    }
 
     // Update the state switch
     int stateIndex = IUFindOnSwitchIndex(&TrackStateSP);
@@ -930,13 +816,9 @@ bool LFAST_Mount::ReadScopeStatus()
     IDSetSwitch(&TrackStateSP, nullptr);
 
     // Calculate new RA DEC
-    if (updatePointingCoordinates(altPosnFb, azPosnFb))
+    if (updatePointingCoordinates())
     {
-        NewRaDec(m_SkyCurrentRADE.rightascension, m_SkyCurrentRADE.declination);
-        AzAltCoordsNP[AXIS_AZ].setValue(m_MountAltAz.azimuth);
-        AzAltCoordsNP[AXIS_ALT].setValue(m_MountAltAz.altitude);
-        AzAltCoordsNP[AXIS_AZ_VEL].setValue(azRateFb);
-        AzAltCoordsNP[AXIS_ALT_VEL].setValue(altRateFb);
+
         AzAltCoordsNP.apply();
     }
 
@@ -973,12 +855,26 @@ bool LFAST_Mount::ReadScopeStatus()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-bool LFAST_Mount::updatePointingCoordinates(double alt, double az)
+bool LFAST_Mount::updatePointingCoordinates()
 {
     LOG_DEBUG("LFAST_Mount::updatePointingCoordinates");
     bool successFlag = true;
-    m_MountAltAz.altitude = alt;
-    m_MountAltAz.azimuth = az;
+    double azPosnFb, altPosnFb, azRateFb, altRateFb;
+    try
+    {
+        azPosnFb = AzimuthAxis->getPositionFeedback();
+        altPosnFb = AltitudeAxis->getPositionFeedback();
+        azRateFb = AzimuthAxis->getVelocityFeedback();
+        altRateFb = AltitudeAxis->getVelocityFeedback();
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR(e.what());
+    }
+
+    m_MountAltAz.altitude = altPosnFb;
+    m_MountAltAz.azimuth = azPosnFb;
+
     // LOGF_INFO("updateEquatorialCoordinates: ALT=%6.4f, AZ=%6.4f", alt, az)
     ALIGNMENT::TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(m_MountAltAz);
     // LOGF_DEBUG("TDV x %lf y %lf z %lf", TDV.x, TDV.y, TDV.z);
@@ -1030,6 +926,12 @@ bool LFAST_Mount::updatePointingCoordinates(double alt, double az)
 
     m_SkyCurrentRADE.rightascension = RightAscension;
     m_SkyCurrentRADE.declination = Declination;
+    NewRaDec(m_SkyCurrentRADE.rightascension, m_SkyCurrentRADE.declination);
+
+    AzAltCoordsNP[AXIS_AZ].setValue(m_MountAltAz.azimuth);
+    AzAltCoordsNP[AXIS_ALT].setValue(m_MountAltAz.altitude);
+    AzAltCoordsNP[AXIS_AZ_VEL].setValue(azRateFb);
+    AzAltCoordsNP[AXIS_ALT_VEL].setValue(altRateFb);
 
     return successFlag;
 }
@@ -1077,12 +979,12 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-    // SIDEREAL_RATE_DPS
+    // LFAST_CONSTANTS::SiderealRate_degpersec
     // constexpr double tm = TRACKRATE_SIDEREAL;
     // Movement in arcseconds
     // Send async
-    double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
-    // double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
+    // double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
 
     m_SkyGuideOffset.declination += dDec;
     // m_SkyGuideOffset.rightascension += dRA;
@@ -1110,8 +1012,8 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
         return IPS_ALERT;
     }
 
-    // double dDec = GuideRateNP[AXIS_DE].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
-    double dRA = GuideRateNP[AXIS_RA].getValue() * SIDEREAL_RATE_DPS * ms / 1000.0;
+    // double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
+    double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
 
     // m_SkyGuideOffset.declination += dDec;
     m_SkyGuideOffset.rightascension += dRA;
@@ -1165,13 +1067,31 @@ void LFAST_Mount::printSlewDriveStates()
 void LFAST_Mount::TimerHit()
 {
     LOG_DEBUG("LFAST_Mount::TimerHit");
+
+    static struct timeval ltv
+    {
+        0, 0
+    }; // previous system time
+    struct timeval tv
+    {
+        0, 0
+    };         // new system time
+    double dt; // Elapsed time in seconds since last tick
+
+    gettimeofday(&tv, nullptr);
+
+    if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
+        ltv = tv;
+
+    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
+    ltv = tv;
+
     TraceThisTickCount++;
     if (60 == TraceThisTickCount)
     {
         TraceThisTick = true;
         TraceThisTickCount = 0;
     }
-
 
     std::string stateStr = {0};
     INDI::IHorizontalCoordinates altAzPosn{0, 0};
@@ -1203,7 +1123,7 @@ void LFAST_Mount::TimerHit()
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
-        // altAzRates = getTrackingTargetAltAzRates();
+        altAzRates = getTrackingTargetAltAzRates();
         AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
         AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
         break;
@@ -1227,8 +1147,19 @@ void LFAST_Mount::TimerHit()
         break;
     }
 
+    if (TrackState == SCOPE_TRACKING)
+    {
+        AltitudeAxis->updateControl(dt, POSN_AND_RATE_CONTROL);
+        AzimuthAxis->updateControl(dt, POSN_AND_RATE_CONTROL);
+    }
+    else
+    {
+        AltitudeAxis->updateControl(dt, POSN_CONTROL_ONLY);
+        AzimuthAxis->updateControl(dt, POSN_CONTROL_ONLY);
+    }
+
     // Simulate mount movement
-    updateSim();
+    updateSim(dt);
 
 #if 0 // PRINT_DEBUG_STUFF
     auto itr = AltitudeAxis->debugStrings.begin();
@@ -1248,342 +1179,6 @@ void LFAST_Mount::TimerHit()
     }
 #endif
     INDI::Telescope::TimerHit();
-    // // RA axis
-    // long SlewSteps = dt * AxisSlewRateRA;
-    // bool CompleteRevolution = SlewSteps >= MICROSTEPS_PER_REVOLUTION;
-    // SlewSteps = SlewSteps % MICROSTEPS_PER_REVOLUTION; // Just in case ;-)
-
-    // switch (AxisStatusRA)
-    // {
-    // case STOPPED:
-    //     // Do nothing
-    //     break;
-
-    // case SLEWING:
-    // {
-    //     DEBUGF(DBG_SIMULATOR,
-    //            "TimerHit Slewing - RA Current Encoder %ld SlewSteps %ld Direction %d Target %ld Status %d",
-    //            CurrentEncoderMicrostepsRA, SlewSteps, AxisDirectionRA, GotoTargetMicrostepsRA, AxisStatusRA);
-
-    //     // Update the encoder
-    //     if (FORWARD == AxisDirectionRA)
-    //         CurrentEncoderMicrostepsRA += SlewSteps;
-    //     else
-    //         CurrentEncoderMicrostepsRA -= SlewSteps;
-    //     if (CurrentEncoderMicrostepsRA < 0)
-    //         CurrentEncoderMicrostepsRA += MICROSTEPS_PER_REVOLUTION;
-    //     else if (CurrentEncoderMicrostepsRA >= MICROSTEPS_PER_REVOLUTION)
-    //         CurrentEncoderMicrostepsRA -= MICROSTEPS_PER_REVOLUTION;
-
-    //     DEBUGF(DBG_SIMULATOR, "TimerHit Slewing - RA New Encoder %d New Status %d", CurrentEncoderMicrostepsRA,
-    //            AxisStatusRA);
-    //     break;
-    // }
-
-    // case SLEWING_TO:
-    // {
-    //     DEBUGF(DBG_SIMULATOR,
-    //            "TimerHit SlewingTo - RA Current Encoder %ld SlewSteps %ld Direction %d Target %ld Status %d",
-    //            CurrentEncoderMicrostepsRA, SlewSteps, AxisDirectionRA, GotoTargetMicrostepsRA, AxisStatusRA);
-
-    //     long OldEncoder = CurrentEncoderMicrostepsRA;
-    //     // Update the encoder
-    //     if (FORWARD == AxisDirectionRA)
-    //         CurrentEncoderMicrostepsRA += SlewSteps;
-    //     else
-    //         CurrentEncoderMicrostepsRA -= SlewSteps;
-    //     if (CurrentEncoderMicrostepsRA < 0)
-    //         CurrentEncoderMicrostepsRA += MICROSTEPS_PER_REVOLUTION;
-    //     else if (CurrentEncoderMicrostepsRA >= MICROSTEPS_PER_REVOLUTION)
-    //         CurrentEncoderMicrostepsRA -= MICROSTEPS_PER_REVOLUTION;
-
-    //     if (CompleteRevolution)
-    //     {
-    //         // Must have found the target
-    //         AxisStatusRA = STOPPED;
-    //         CurrentEncoderMicrostepsRA = GotoTargetMicrostepsRA;
-    //     }
-    //     else
-    //     {
-    //         bool FoundTarget = false;
-    //         if (FORWARD == AxisDirectionRA)
-    //         {
-    //             if (CurrentEncoderMicrostepsRA < OldEncoder)
-    //             {
-    //                 // Two ranges to search
-    //                 if ((GotoTargetMicrostepsRA >= OldEncoder) &&
-    //                     (GotoTargetMicrostepsRA <= MICROSTEPS_PER_REVOLUTION))
-    //                     FoundTarget = true;
-    //                 else if ((GotoTargetMicrostepsRA >= 0) &&
-    //                          (GotoTargetMicrostepsRA <= CurrentEncoderMicrostepsRA))
-    //                     FoundTarget = true;
-    //             }
-    //             else if ((GotoTargetMicrostepsRA >= OldEncoder) &&
-    //                      (GotoTargetMicrostepsRA <= CurrentEncoderMicrostepsRA))
-    //                 FoundTarget = true;
-    //         }
-    //         else
-    //         {
-    //             if (CurrentEncoderMicrostepsRA > OldEncoder)
-    //             {
-    //                 // Two ranges to search
-    //                 if ((GotoTargetMicrostepsRA >= 0) && (GotoTargetMicrostepsRA <= OldEncoder))
-    //                     FoundTarget = true;
-    //                 else if ((GotoTargetMicrostepsRA >= CurrentEncoderMicrostepsRA) &&
-    //                          (GotoTargetMicrostepsRA <= MICROSTEPS_PER_REVOLUTION))
-    //                     FoundTarget = true;
-    //             }
-    //             else if ((GotoTargetMicrostepsRA >= CurrentEncoderMicrostepsRA) &&
-    //                      (GotoTargetMicrostepsRA <= OldEncoder))
-    //                 FoundTarget = true;
-    //         }
-    //         if (FoundTarget)
-    //         {
-    //             AxisStatusRA = STOPPED;
-    //             CurrentEncoderMicrostepsRA = GotoTargetMicrostepsRA;
-    //         }
-    //     }
-    //     DEBUGF(DBG_SIMULATOR, "TimerHit SlewingTo - RA New Encoder %d New Status %d", CurrentEncoderMicrostepsRA,
-    //            AxisStatusRA);
-    //     break;
-    // }
-    // }
-
-    // // DEC axis
-    // SlewSteps = dt * AxisSlewRateDEC;
-
-    // switch (AxisStatusDEC)
-    // {
-    // case STOPPED:
-    //     // Do nothing
-    //     break;
-
-    // case SLEWING:
-    // {
-    //     DEBUGF(DBG_SIMULATOR,
-    //            "TimerHit Slewing - DEC Current Encoder %ld SlewSteps %d Direction %ld Target %ld Status %d",
-    //            CurrentEncoderMicrostepsDEC, SlewSteps, AxisDirectionDEC, GotoTargetMicrostepsDEC, AxisStatusDEC);
-
-    //     // Update the encoder
-    //     SlewSteps = SlewSteps % MICROSTEPS_PER_REVOLUTION; // Just in case ;-)
-    //     if (FORWARD == AxisDirectionDEC)
-    //         CurrentEncoderMicrostepsDEC += SlewSteps;
-    //     else
-    //         CurrentEncoderMicrostepsDEC -= SlewSteps;
-    //     if (CurrentEncoderMicrostepsDEC > MAX_DEC)
-    //     {
-    //         CurrentEncoderMicrostepsDEC = MAX_DEC;
-    //         AxisStatusDEC = STOPPED; // Hit the buffers
-    //         DEBUG(DBG_SIMULATOR, "TimerHit - DEC axis hit the buffers at MAX_DEC");
-    //     }
-    //     else if (CurrentEncoderMicrostepsDEC < MIN_DEC)
-    //     {
-    //         CurrentEncoderMicrostepsDEC = MIN_DEC;
-    //         AxisStatusDEC = STOPPED; // Hit the buffers
-    //         DEBUG(DBG_SIMULATOR, "TimerHit - DEC axis hit the buffers at MIN_DEC");
-    //     }
-
-    //     DEBUGF(DBG_SIMULATOR, "TimerHit Slewing - DEC New Encoder %d New Status %d", CurrentEncoderMicrostepsDEC,
-    //            AxisStatusDEC);
-    //     break;
-    // }
-
-    // case SLEWING_TO:
-    // {
-    //     DEBUGF(DBG_SIMULATOR,
-    //            "TimerHit SlewingTo - DEC Current Encoder %ld SlewSteps %d Direction %ld Target %ld Status %d",
-    //            CurrentEncoderMicrostepsDEC, SlewSteps, AxisDirectionDEC, GotoTargetMicrostepsDEC, AxisStatusDEC);
-
-    //     // Calculate steps to target
-    //     int StepsToTarget;
-    //     if (FORWARD == AxisDirectionDEC)
-    //     {
-    //         if (CurrentEncoderMicrostepsDEC <= GotoTargetMicrostepsDEC)
-    //             StepsToTarget = GotoTargetMicrostepsDEC - CurrentEncoderMicrostepsDEC;
-    //         else
-    //             StepsToTarget = CurrentEncoderMicrostepsDEC - GotoTargetMicrostepsDEC;
-    //     }
-    //     else
-    //     {
-    //         // Axis in reverse
-    //         if (CurrentEncoderMicrostepsDEC >= GotoTargetMicrostepsDEC)
-    //             StepsToTarget = CurrentEncoderMicrostepsDEC - GotoTargetMicrostepsDEC;
-    //         else
-    //             StepsToTarget = GotoTargetMicrostepsDEC - CurrentEncoderMicrostepsDEC;
-    //     }
-    //     if (StepsToTarget <= SlewSteps)
-    //     {
-    //         // Target was hit this tick
-    //         AxisStatusDEC = STOPPED;
-    //         CurrentEncoderMicrostepsDEC = GotoTargetMicrostepsDEC;
-    //     }
-    //     else
-    //     {
-    //         if (FORWARD == AxisDirectionDEC)
-    //             CurrentEncoderMicrostepsDEC += SlewSteps;
-    //         else
-    //             CurrentEncoderMicrostepsDEC -= SlewSteps;
-    //         if (CurrentEncoderMicrostepsDEC < 0)
-    //             CurrentEncoderMicrostepsDEC += MICROSTEPS_PER_REVOLUTION;
-    //         else if (CurrentEncoderMicrostepsDEC >= MICROSTEPS_PER_REVOLUTION)
-    //             CurrentEncoderMicrostepsDEC -= MICROSTEPS_PER_REVOLUTION;
-    //     }
-
-    //     DEBUGF(DBG_SIMULATOR, "TimerHit SlewingTo - DEC New Encoder %d New Status %d", CurrentEncoderMicrostepsDEC,
-    //            AxisStatusDEC);
-    //     break;
-    // }
-    // }
-
-    // INDI::Telescope::TimerHit(); // This will call ReadScopeStatus
-
-    // // OK I have updated the celestial reference frame RA/DEC in ReadScopeStatus
-    // // Now handle the tracking state
-    // switch (TrackState)
-    // {
-    // case SCOPE_SLEWING:
-    //     if ((STOPPED == AxisStatusRA) && (STOPPED == AxisStatusDEC))
-    //     {
-    //         if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
-    //         {
-    //             // Goto has finished start tracking
-    //             DEBUG(DBG_SIMULATOR, "TimerHit - Goto finished start tracking");
-    //             TrackState = SCOPE_TRACKING;
-    //             // Fall through to tracking case
-    //         }
-    //         else
-    //         {
-    //             TrackState = SCOPE_IDLE;
-    //             break;
-    //         }
-    //     }
-    //     else
-    //         break;
-
-    // case SCOPE_TRACKING:
-    // {
-    //     // Continue or start tracking
-    //     // Calculate where the mount needs to be in POLLMS time
-    //     // POLLMS is hardcoded to be one second
-    //     // TODO may need to make this longer to get a meaningful result
-    //     double JulianOffset = 1.0 / (24.0 * 60 * 60);
-    //     TelescopeDirectionVector TDV;
-    //     INDI::IHorizontalCoordinates AltAz{0, 0};
-
-    //     if (TransformCelestialToTelescope(m_SkyTrackingTarget.rightascension, m_SkyTrackingTarget.declination, JulianOffset,
-    //                                       TDV))
-    //         AltitudeAzimuthFromTelescopeDirectionVector(TDV, AltAz);
-    //     else
-    //     {
-
-    //         INDI::IEquatorialCoordinates EquatorialCoordinates{0, 0};
-    //         EquatorialCoordinates.rightascension = m_SkyTrackingTarget.rightascension;
-    //         EquatorialCoordinates.declination = m_SkyTrackingTarget.declination;
-    //         INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys() + JulianOffset, &AltAz);
-    //         INDI::EquatorialToHorizontal(&EquatorialCoordinates, &m_Location, ln_get_julian_from_sys() + JulianOffset,
-    //                                      &AltAz);
-    //     }
-
-    //     // My altitude encoder runs -90 to +90
-    //     if ((AltAz.altitude > 90.0) || (AltAz.altitude < -90.0))
-    //     {
-    //         DEBUG(DBG_SIMULATOR, "TimerHit tracking - Altitude out of range");
-    //         // This should not happen
-    //         return;
-    //     }
-
-    //     // My polar encoder runs 0 to +360
-    //     if ((AltAz.azimuth > 360.0) || (AltAz.azimuth < -360.0))
-    //     {
-    //         DEBUG(DBG_SIMULATOR, "TimerHit tracking - Azimuth out of range");
-    //         // This should not happen
-    //         return;
-    //     }
-
-    //     if (AltAz.azimuth < 0.0)
-    //     {
-    //         DEBUG(DBG_SIMULATOR, "TimerHit tracking - Azimuth negative");
-    //         AltAz.azimuth = 360.0 + AltAz.azimuth;
-    //     }
-
-    //     long AltitudeOffsetMicrosteps = int(AltAz.altitude * MICROSTEPS_PER_DEGREE - CurrentEncoderMicrostepsDEC);
-    //     long AzimuthOffsetMicrosteps = int(AltAz.azimuth * MICROSTEPS_PER_DEGREE - CurrentEncoderMicrostepsRA);
-
-    //     DEBUGF(DBG_SIMULATOR, "TimerHit - Tracking AltitudeOffsetMicrosteps %d AzimuthOffsetMicrosteps %d",
-    //            AltitudeOffsetMicrosteps, AzimuthOffsetMicrosteps);
-
-    //     if (0 != AzimuthOffsetMicrosteps)
-    //     {
-    //         // Calculate the slewing rates needed to reach that position
-    //         // at the correct time. This is simple as interval is one second
-    //         if (AzimuthOffsetMicrosteps > 0)
-    //         {
-    //             if (AzimuthOffsetMicrosteps < MICROSTEPS_PER_REVOLUTION / 2.0)
-    //             {
-    //                 // Forward
-    //                 AxisDirectionRA = FORWARD;
-    //                 AxisSlewRateRA = AzimuthOffsetMicrosteps;
-    //             }
-    //             else
-    //             {
-    //                 // Reverse
-    //                 AxisDirectionRA = REVERSE;
-    //                 AxisSlewRateRA = MICROSTEPS_PER_REVOLUTION - AzimuthOffsetMicrosteps;
-    //             }
-    //         }
-    //         else
-    //         {
-    //             AzimuthOffsetMicrosteps = std::abs(AzimuthOffsetMicrosteps);
-    //             if (AzimuthOffsetMicrosteps < MICROSTEPS_PER_REVOLUTION / 2.0)
-    //             {
-    //                 // Forward
-    //                 AxisDirectionRA = REVERSE;
-    //                 AxisSlewRateRA = AzimuthOffsetMicrosteps;
-    //             }
-    //             else
-    //             {
-    //                 // Reverse
-    //                 AxisDirectionRA = FORWARD;
-    //                 AxisSlewRateRA = MICROSTEPS_PER_REVOLUTION - AzimuthOffsetMicrosteps;
-    //             }
-    //         }
-    //         AxisSlewRateRA = std::abs(AzimuthOffsetMicrosteps);
-    //         AxisDirectionRA = AzimuthOffsetMicrosteps > 0 ? FORWARD : REVERSE; // !!!! BEWARE INERTIA FREE MOUNT
-    //         AxisStatusRA = SLEWING;
-    //         DEBUGF(DBG_SIMULATOR, "TimerHit - Tracking AxisSlewRateRA %lf AxisDirectionRA %d", AxisSlewRateRA,
-    //                AxisDirectionRA);
-    //     }
-    //     else
-    //     {
-    //         // Nothing to do - stop the axis
-    //         AxisStatusRA = STOPPED; // !!!! BEWARE INERTIA FREE MOUNT
-    //         DEBUG(DBG_SIMULATOR, "TimerHit - Tracking nothing to do stopping RA axis");
-    //     }
-
-    //     if (0 != AltitudeOffsetMicrosteps)
-    //     {
-    //         // Calculate the slewing rates needed to reach that position
-    //         // at the correct time.
-    //         AxisSlewRateDEC = std::abs(AltitudeOffsetMicrosteps);
-    //         AxisDirectionDEC = AltitudeOffsetMicrosteps > 0 ? FORWARD : REVERSE; // !!!! BEWARE INERTIA FREE MOUNT
-    //         AxisStatusDEC = SLEWING;
-    //         DEBUGF(DBG_SIMULATOR, "TimerHit - Tracking AxisSlewRateDEC %lf AxisDirectionDEC %d", AxisSlewRateDEC,
-    //                AxisDirectionDEC);
-    //     }
-    //     else
-    //     {
-    //         // Nothing to do - stop the axis
-    //         AxisStatusDEC = STOPPED; // !!!! BEWARE INERTIA FREE MOUNT
-    //         DEBUG(DBG_SIMULATOR, "TimerHit - Tracking nothing to do stopping DEC axis");
-    //     }
-
-    //     break;
-    // }
-
-    // default:
-    //     break;
-    // }
-
     TraceThisTick = false;
 }
 
@@ -1596,39 +1191,11 @@ void LFAST_Mount::hexDump(char *buf, const char *data, int size)
         buf[3 * size - 1] = '\0';
 }
 
-void LFAST_Mount::updateSim()
+void LFAST_Mount::updateSim(double dt)
 {
     LOG_DEBUG("LFAST_Mount::updateSim");
 #if SIM_MODE_ENABLED
-    static struct timeval ltv
-    {
-        0, 0
-    }; // previous system time
-    struct timeval tv
-    {
-        0, 0
-    };         // new system time
-    double dt; // Elapsed time in seconds since last tick
-
-    gettimeofday(&tv, nullptr);
-
-    if (ltv.tv_sec == 0 && ltv.tv_usec == 0)
-        ltv = tv;
-
-    dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
-    ltv = tv;
-    // LOGF_INFO("dt: %6.4f", dt);
-    // if (TrackState == SCOPE_TRACKING)
-    // {
-    //     AltitudeAxis->simulate(dt, RATE_CONTROL);
-    //     AzimuthAxis->simulate(dt, RATE_CONTROL);
-    // }
-    // else
-    // {
-    //     AltitudeAxis->simulate(dt, POSITION_CONTROL);
-    //     AzimuthAxis->simulate(dt, POSITION_CONTROL);
-    // }
-    AltitudeAxis->simulate(dt, POSITION_CONTROL);
-    AzimuthAxis->simulate(dt, POSITION_CONTROL);
+    AltitudeAxis->simulate(dt);
+    AzimuthAxis->simulate(dt);
 #endif
 }

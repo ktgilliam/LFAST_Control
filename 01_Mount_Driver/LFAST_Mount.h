@@ -9,6 +9,7 @@
 #include "alignment/AlignmentSubsystemForDrivers.h"
 #include "inditimer.h"
 #include "slew_drive.h"
+#include "memory.h"
 
 // #include "indielapsedtimer.h"
 namespace LFAST
@@ -121,6 +122,7 @@ protected:
 private:
     unsigned int DBG_SCOPE{0};
 
+
     SlewDrive *AltitudeAxis;
     SlewDrive *AzimuthAxis;
 
@@ -177,11 +179,11 @@ private:
     ///////////////////////////////////////////////////////////////////////////////
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
     INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
-    bool updatePointingCoordinates(double alt, double az);
+    bool updatePointingCoordinates();
     void printSlewDriveStates();
-    INDI::IHorizontalCoordinates HorizontalRates_geocentric3();
+    INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
-    void updateSim();
+    void updateSim(double dt);
 };
 
 const std::string getDirString(INDI_DIR_NS dir)

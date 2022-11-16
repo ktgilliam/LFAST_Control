@@ -18,8 +18,8 @@ set(CMAKE_BUILD_TYPE Debug)
 #========================================= Version Info  =========================================#
 #=================================================================================================#
 # these will be used to set the version number in config.h and our driver's xml file
-set(CDRIVER_VERSION_MAJOR 1)
-set(CDRIVER_VERSION_MINOR 2)
+set(CDRIVER_VERSION_MAJOR 0)
+set(CDRIVER_VERSION_MINOR 1)
 
 
 
