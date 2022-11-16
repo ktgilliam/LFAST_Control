@@ -127,7 +127,7 @@ void PID_Controller::update(double e, double dt, double *uC)
         double diff = 0;
         if (!firstTime)
         {
-            diff = e - e_prev;
+            diff = (e - e_prev)/dt;
         }
         e_prev = e;
         firstTime = false;
