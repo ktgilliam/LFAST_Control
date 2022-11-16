@@ -34,6 +34,7 @@ public:
     void configureIntegratorSaturation(double ulim, double llim);
     void configureOutputSaturation(double ulim, double llim);
     void resetIntegrator();
+    void reset();
     void update(double e, double dt, double *uC);
     bool integratorIsSaturated();
     bool outputIsSaturated();
@@ -50,7 +51,8 @@ private:
     double Kd;
 
     double integratorState;
-    double prevE;
+    double e_prev;
+    bool firstTime;
     bool outputSaturatedFlag;
 
     struct limits integrator_limits

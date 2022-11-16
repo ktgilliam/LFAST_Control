@@ -3,15 +3,19 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <memory>
+#include "../00_Utils/PID_Controller.h"
+#include "../00_Utils/df2_filter.h"
 
-#define SLEW_COMPLETE_THRESH 0.0005
+#define SLEW_COMPLETE_THRESH_POSN 0.05
+#define SLEW_COMPLETE_THRESH_RATE 0.003
 // #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
 
 typedef enum
 {
-    POSITION_CONTROL,
-    RATE_CONTROL
+    POSN_CONTROL_ONLY,
+    POSN_AND_RATE_CONTROL
 } ControlMode_t;
 
 class SlewDrive
@@ -28,7 +32,13 @@ private:
     double combinedRateCmdSaturated_dps;
     bool isEnabled;
     double rateLim;
+    // const PID_Controller *pid;
+    std::unique_ptr<PID_Controller> pid;
 
+#if SIM_MODE_ENABLED
+    std::unique_ptr<DF2_IIR<double>> driveModelPtr;
+    // DF2_IIR<double> *driveModelPtr;
+#endif
 public:
     SlewDrive(const char *);
     void enable();
@@ -40,7 +50,7 @@ public:
     double getVelocityFeedback() { return rateFeedback_dps; }
 
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
-    
+
     void abortSlew();
     void syncPosition(double posn);
     bool isSlewComplete();
@@ -50,9 +60,9 @@ public:
     void updateRateOffset(double rate);
     void updateSlewRate(double slewRate);
     const char *getModeString();
-    void generateCommands(double dt, ControlMode_t mode);
+    void updateControl(double dt, ControlMode_t mode);
 #if SIM_MODE_ENABLED
-    void simulate(double dt, ControlMode_t mode);
+    void simulate(double dt);
 #endif
 
     std::vector<std::string> debugStrings;

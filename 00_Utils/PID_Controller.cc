@@ -11,7 +11,7 @@ PID_Controller::PID_Controller(double _kp, double _ki, double _kd) : Kp(_kp),
                                                                      limit_integrator(false),
                                                                      limit_output(false),
                                                                      outputSaturatedFlag(false),
-                                                                     prevE(0)
+                                                                     e_prev(0)
 {
     configureCompMode();
 }
@@ -61,6 +61,17 @@ void PID_Controller::configureOutputSaturation(double ulim, double llim)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
+void PID_Controller::reset()
+{
+    firstTime = true;
+    e_prev = 0;
+    integratorState = 0.0;
+    resetIntegrator();
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
 void PID_Controller::resetIntegrator()
 {
     integratorState = 0.0;
@@ -93,9 +104,13 @@ void PID_Controller::update(double e, double dt, double *uC)
     double diff_term{0};
     double output_pre_sat{0};
     double output_post_sat{0};
+    double output{0};
 
     if (compensationMode & DIGITAL_CONTROL::P_BIT)
+    {
         prop_term = e * Kp;
+        output += prop_term;
+    }
 
     if (compensationMode & DIGITAL_CONTROL::I_BIT)
     {
@@ -104,20 +119,21 @@ void PID_Controller::update(double e, double dt, double *uC)
             int_term = saturate(integratorState, integrator_limits.llim, integrator_limits.ulim);
         else
             int_term = integratorState;
+        output += int_term;
     }
 
-    static bool firstTime = true;
     if (compensationMode & DIGITAL_CONTROL::D_BIT)
     {
         double diff = 0;
         if (!firstTime)
         {
-            diff = e-prevE;
+            diff = e - e_prev;
         }
-        prevE = e;
+        e_prev = e;
         firstTime = false;
         diff_term = diff * Kd;
+        output += diff_term;
     }
 
-    *uC = 0.0;
+    *uC = output;
 }
