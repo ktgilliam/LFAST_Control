@@ -107,4 +107,6 @@ namespace KINKO
         MOTOR_MODE_TORQUE = 4,
         MOTOR_MODE_HOME = 6
     };
+
+        const uint32_t COUNTS_PER_REV = 10000;
 }

@@ -13,9 +13,13 @@
 
 namespace KINKO
 {
-    const int drive_i_peak = 36;
-    const double amps2counts = (2048.0 / drive_i_peak) / 1.414;
-    const double rpm2cps = 512 * 10000.0 / 1875;
+
+    constexpr int drive_i_peak = 36;
+    constexpr double amps2counts = (2048.0 / drive_i_peak) / 1.414;
+    constexpr double counts2amps = 1.0 / amps2counts;
+    constexpr double rpm2cps = 512 * 10000.0 / 1875;
+    constexpr int32_t deg2counts = (int32_t)COUNTS_PER_REV / 360;
+    constexpr double counts2deg = 360.0 / COUNTS_PER_REV;
 
     enum KincoPersistentFields
     {
@@ -32,7 +36,8 @@ class KinkoDriver : public ServoInterface
 {
 private:
     static uint16_t numDrivers;
-    modbus_t *ctx;
+    static modbus_t *ctx;
+    bool modbusNodeIsSet;
 
 protected:
     int16_t driverNodeId;
@@ -46,7 +51,7 @@ protected:
 public:
     KinkoDriver(int16_t driverId);
     virtual ~KinkoDriver(){};
-
+    bool readyForModbus();
     void setDriverState(uint16_t) override;
     void getDriverState() override{};
     void setControlMode(uint16_t) override;
@@ -59,7 +64,8 @@ public:
     double getCurrentFeedback(bool updateConsole = false) override;
     double getPositionFeedback(bool updateConsole = false) override;
 
-    void connectRTU(const char *device, int baud, char parity, int data_bit, int stop_bit);
+    static void connectRTU(const char *device, int baud = 19200, char parity = 'N', int data_bit = 8, int stop_bit = 1);
+    static bool IsConnected();
 #if defined(LFAST_TERMINAL)
     void connectTerminalInterface(TerminalInterface *_cli) override;
     void setupPersistentFields() override;

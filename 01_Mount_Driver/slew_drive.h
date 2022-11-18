@@ -35,22 +35,23 @@ private:
     double rateLim;
     // const PID_Controller *pid;
     std::unique_ptr<PID_Controller> pid;
-    std::unique_ptr<KinkoDriver> pDriveA;
-    std::unique_ptr<KinkoDriver> pDriveB;
-
 #if SIM_MODE_ENABLED
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;
-    // DF2_IIR<double> *driveModelPtr;
+#else
+    std::unique_ptr<KinkoDriver> pDriveA;
+    std::unique_ptr<KinkoDriver> pDriveB;
 #endif
 public:
     SlewDrive(const char *);
+    static bool connect(const char* devPath);
     void enable();
-
+    void disable();
     double getPositionCommand() { return std::fmod(positionCommand_deg, 360.0); }
-    double getPositionFeedback() { return std::fmod(positionFeedback_deg, 360.0); }
+    double getPositionFeedback();
+    double processPositionFeedback(double currPosn);
 
     double getVelocityCommand() { return rateCommandOffset_dps + rateRef_dps; }
-    double getVelocityFeedback() { return rateFeedback_dps; }
+    double getVelocityFeedback();
 
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
 
@@ -63,7 +64,7 @@ public:
     void updateRateOffset(double rate);
     void updateSlewRate(double slewRate);
     const char *getModeString();
-    void updateControlCommands(double dt, ControlMode_t mode);
+    void updateControlLoops(double dt, ControlMode_t mode);
     double mapSlewDriveCommandToMotors();
 #if SIM_MODE_ENABLED
     void simulate(double dt);

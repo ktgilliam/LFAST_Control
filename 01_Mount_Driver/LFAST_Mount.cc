@@ -179,8 +179,15 @@ bool LFAST_Mount::initProperties()
     SlewRateSP.sp[LFAST_CONSTANTS::DEFAULT_SLEW_IDX].s = ISS_ON;
 
     LOG_WARN("Initial position hardcoded to parking position");
-    AltitudeAxis->syncPosition(default_park_posn_alt);
-    AzimuthAxis->syncPosition(default_park_posn_az);
+    try
+    {
+        AltitudeAxis->syncPosition(default_park_posn_alt);
+        AzimuthAxis->syncPosition(default_park_posn_az);
+    }
+    catch (const std::exception &e)
+    {
+        LOGF_ERROR("Error: %s", e.what());
+    }
 
     addAuxControls();
 
@@ -199,8 +206,9 @@ bool LFAST_Mount::initProperties()
     // NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
     // NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
 
-    // modbusCommPortTP{1};
-    // defineProperty(&NtpServerTP);
+    modbusCommPortTP[0].fill("MODBUS_COMM_DEV_TP", "Modbus Comm Port", "/dev/ttyUSB0");
+    modbusCommPortTP.fill(getDeviceName(), "MODBUS_COMM_DEV", "Modbus", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
+    defineProperty(&modbusCommPortTP);
 
     AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
     AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
@@ -291,8 +299,24 @@ bool LFAST_Mount::Disconnect()
 
 bool LFAST_Mount::Handshake()
 {
-    LOG_WARN("Handshake not implemented yet.");
-    return true;
+    // LOG_WARN("Handshake not implemented yet.");
+    auto devPath = modbusCommPortTP[0].getText();
+    LOGF_INFO("Connecting to modbus comm port: %s", devPath);
+    try
+    {
+        bool successFlag = SlewDrive::connect(devPath);
+        if (successFlag)
+            LOG_INFO("Modbus connection successful");
+        else
+            LOG_INFO("Modbus connection failed");
+        AzimuthAxis->disable();
+        return successFlag;
+    }
+    catch (const std::exception &e)
+    {
+        LOGF_ERROR("UNABLE TO CONNECT TO DRIVERS: %s", e.what());
+        return false;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -446,6 +470,7 @@ bool LFAST_Mount::SetSlewRate(int index)
     altVal = slewRateTmp;
 
     LOGF_INFO("Setting slew rate to %.3fx Sidereal (%6.4f deg/s).", mult, slewRateTmp);
+
     AzimuthAxis->updateSlewRate(azVal);
     AltitudeAxis->updateSlewRate(altVal);
     return true;
@@ -453,13 +478,13 @@ bool LFAST_Mount::SetSlewRate(int index)
 
 INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
-    LOG_DEBUG("\n=================");
+    // LOG_DEBUG("\n=================");
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
 
     double lst = get_local_sidereal_time(LocationN[LOCATION_LONGITUDE].value);
     double ha = hrs2rad(lst - ra);
-    LOGF_DEBUG("HA: %6.5f", rad2deg(ha));
+    // LOGF_DEBUG("HA: %6.5f", rad2deg(ha));
 
     double cHA = std::cos(ha);
     double sHA = std::sin(ha);
@@ -472,22 +497,22 @@ INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
     double sLAT = std::sin(lat);
 
     double alt = deg2rad(m_MountAltAz.altitude);
-    LOGF_DEBUG("ALT: %6.5f", rad2deg(alt));
+    // LOGF_DEBUG("ALT: %6.5f", rad2deg(alt));
     double sALT = std::sin(alt);
     double cALT = std::cos(alt);
 
     double az = deg2rad(m_MountAltAz.azimuth);
-    LOGF_DEBUG("AZ: %6.5f", rad2deg(az));
+    // LOGF_DEBUG("AZ: %6.5f", rad2deg(az));
     double sAZ = std::sin(az);
     double cAZ = std::cos(az);
 
     double sPAR = sHA * cLAT / cALT;
     double PAR = std::asin(sPAR);
-    LOGF_DEBUG("PAR: %6.5f", rad2deg(PAR));
+    // LOGF_DEBUG("PAR: %6.5f", rad2deg(PAR));
     double cPAR = std::cos(PAR);
 
     double sum = PAR + ha + M_PI_2 - az;
-    LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
+    // LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
     // LOGF_DEBUG("ANGLE SUM (rad): %6.4f",(sum));
 
     double azRate_dps = LFAST_CONSTANTS::SiderealRate_degpersec * (cLAT * sAZ + 0.0);
@@ -496,6 +521,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
     INDI::IHorizontalCoordinates vHz{0, 0};
     vHz.altitude = altRate_dps;
     vHz.azimuth = azRate_dps;
+    LOGF_DEBUG("ALT_RATE: %6.4f, AZ_RATE: %6.4f", altRate_dps, azRate_dps);
     return vHz;
 }
 // //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -709,8 +735,17 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 bool LFAST_Mount::Sync(double ra, double dec)
 {
     double azFb, altFb;
-    azFb = AzimuthAxis->getPositionFeedback();
-    altFb = AltitudeAxis->getPositionFeedback();
+    LOG_WARN("Initial position hardcoded to parking position");
+    try
+    {
+        azFb = AzimuthAxis->getPositionFeedback();
+        altFb = AltitudeAxis->getPositionFeedback();
+    }
+    catch (const std::exception &e)
+    {
+        LOGF_ERROR("Sync Error: %s", e.what());
+    }
+
     m_MountAltAz.azimuth = azFb;
     m_MountAltAz.altitude = altFb;
 
@@ -871,7 +906,7 @@ bool LFAST_Mount::updatePointingCoordinates()
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOGF_ERROR("updatePointingCoordinates Error:%s", e.what());
     }
 
     m_MountAltAz.altitude = altPosnFb;
@@ -1055,13 +1090,26 @@ void LFAST_Mount::printSlewDriveStates()
     static unsigned int count = 0;
     if (count++ >= 20)
     {
-        double azPosnErr = AzimuthAxis->getPositionCommand() - AzimuthAxis->getPositionFeedback();
-        double altPosnErr = AltitudeAxis->getPositionCommand() - AltitudeAxis->getPositionFeedback();
+        double azPosnFb, altPosnFb, azRateFb, altRateFb;
+        try
+        {
+            azPosnFb = AzimuthAxis->getPositionFeedback();
+            altPosnFb = AltitudeAxis->getPositionFeedback();
+            azRateFb = AzimuthAxis->getVelocityFeedback();
+            altRateFb = AltitudeAxis->getVelocityFeedback();
+        }
+        catch (const std::exception &e)
+        {
+            LOGF_ERROR("printSlewDriveStates Error: %s", e.what());
+        }
+
+        double azPosnErr = AzimuthAxis->getPositionCommand() - azPosnFb;
+        double altPosnErr = AltitudeAxis->getPositionCommand() - altPosnFb;
         LOGF_INFO("POSN ERR: %10.8f, %10.8f", azPosnErr, altPosnErr);
 
         // LOGF_INFO("POSN FB: %6.4f, %6.4f", AltitudeAxis->getPositionFeedback(), AzimuthAxis->getPositionFeedback());
         LOGF_INFO("RATE CMD: %10.8f, %10.8f", AltitudeAxis->getVelocityCommand(), AzimuthAxis->getVelocityCommand());
-        LOGF_INFO("RATE FB: %10.8f, %10.8f", AltitudeAxis->getVelocityFeedback(), AzimuthAxis->getVelocityFeedback());
+        LOGF_INFO("RATE FB: %10.8f, %10.8f", altRateFb, azRateFb);
         count = 0;
     }
 }
@@ -1149,19 +1197,29 @@ void LFAST_Mount::TimerHit()
         break;
     }
 
-    if (TrackState == SCOPE_TRACKING)
+    try
     {
-        AltitudeAxis->updateControlCommands(dt, POSN_AND_RATE_CONTROL);
-        AzimuthAxis->updateControlCommands(dt, POSN_AND_RATE_CONTROL);
+        if (TrackState == SCOPE_TRACKING)
+        {
+            AltitudeAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
+            // AzimuthAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
+        }
+        else
+        {
+            AltitudeAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
+            LOGF_INFO("%6.4f", AltitudeAxis->getVelocityCommand());
+            // AzimuthAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
+        }
     }
-    else
+    catch (const std::exception &e)
     {
-        AltitudeAxis->updateControlCommands(dt, POSN_CONTROL_ONLY);
-        AzimuthAxis->updateControlCommands(dt, POSN_CONTROL_ONLY);
+        LOGF_ERROR("TimerHit Error:  %s", e.what());
     }
 
+#if SIM_MODE_ENABLED
     // Simulate mount movement
     updateSim(dt);
+#endif
 
 #if 0 // PRINT_DEBUG_STUFF
     auto itr = AltitudeAxis->debugStrings.begin();
@@ -1193,6 +1251,7 @@ void LFAST_Mount::hexDump(char *buf, const char *data, int size)
         buf[3 * size - 1] = '\0';
 }
 
+#if SIM_MODE_ENABLED
 void LFAST_Mount::updateSim(double dt)
 {
     LOG_DEBUG("LFAST_Mount::updateSim");
@@ -1201,3 +1260,4 @@ void LFAST_Mount::updateSim(double dt)
     AzimuthAxis->simulate(dt);
 #endif
 }
+#endif

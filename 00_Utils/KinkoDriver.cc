@@ -10,7 +10,8 @@
 #define ERR_BUFF_SIZE 40
 
 uint16_t KinkoDriver::numDrivers = 0;
-
+modbus_t *KinkoDriver::ctx;
+double convertPosnIUtoDeg(int32_t current_units);
 double convertSpeedIUtoRPM(int32_t speed_units);
 double convertCurrIUtoAmp(int32_t current_units);
 int32_t convertSpeedRPMtoIU(int16_t speed_rpm);
@@ -23,6 +24,7 @@ KinkoDriver::KinkoDriver(int16_t driverId)
 {
     numDrivers++;
     ctx = NULL;
+    modbusNodeIsSet = false;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,8 +38,6 @@ void KinkoDriver::connectRTU(const char *device, int baud, char parity, int data
         throw std::runtime_error("Unable to create the libmodbus context\n");
     }
 
-    modbus_set_slave(ctx, driverNodeId);
-
     if (modbus_connect(ctx) == -1)
     {
         char errBuff[ERR_BUFF_SIZE];
@@ -47,14 +47,39 @@ void KinkoDriver::connectRTU(const char *device, int baud, char parity, int data
     }
 }
 
+bool KinkoDriver::IsConnected()
+{
+    return (ctx != NULL);
+}
+bool KinkoDriver::readyForModbus()
+{
+    if (ctx == NULL)
+    {
+        return false;
+    }
+    else
+    {
+        if (!modbusNodeIsSet)
+        {
+            modbus_set_slave(ctx, driverNodeId);
+            modbusNodeIsSet = true;
+        }
+        return true;
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 template <typename T>
 T KinkoDriver::readDriverRegister(uint16_t modBusAddr)
 {
-    if (ctx == NULL)
-        throw std::runtime_error("Modbus context not established.");
+    if (!readyForModbus())
+    {
+        char errBuff[100];
+        sprintf(errBuff, "readDriverRegister [%d]::Modbus Not Ready.", modBusAddr);
+        throw std::runtime_error(errBuff);
+    }
 
     uint16_t result_code = 0;
     constexpr uint16_t numWords = sizeof(T) / sizeof(uint16_t);
@@ -76,8 +101,13 @@ T KinkoDriver::readDriverRegister(uint16_t modBusAddr)
 template <typename T>
 uint16_t KinkoDriver::writeDriverRegisters(uint16_t modBusAddr, T reg_value)
 {
-    if (ctx == NULL)
-        throw std::runtime_error("Modbus context not established.");
+    if (!readyForModbus())
+    {
+        char errBuff[100];
+        sprintf(errBuff, "writeDriverRegisters [%d]::Modbus Not Ready.", modBusAddr);
+        throw std::runtime_error(errBuff);
+    }
+
     uint16_t result_code = 0;
     uint16_t numWords = sizeof(T) / sizeof(uint16_t);
 
@@ -227,14 +257,48 @@ double KinkoDriver::getCurrentFeedback(bool updateConsole)
 double KinkoDriver::getPositionFeedback(bool updateConsole)
 {
     auto encoder_counts = readDriverRegister<int32_t>(KINKO::POS_ACTUAL);
-    // TODO: Convert to eng units
-    #if defined(LFAST_TERMINAL)
+    double encoder_pos = convertPosnIUtoDeg(encoder_counts);
+#if defined(LFAST_TERMINAL)
     if (updateConsole && cli != nullptr)
     {
         cli->updatePersistentField(KINKO::POSN_FB_ROW, encoder_counts);
     }
-    #endif
-    return encoder_counts;
+#endif
+    return encoder_pos;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+double convertSpeedIUtoRPM(int32_t speed_units)
+{
+    return (((double)speed_units * 1875) / (512 * 10000));
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+double convertCurrIUtoAmp(int32_t current_units)
+{
+    return (double)current_units * KINKO::counts2amps * 100.0;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+double convertPosnIUtoDeg(int32_t current_units)
+{
+    return (double)current_units * KINKO::counts2deg;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
+{
+    int32_t speed_units = 0;
+    double holder = 0;
+    holder = (double)speed_rpm * KINKO::rpm2cps;
+    speed_units = (int32_t)holder;
+    return speed_units;
 }
 
 #if defined(LFAST_TERMINAL)
@@ -304,30 +368,3 @@ void KinkoDriver::updateStatusFields()
     cli->updatePersistentField(KINKO::DRIVER_STATUS_ROW, "INIT");
 }
 #endif
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-double convertSpeedIUtoRPM(int32_t speed_units)
-{
-    return (((double)speed_units * 1875) / (512 * 10000));
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-double convertCurrIUtoAmp(int32_t current_units)
-{
-    return (double)current_units / KINKO::amps2counts * 100.0;
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
-{
-    int32_t speed_units = 0;
-    double holder = 0;
-    holder = (double)speed_rpm * KINKO::rpm2cps;
-    speed_units = (int32_t)holder;
-    return speed_units;
-}
