@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <vector>
 #include <iomanip>
@@ -6,7 +8,6 @@
 #include <iostream>
 #include <algorithm>
 
-#pragma once
 
 #define MAX_DEPTH 3
 #define OUTPUT_DEBUG_INFO true

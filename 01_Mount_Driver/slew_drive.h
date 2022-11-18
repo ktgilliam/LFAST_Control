@@ -6,6 +6,7 @@
 #include <memory>
 #include "../00_Utils/PID_Controller.h"
 #include "../00_Utils/df2_filter.h"
+#include "../00_Utils/KinkoDriver.h"
 
 #define SLEW_COMPLETE_THRESH_POSN 0.05
 #define SLEW_COMPLETE_THRESH_RATE 0.003
@@ -34,6 +35,8 @@ private:
     double rateLim;
     // const PID_Controller *pid;
     std::unique_ptr<PID_Controller> pid;
+    std::unique_ptr<KinkoDriver> pDriveA;
+    std::unique_ptr<KinkoDriver> pDriveB;
 
 #if SIM_MODE_ENABLED
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;
@@ -60,7 +63,8 @@ public:
     void updateRateOffset(double rate);
     void updateSlewRate(double slewRate);
     const char *getModeString();
-    void updateControl(double dt, ControlMode_t mode);
+    void updateControlCommands(double dt, ControlMode_t mode);
+    double mapSlewDriveCommandToMotors();
 #if SIM_MODE_ENABLED
     void simulate(double dt);
 #endif

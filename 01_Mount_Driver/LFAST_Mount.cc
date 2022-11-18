@@ -1151,13 +1151,13 @@ void LFAST_Mount::TimerHit()
 
     if (TrackState == SCOPE_TRACKING)
     {
-        AltitudeAxis->updateControl(dt, POSN_AND_RATE_CONTROL);
-        AzimuthAxis->updateControl(dt, POSN_AND_RATE_CONTROL);
+        AltitudeAxis->updateControlCommands(dt, POSN_AND_RATE_CONTROL);
+        AzimuthAxis->updateControlCommands(dt, POSN_AND_RATE_CONTROL);
     }
     else
     {
-        AltitudeAxis->updateControl(dt, POSN_CONTROL_ONLY);
-        AzimuthAxis->updateControl(dt, POSN_CONTROL_ONLY);
+        AltitudeAxis->updateControlCommands(dt, POSN_CONTROL_ONLY);
+        AzimuthAxis->updateControlCommands(dt, POSN_CONTROL_ONLY);
     }
 
     // Simulate mount movement

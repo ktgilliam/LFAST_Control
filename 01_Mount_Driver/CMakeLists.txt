@@ -13,18 +13,18 @@ include_directories( ${CMAKE_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
 
+set(PROJECT_INCLUDES 
+	${INDI_LIBRARIES}
+	${NOVA_LIBRARIES} 
+	PID_Controller 
+	KinkoDriver)
+
 # add_library(slew_drive_control slew_drive.cc)
 add_executable(LFAST_Mount LFAST_Mount.cc slew_drive.cc)
 # add_executable(LFAST_Mount_testable LFAST_Mount.cc)
 
-target_link_libraries(LFAST_Mount   
-			 ${INDI_LIBRARIES}
-			 ${NOVA_LIBRARIES} 
-			 PID_Controller 
-			 )
+target_link_libraries( LFAST_Mount   ${PROJECT_INCLUDES} )
 
-			#  lfast_comms)
-			add_compile_definitions(SIM_MODE_ENABLED=1)
 # tell cmake where to install our executable
 install(TARGETS LFAST_Mount RUNTIME DESTINATION bin)
 

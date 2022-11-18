@@ -56,12 +56,3 @@ TEST(bash_wrapper_tests, testStrSplit)
     EXPECT_STREQ(tokens.at(2).c_str(), "a");
     EXPECT_STREQ(tokens.at(3).c_str(), "test");
 }
-
-TEST(bash_wrapper_tests, testStrSplit)
-{
-	BashCommand bw;
-	bw.Command = R"()";
-    bw.execBashCommandWithPipes();
-    std::cout << "#### " <<  std::endl << bw.StdOut << std::endl;
-    SUCCEED();
-}

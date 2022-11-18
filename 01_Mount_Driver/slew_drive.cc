@@ -6,6 +6,10 @@
 #include "lfast_constants.h"
 #include "../00_Utils/math_util.h"
 #include "../00_Utils/PID_Controller.h"
+#include "../00_Utils/KinkoDriver.h"
+
+const unsigned DriveA_ID = 1;
+const unsigned DriveB_ID = 2;
 
 /////////////////////////////////////////////////////////////////////////
 ////////////////////// PUBLIC MEMBER FUNCTIONS //////////////////////////
@@ -38,6 +42,9 @@ SlewDrive::SlewDrive(const char *label)
             lfc::SLEW_POSN_KP,
             lfc::SLEW_POSN_KI,
             lfc::SLEW_POSN_KD));
+
+    pDriveA = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveA_ID));
+    pDriveB = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveB_ID));
 
 #if SIM_MODE_ENABLED
     driveModelPtr = std::unique_ptr<DF2_IIR<double>>(
@@ -120,11 +127,11 @@ void SlewDrive::enable()
 {
     isEnabled = true;
 }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-
-void SlewDrive::updateControl(double dt, ControlMode_t mode)
+void SlewDrive::updateControlCommands(double dt, ControlMode_t mode)
 {
     double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
@@ -158,13 +165,30 @@ void SlewDrive::updateControl(double dt, ControlMode_t mode)
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandOffset_dps;
         // combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
     }
+
 #if SIM_MODE_ENABLED
-    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * FAKE_SLEW_DRIVE_MAX_SPEED_DPS, FAKE_SLEW_DRIVE_MAX_SPEED_DPS);
+    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps,
+                                            -1 * FAKE_SLEW_DRIVE_MAX_SPEED_DPS,
+                                            FAKE_SLEW_DRIVE_MAX_SPEED_DPS);
 #else
-    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps, -1 * SLEW_DRIVE_MAX_SPEED_DPS, SLEW_DRIVE_MAX_SPEED_DPS);
+    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps,
+                                            -1 * LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS,
+                                            LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS);
+
+    double motorVelCommand = mapSlewDriveCommandToMotors();
+    // The worm gears have to turn opposite directions
+    pDriveA->updateVelocityCommand(motorVelCommand);
+    pDriveB->updateVelocityCommand(-1 * motorVelCommand);
 #endif
 }
 
+double SlewDrive::mapSlewDriveCommandToMotors()
+{
+    // TODO: Implement proper state estimation
+    double motorSpeed_dps = combinedRateCmdSaturated_dps * LFAST_CONSTANTS::TOTAL_GEAR_RATIO;
+    double motorSpeed_rpm = motorSpeed_dps / 6;
+    return (motorSpeed_rpm);
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,30 +196,8 @@ void SlewDrive::updateControl(double dt, ControlMode_t mode)
 
 void SlewDrive::simulate(double dt)
 {
-    // static double prevRateCmd;
-    // static bool firstTime = true;
-    // if (firstTime)
-    // {
-    //     prevRateCmd = combinedRateCmdSaturated_dps;
-    //     firstTime = false;
-    // }
-
     rateFeedback_dps = driveModelPtr->update(combinedRateCmdSaturated_dps);
-    // prevRateCmd = combinedRateCmdSaturated_dps;
     double deltaPos = rateFeedback_dps * dt;
-
-    // if ((std::abs(deltaPos) <= SLEW_COMPLETE_THRESH) && std::abs(rateCommandOffset_dps) == 0.0)
-    // {
-    //     positionFeedback_deg = positionCommand_deg;
-    //     rateCommandOffset_dps = 0;
-    //     rateRef_dps = 0.0;
-    //     rateFeedback_dps = 0.0;
-    // }
-    // else
-    // {
-    //     positionFeedback_deg += deltaPos;
-    // }
-
     positionFeedback_deg += deltaPos;
 }
 
