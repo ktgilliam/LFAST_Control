@@ -8,8 +8,6 @@
 #include "../00_Utils/math_util.h"
 #include "../00_Utils/PID_Controller.h"
 #include "../00_Utils/KinkoDriver.h"
-const unsigned DriveA_ID = 1;
-const unsigned DriveB_ID = 2;
 
 /////////////////////////////////////////////////////////////////////////
 ////////////////////// PUBLIC MEMBER FUNCTIONS //////////////////////////
@@ -24,11 +22,12 @@ namespace lfc = LFAST_CONSTANTS;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-SlewDrive::SlewDrive(const char *label)
+SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, bool simMode)
 {
     axisLabel = label;
     // Initialize state variables
     isEnabled = false;
+    simModeEnabled = simMode;
 
     positionFeedback_deg = 0.0;
     positionCommand_deg = 0.0;
@@ -37,22 +36,23 @@ SlewDrive::SlewDrive(const char *label)
     rateRef_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
 
+    // if (simModeEnabled)
+    // {
     pid = std::unique_ptr<PID_Controller>(
         new PID_Controller(
             lfc::SLEW_POSN_KP,
             lfc::SLEW_POSN_KI,
             lfc::SLEW_POSN_KD));
+    // }
 
-#if SIM_MODE_ENABLED
     driveModelPtr = std::unique_ptr<DF2_IIR<double>>(
         new DF2_IIR<double>(
             DIGITAL_CONTROL::lpf_3_b,
             DIGITAL_CONTROL::lpf_3_a,
             2));
-#else
+
     pDriveA = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveA_ID));
     pDriveB = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveB_ID));
-#endif
 
     updateSlewRate(MAX_RATE_CMD);
     pid->reset();
@@ -60,14 +60,58 @@ SlewDrive::SlewDrive(const char *label)
     // pid = new PID_Controller(lfc::SLEW_POSN_KP, lfc::SLEW_POSN_KI, lfc::SLEW_POSN_KD);
 }
 
-bool SlewDrive::connect(const char *devPath)
+bool SlewDrive::initializeDriverBus(const char *devPath)
 {
-#if !SIM_MODE_ENABLED
-    KinkoDriver::connectRTU(devPath);
-    return KinkoDriver::IsConnected();
-#else
-    return true;
-#endif
+    KinkoDriver::initializeRTU(devPath);
+    return KinkoDriver::rtuIsActive();
+}
+
+bool SlewDrive::connectToDrivers()
+{
+    bool result;
+    if (!simModeEnabled)
+    {
+        try
+        {
+            result = pDriveA->driverHandshake();
+            result &= pDriveB->driverHandshake();
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::connectToDrivers() Error.\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
+    }
+    else
+    {
+        result = true;
+    }
+
+    return result;
+}
+
+void SlewDrive::initializeStates()
+{
+    if (!simModeEnabled)
+    {
+        try
+        {
+            pDriveA->setDirectionMode(KINKO::CCW_IS_POSITIVE);
+            pDriveB->setDirectionMode(KINKO::CW_IS_POSITIVE);
+
+            pDriveA->zeroPositionOffset();
+            pDriveB->zeroPositionOffset();
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::initializeStates() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
+    }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -87,8 +131,38 @@ void SlewDrive::abortSlew()
     positionCommand_deg = positionFeedback_deg;
     rateRef_dps = 0.0;
     rateCommandOffset_dps = 0.0;
+    try
+    {
+        pDriveA->setDriverState(KINKO::MOTOR_STATE_ESTOP);
+        pDriveB->setDriverState(KINKO::MOTOR_STATE_ESTOP);
+    }
+    catch (const std::exception &e)
+    {
+        std::stringstream ss;
+        ss << "SlewDrive::abortSlew() Error [" << axisLabel << "]\n"
+           << e.what();
+        throw std::runtime_error(ss.str().c_str());
+    }
 }
-
+void SlewDrive::slowStop()
+{
+    if (!simModeEnabled)
+    {
+        try
+        {
+            pDriveA->updateVelocityCommand(0.0);
+            pDriveB->updateVelocityCommand(0.0);
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::slowStop() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
+    }
+    // abortSlew();
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,17 +212,29 @@ void SlewDrive::updateRateOffset(double rate)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::enable()
 {
-    if (!KinkoDriver::IsConnected())
+    if (!simModeEnabled)
     {
-        throw std::runtime_error("enable:: Drivers not connected.");
+        if (!KinkoDriver::rtuIsActive())
+        {
+            throw std::runtime_error("enable:: Drivers not connected.");
+        }
+        try
+        {
+            pDriveA->setDriverState(KINKO::MOTOR_STATE_ENABLE);
+            pDriveB->setDriverState(KINKO::MOTOR_STATE_ENABLE);
+            pDriveA->setDriverState(KINKO::MOTOR_STATE_ON);
+            pDriveB->setDriverState(KINKO::MOTOR_STATE_ON);
+            pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
+            pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::enable() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
     }
-
-    pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
-    pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
-    pDriveA->setDriverState(KINKO::MOTOR_STATE_ENABLE);
-    pDriveB->setDriverState(KINKO::MOTOR_STATE_ENABLE);
-    pDriveA->setDriverState(KINKO::MOTOR_STATE_ON);
-    pDriveB->setDriverState(KINKO::MOTOR_STATE_ON);
     isEnabled = true;
 }
 
@@ -157,12 +243,24 @@ void SlewDrive::enable()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::disable()
 {
-    if (KinkoDriver::IsConnected())
+    if (!simModeEnabled)
     {
-        pDriveA->setDriverState(KINKO::MOTOR_STATE_DISABLE);
-        pDriveB->setDriverState(KINKO::MOTOR_STATE_DISABLE);
+        if (KinkoDriver::rtuIsActive())
+        {
+            try
+            {
+                pDriveA->setDriverState(KINKO::MOTOR_STATE_DISABLE);
+                pDriveB->setDriverState(KINKO::MOTOR_STATE_DISABLE);
+            }
+            catch (const std::exception &e)
+            {
+                std::stringstream ss;
+                ss << "SlewDrive::disable() Error [" << axisLabel << "]\n"
+                   << e.what();
+                throw std::runtime_error(ss.str().c_str());
+            }
+        }
     }
-
     isEnabled = false;
 }
 
@@ -214,17 +312,29 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
                                             -1 * LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS,
                                             LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS);
 
-    double motorVelCommand_RPM = mapSlewDriveCommandToMotors();
-    // The worm gears have to turn opposite directions
-    if (!KinkoDriver::IsConnected())
+    double motorVelCommand_RPM = mapSlewDriveCommandToMotors(combinedRateCmdSaturated_dps);
+
+    if (!simModeEnabled)
     {
-        throw std::runtime_error("updateControlLoops:: Drivers not connected.");
-    }
-    if (isEnabled)
-    {
-        motorVelCommand_RPM = 200.0*LFAST_CONSTANTS::INV_TOTAL_GEAR_RATIO;
-        pDriveA->updateVelocityCommand(motorVelCommand_RPM);
-        pDriveB->updateVelocityCommand(-1 * motorVelCommand_RPM);
+        if (!KinkoDriver::rtuIsActive())
+        {
+            throw std::runtime_error("updateControlLoops:: Drivers not connected.");
+        }
+        if (isEnabled)
+        {
+            try
+            {
+                pDriveA->updateVelocityCommand(motorVelCommand_RPM);
+                pDriveB->updateVelocityCommand(motorVelCommand_RPM);
+            }
+            catch (const std::exception &e)
+            {
+                std::stringstream ss;
+                ss << "SlewDrive::updateControlLoops() Error [" << axisLabel << "]\n"
+                   << e.what();
+                throw std::runtime_error(ss.str().c_str());
+            }
+        }
     }
 #endif
 }
@@ -232,10 +342,10 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-double SlewDrive::mapSlewDriveCommandToMotors()
+double SlewDrive::mapSlewDriveCommandToMotors(double slewRateCmd_dps)
 {
     // TODO: Implement proper state estimation
-    double motorSpeed_dps = combinedRateCmdSaturated_dps * LFAST_CONSTANTS::TOTAL_GEAR_RATIO;
+    double motorSpeed_dps = slewRateCmd_dps * LFAST_CONSTANTS::TOTAL_GEAR_RATIO;
     double motorSpeed_rpm = motorSpeed_dps / 6;
     return (motorSpeed_rpm);
 }
@@ -243,22 +353,53 @@ double SlewDrive::mapSlewDriveCommandToMotors()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
+double SlewDrive::mapMotorPositionToSlewDrive(double motorPosn_deg)
+{
+    // TODO: Implement proper state estimation
+    return (motorPosn_deg * LFAST_CONSTANTS::INV_TOTAL_GEAR_RATIO);
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
 double SlewDrive::getPositionFeedback()
 {
-#if SIM_MODE_ENABLED
-    return std::fmod(positionFeedback_deg, 360.0);
-#else
-    if (!KinkoDriver::IsConnected())
+    if (simModeEnabled)
     {
-        throw std::runtime_error("getPositionFeedback:: Drivers not connected.");
+        return std::fmod(positionFeedback_deg, 360.0);
     }
+    else
+    {
+        if (!KinkoDriver::rtuIsActive())
+        {
+            throw std::runtime_error("getPositionFeedback:: Drivers not connected.");
+        }
+        double drvAPosn, drvBPosn;
+        try
+        {
+            drvAPosn = pDriveA->getPositionFeedback();
+            drvBPosn = pDriveB->getPositionFeedback();
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::getPositionFeedback() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
 
-    double drvAPosn = pDriveA->getPositionFeedback();
-    double drvBPosn = pDriveA->getPositionFeedback();
-    double drvPosnAve = (drvAPosn + drvBPosn) * 0.5;
-    positionFeedback_deg = processPositionFeedback(drvPosnAve);
-    return positionFeedback_deg;
-#endif
+        double drvPosnAve = (drvAPosn + drvBPosn) * 0.5;
+        // Check difference between them?
+        if ((drvAPosn - drvBPosn) > 1.5)
+        {
+            disable();
+            char errbuff[100];
+            sprintf(errbuff, "Motor feedbacks not sync'd: A=%6.4f, B=%6.4f", drvAPosn, drvBPosn);
+            throw std::runtime_error(errbuff);
+        }
+        // positionFeedback_deg = processPositionFeedback(drvPosnAve);
+        positionFeedback_deg = mapMotorPositionToSlewDrive(drvPosnAve);
+        return positionFeedback_deg;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -274,6 +415,7 @@ double SlewDrive::processPositionFeedback(double currPosn)
     if (firstTime)
     {
         prevPosn = currPosn;
+        prevSector = 0;
         currSector = 0;
     }
 
@@ -299,7 +441,9 @@ double SlewDrive::processPositionFeedback(double currPosn)
         int deltaSector = currSector - prevSector;
         if (std::abs(deltaSector) > 1)
         {
-            throw std::runtime_error("Encoder unwrap error");
+            char errBuff[100];
+            sprintf(errBuff, "Encoder unwrap error [%d->%d][%6.4f]", currSector, prevSector, currPosn);
+            throw std::runtime_error(errBuff);
         }
     }
 
@@ -314,30 +458,49 @@ double SlewDrive::processPositionFeedback(double currPosn)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double SlewDrive::getVelocityFeedback()
 {
-#if !SIM_MODE_ENABLED
-    if (!KinkoDriver::IsConnected())
+    if (simModeEnabled)
     {
-        throw std::runtime_error("getVelocityFeedback:: Drivers not connected.");
+        rateFeedback_dps = driveModelPtr->update(combinedRateCmdSaturated_dps);
     }
-    double drvAVel = pDriveA->getVelocityFeedback();
-    double drvBVel = pDriveB->getVelocityFeedback();
-    double drvVelAve = (drvAVel - drvBVel) * 0.5;
-    rateFeedback_dps = drvVelAve;
+    else
+    {
+        if (!KinkoDriver::rtuIsActive())
+        {
+            throw std::runtime_error("getVelocityFeedback:: Drivers not connected.");
+        }
 
-#endif
+        double drvAVel, drvBVel;
+        try
+        {
+            drvAVel = pDriveA->getVelocityFeedback();
+            drvBVel = pDriveB->getVelocityFeedback();
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::getVelocityFeedback() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
+
+        double drvVelAve = (drvAVel - drvBVel) * 0.5;
+        rateFeedback_dps = drvVelAve;
+    }
     return rateFeedback_dps;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#if SIM_MODE_ENABLED
-
 void SlewDrive::simulate(double dt)
 {
-    rateFeedback_dps = driveModelPtr->update(combinedRateCmdSaturated_dps);
-    double deltaPos = rateFeedback_dps * dt;
-    positionFeedback_deg += deltaPos;
+    if (simModeEnabled)
+    {
+        double deltaPos = rateFeedback_dps * dt;
+        positionFeedback_deg += deltaPos;
+    }
+    else
+    {
+        throw std::runtime_error("simulate() called on non-simulated axis");
+    }
 }
-
-#endif

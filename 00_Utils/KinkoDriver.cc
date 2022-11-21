@@ -7,10 +7,11 @@
 #include "KinkoNamespace.h"
 #include "BitFieldUtil.h"
 
-#define ERR_BUFF_SIZE 40
+#define ERR_BUFF_SIZE 60
 
-uint16_t KinkoDriver::numDrivers = 0;
 modbus_t *KinkoDriver::ctx;
+std::vector<KinkoDriver *> KinkoDriver::connectedDrives;
+
 double convertPosnIUtoDeg(int32_t current_units);
 double convertSpeedIUtoRPM(int32_t speed_units);
 double convertCurrIUtoAmp(int32_t current_units);
@@ -22,17 +23,19 @@ int32_t convertSpeedRPMtoIU(int16_t speed_rpm);
 KinkoDriver::KinkoDriver(int16_t driverId)
     : driverNodeId(driverId)
 {
-    numDrivers++;
     ctx = NULL;
     modbusNodeIsSet = false;
+    DriveIsConnected = false;
+    encoderOffset = 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-void KinkoDriver::connectRTU(const char *device, int baud, char parity, int data_bit, int stop_bit)
+void KinkoDriver::initializeRTU(const char *device, int baud, char parity, int data_bit, int stop_bit)
 {
     ctx = modbus_new_rtu(device, baud, parity, data_bit, stop_bit);
+
     if (ctx == NULL)
     {
         throw std::runtime_error("Unable to create the libmodbus context\n");
@@ -41,46 +44,68 @@ void KinkoDriver::connectRTU(const char *device, int baud, char parity, int data
     if (modbus_connect(ctx) == -1)
     {
         char errBuff[ERR_BUFF_SIZE];
-        sprintf(errBuff, "Connection failed: %s\n", modbus_strerror(errno));
+        sprintf(errBuff, "Connection failed [%s]: %s\n", device, modbus_strerror(errno));
         modbus_free(ctx);
         throw std::runtime_error(errBuff);
     }
+    modbus_flush(ctx);
 }
 
-bool KinkoDriver::IsConnected()
+bool KinkoDriver::rtuIsActive()
 {
     return (ctx != NULL);
 }
+
+bool KinkoDriver::driverHandshake()
+{
+    if (!readyForModbus())
+    {
+        char errBuff[100];
+        sprintf(errBuff, "driverHandshake ID %d::Modbus Not Ready.\n", driverNodeId);
+        throw std::runtime_error(errBuff);
+    }
+
+    modbus_flush(ctx);
+    KINKO::StatusWord_t driveStatus;
+    driveStatus.ALL = readDriverRegister<uint16_t>(driverNodeId, KINKO::STATUS_WORD);
+    bool commsFound = driveStatus.BITS.COMMUNICATION_FOUND;
+    if (commsFound)
+    {
+        DriveIsConnected = true;
+        connectedDrives.push_back(this);
+    }
+    else
+    {
+        char errBuff[ERR_BUFF_SIZE];
+        sprintf(errBuff, "driverHandshake ID %d, Connection failed. Modbuss Error: %s\n", driverNodeId, modbus_strerror(errno));
+        throw std::runtime_error(errBuff);
+    }
+    return commsFound;
+}
+
 bool KinkoDriver::readyForModbus()
 {
     if (ctx == NULL)
     {
         return false;
     }
-    else
-    {
-        if (!modbusNodeIsSet)
-        {
-            modbus_set_slave(ctx, driverNodeId);
-            modbusNodeIsSet = true;
-        }
-        return true;
-    }
+    return true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 template <typename T>
-T KinkoDriver::readDriverRegister(uint16_t modBusAddr)
+T KinkoDriver::readDriverRegister(uint8_t devId, uint16_t modBusAddr)
 {
     if (!readyForModbus())
     {
         char errBuff[100];
-        sprintf(errBuff, "readDriverRegister [%d]::Modbus Not Ready.", modBusAddr);
+        sprintf(errBuff, "readDriverRegister [%d]::Drive not connected.\n", modBusAddr);
         throw std::runtime_error(errBuff);
     }
 
+    modbus_set_slave(ctx, devId);
     uint16_t result_code = 0;
     constexpr uint16_t numWords = sizeof(T) / sizeof(uint16_t);
     ConversionBuffer<T> rxBuff;
@@ -88,9 +113,8 @@ T KinkoDriver::readDriverRegister(uint16_t modBusAddr)
     result_code = modbus_read_registers(ctx, modBusAddr, numWords, rxBuff.U16_PARTS);
     if (result_code == -1)
     {
-        char errBuff[ERR_BUFF_SIZE];
-        sprintf(errBuff, "%s\n", modbus_strerror(errno));
-        throw std::runtime_error(errBuff);
+        modbus_flush(ctx);
+        throw std::runtime_error(modbus_strerror(errno));
     }
     return static_cast<T>(rxBuff.WHOLE);
 }
@@ -99,23 +123,22 @@ T KinkoDriver::readDriverRegister(uint16_t modBusAddr)
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 template <typename T>
-uint16_t KinkoDriver::writeDriverRegisters(uint16_t modBusAddr, T reg_value)
+uint16_t KinkoDriver::writeDriverRegisters(uint8_t devId, uint16_t modBusAddr, T reg_value)
 {
     if (!readyForModbus())
     {
         char errBuff[100];
-        sprintf(errBuff, "writeDriverRegisters [%d]::Modbus Not Ready.", modBusAddr);
+        sprintf(errBuff, "writeDriverRegisters [%d]::Drive not connected.\n", modBusAddr);
         throw std::runtime_error(errBuff);
     }
 
+    modbus_set_slave(ctx, devId);
     uint16_t result_code = 0;
     uint16_t numWords = sizeof(T) / sizeof(uint16_t);
 
     ConversionBuffer<T> txBuff;
-
     if (numWords == 1)
     {
-
         result_code = modbus_write_register(ctx, modBusAddr, reg_value);
     }
     else
@@ -125,9 +148,8 @@ uint16_t KinkoDriver::writeDriverRegisters(uint16_t modBusAddr, T reg_value)
     }
     if (result_code == -1)
     {
-        char errBuff[ERR_BUFF_SIZE];
-        sprintf(errBuff, "%s\n", modbus_strerror(errno));
-        throw std::runtime_error(errBuff);
+        modbus_flush(ctx);
+        throw std::runtime_error(modbus_strerror(errno));
     }
     return result_code;
 }
@@ -137,7 +159,7 @@ uint16_t KinkoDriver::writeDriverRegisters(uint16_t modBusAddr, T reg_value)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::setDriverState(uint16_t motor_state)
 {
-    writeDriverRegisters<uint16_t>(KINKO::CONTROL_WORD, motor_state);
+    writeDriverRegisters<uint16_t>(driverNodeId, KINKO::CONTROL_WORD, motor_state);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,7 +167,7 @@ void KinkoDriver::setDriverState(uint16_t motor_state)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::setControlMode(uint16_t motor_mode)
 {
-    writeDriverRegisters<uint16_t>(KINKO::OPERATION_MODE, motor_mode);
+    writeDriverRegisters<uint16_t>(driverNodeId, KINKO::OPERATION_MODE, motor_mode);
 #if defined(LFAST_TERMINAL)
     if (cli != nullptr)
     {
@@ -171,16 +193,45 @@ void KinkoDriver::setControlMode(uint16_t motor_mode)
     }
 #endif
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void KinkoDriver::setDirectionMode(uint8_t dir)
+{
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::INVERT_DIRECTION, dir);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void KinkoDriver::setMaxSpeed(double maxRPM)
+{
+    int32_t max_rpm_IU = convertSpeedRPMtoIU(maxRPM);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::MAX_SPEED, max_rpm_IU);
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void KinkoDriver::zeroPositionOffset()
+{
+
+    encoderOffset = readDriverRegister<int32_t>(driverNodeId, KINKO::POS_ACTUAL);
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::updatePositionCommand(double posn_setpoint)
 {
-    writeDriverRegisters<int32_t>(KINKO::TARGET_POSITION, posn_setpoint);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::TARGET_POSITION, posn_setpoint);
 #if defined(LFAST_TERMINAL)
     if (cli != nullptr)
     {
-        cli->updatePersistentField(KINKO::CMD_ROW, posn_setpoint);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::CMD_ROW_A, posn_setpoint);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::CMD_ROW_B, posn_setpoint);
     }
 #endif
 }
@@ -191,12 +242,14 @@ void KinkoDriver::updatePositionCommand(double posn_setpoint)
 void KinkoDriver::updateVelocityCommand(double velocity_setpoint)
 {
     int32_t target_speed_value = convertSpeedRPMtoIU(velocity_setpoint);
-    // int32_t target_speed_value = 0x;
-    writeDriverRegisters<int32_t>(KINKO::TARGET_SPEED, target_speed_value);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::TARGET_SPEED, target_speed_value);
 #if defined(LFAST_TERMINAL)
     if (cli != nullptr)
     {
-        cli->updatePersistentField(KINKO::CMD_ROW, velocity_setpoint);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::CMD_ROW_A, velocity_setpoint);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::CMD_ROW_B, velocity_setpoint);
     }
 #endif
 }
@@ -206,11 +259,14 @@ void KinkoDriver::updateVelocityCommand(double velocity_setpoint)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::updateTorqueCommand(double torque_setpoint)
 {
-    writeDriverRegisters<int32_t>(KINKO::TARGET_TORQUE, torque_setpoint);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::TARGET_TORQUE, torque_setpoint);
 #if defined(LFAST_TERMINAL)
     if (cli != nullptr)
     {
-        cli->updatePersistentField(KINKO::CMD_ROW, torque_setpoint);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::CMD_ROW_A, torque_setpoint);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::CMD_ROW_B, torque_setpoint);
     }
 #endif
 }
@@ -220,16 +276,16 @@ void KinkoDriver::updateTorqueCommand(double torque_setpoint)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double KinkoDriver::getVelocityFeedback(bool updateConsole)
 {
-    static double tmpv = 0.0;
-    tmpv += 0.001;
     // int32_t real_speed_units = readDriverRegister(KINKO::REAL_SPEED);
-    auto real_speed_units = readDriverRegister<int32_t>(KINKO::REAL_SPEED);
+    auto real_speed_units = readDriverRegister<int32_t>(driverNodeId, KINKO::REAL_SPEED);
     auto real_speed_rpm = convertSpeedIUtoRPM(real_speed_units);
 #if defined(LFAST_TERMINAL)
     if (updateConsole && cli != nullptr)
     {
-        real_speed_rpm = tmpv;
-        cli->updatePersistentField(KINKO::VEL_FB_ROW, real_speed_rpm);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::VEL_FB_ROW_A, real_speed_rpm);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::VEL_FB_ROW_B, real_speed_rpm);
     }
 #endif
     return real_speed_rpm;
@@ -240,12 +296,15 @@ double KinkoDriver::getVelocityFeedback(bool updateConsole)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double KinkoDriver::getCurrentFeedback(bool updateConsole)
 {
-    auto real_current_units = readDriverRegister<int32_t>(KINKO::REAL_CURRENT);
+    auto real_current_units = readDriverRegister<int32_t>(driverNodeId, KINKO::REAL_CURRENT);
     int32_t real_current_amps = convertCurrIUtoAmp(real_current_units);
 #if defined(LFAST_TERMINAL)
     if (updateConsole && cli != nullptr)
     {
-        cli->updatePersistentField(KINKO::TRQ_FB_ROW, real_current_amps);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::TRQ_FB_ROW_A, real_current_amps);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::TRQ_FB_ROW_B, real_current_amps);
     }
 #endif
     return real_current_amps;
@@ -256,12 +315,20 @@ double KinkoDriver::getCurrentFeedback(bool updateConsole)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double KinkoDriver::getPositionFeedback(bool updateConsole)
 {
-    auto encoder_counts = readDriverRegister<int32_t>(KINKO::POS_ACTUAL);
-    double encoder_pos = convertPosnIUtoDeg(encoder_counts);
+    int32_t encoder_counts = readDriverRegister<int32_t>(driverNodeId, KINKO::POS_ACTUAL);
+    int32_t encoder_counts_offs = encoder_counts - encoderOffset;
+    // if(encoder_counts_offs < 0)
+    //     encoder_counts_offs += KINKO::COUNTS_PER_REV;
+
+    double encoder_pos = convertPosnIUtoDeg(encoder_counts_offs);
+
 #if defined(LFAST_TERMINAL)
     if (updateConsole && cli != nullptr)
     {
-        cli->updatePersistentField(KINKO::POSN_FB_ROW, encoder_counts);
+        if (driverNodeId == 1)
+            cli->updatePersistentField(KINKO::POSN_FB_ROW_A, encoder_counts_offs);
+        else if (driverNodeId == 2)
+            cli->updatePersistentField(KINKO::POSN_FB_ROW_B, encoder_counts_offs);
     }
 #endif
     return encoder_pos;
@@ -273,6 +340,17 @@ double KinkoDriver::getPositionFeedback(bool updateConsole)
 double convertSpeedIUtoRPM(int32_t speed_units)
 {
     return (((double)speed_units * 1875) / (512 * 10000));
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
+{
+    int32_t speed_units = 0;
+    double holder = 0;
+    holder = (double)speed_rpm * KINKO::rpm2cps;
+    speed_units = (int32_t)holder;
+    return speed_units;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -288,17 +366,6 @@ double convertCurrIUtoAmp(int32_t current_units)
 double convertPosnIUtoDeg(int32_t current_units)
 {
     return (double)current_units * KINKO::counts2deg;
-}
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
-int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
-{
-    int32_t speed_units = 0;
-    double holder = 0;
-    holder = (double)speed_rpm * KINKO::rpm2cps;
-    speed_units = (int32_t)holder;
-    return speed_units;
 }
 
 #if defined(LFAST_TERMINAL)
@@ -317,12 +384,18 @@ void KinkoDriver::connectTerminalInterface(TerminalInterface *_cli)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::setupPersistentFields()
 {
-    cli->addPersistentField("Driver Status", KINKO::DRIVER_STATUS_ROW);
-    cli->addPersistentField("Driver Mode", KINKO::DRIVER_MODE_ROW);
-    cli->addPersistentField("Command", KINKO::CMD_ROW);
-    cli->addPersistentField("Position FB [deg]", KINKO::POSN_FB_ROW);
-    cli->addPersistentField("Velocity FB [RPM]", KINKO::VEL_FB_ROW);
-    cli->addPersistentField("Torque FB [%]", KINKO::TRQ_FB_ROW);
+
+    // cli->addPersistentField("Driver Status", KINKO::DRIVER_STATUS_ROW);
+    // cli->addPersistentField("Driver Mode", KINKO::DRIVER_MODE_ROW);
+    cli->addPersistentField("A Command", KINKO::CMD_ROW_A);
+    cli->addPersistentField("A Position FB [cnts]", KINKO::POSN_FB_ROW_A);
+    cli->addPersistentField("A Velocity FB [RPM]", KINKO::VEL_FB_ROW_A);
+    cli->addPersistentField("A Torque FB [%]", KINKO::TRQ_FB_ROW_A);
+
+    cli->addPersistentField("B Command", KINKO::CMD_ROW_B);
+    cli->addPersistentField("B Position FB [cnts]", KINKO::POSN_FB_ROW_B);
+    cli->addPersistentField("B Velocity FB [RPM]", KINKO::VEL_FB_ROW_B);
+    cli->addPersistentField("B Torque FB [%]", KINKO::TRQ_FB_ROW_B);
 
     ServoInterface::setupPersistentFields();
     updateStatusFields();
@@ -350,11 +423,11 @@ void KinkoDriver::readAndUpdateStatusField(unsigned fieldId)
     {
     case KINKO::DRIVER_MODE_ROW:
         // read driver mode
-        cli->updatePersistentField(fieldSwitch, "INIT");
+        // cli->updatePersistentField(fieldSwitch, "INIT");
         break;
     case KINKO::DRIVER_STATUS_ROW:
         // read driver status
-        cli->updatePersistentField(fieldSwitch, "INIT");
+        // cli->updatePersistentField(fieldSwitch, "INIT");
         break;
     }
 }

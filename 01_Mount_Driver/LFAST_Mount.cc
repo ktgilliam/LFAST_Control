@@ -48,7 +48,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
-const double constexpr default_park_posn_alt = -10.0;
+const double constexpr default_park_posn_alt = 30.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
@@ -58,10 +58,14 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 const char azLabel[] = "Az. Axis";
 const char altLabel[] = "Alt. Axis";
 
+const bool ALT_SIMULATED = false;
+const bool AZ_SIMULATED = true;
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
+LFAST_Mount::LFAST_Mount()
+    : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
     // Set up the basic configuration for the mount
     setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
@@ -70,8 +74,19 @@ LFAST_Mount::LFAST_Mount() : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugL
 
     DBG_SCOPE = INDI::Logger::getInstance().addDebugLevel("Scope Verbose", "SCOPE");
 
-    AzimuthAxis = std::unique_ptr<SlewDrive>(new SlewDrive(azLabel));
-    AltitudeAxis = std::unique_ptr<SlewDrive>(new SlewDrive(altLabel));
+    AzimuthAxis = std::unique_ptr<SlewDrive>(
+        new SlewDrive(
+            azLabel,
+            LFAST_CONSTANTS::AZIMUTH_MOTOR_A_ID,
+            LFAST_CONSTANTS::AZIMUTH_MOTOR_B_ID,
+            AZ_SIMULATED));
+
+    AltitudeAxis = std::unique_ptr<SlewDrive>(
+        new SlewDrive(
+            altLabel,
+            LFAST_CONSTANTS::ALTITUDE_MOTOR_A_ID,
+            LFAST_CONSTANTS::ALTITUDE_MOTOR_B_ID,
+            ALT_SIMULATED));
 
     initializeTimers();
 
@@ -200,15 +215,28 @@ bool LFAST_Mount::initProperties()
     // // Set fastest default speed
     // MountSlewRateSP.fill(getDeviceName(), "MOUNT_SLEW_SPEED", "Fast Slew", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
     // MountSlewRateSP[LFAST::DEFAULT_SLEW_IDX].s = ISS_ON;
-    // SetSlewRate(LFAST::DEFAULT_SLEW_IDX);
+    SetSlewRate(LFAST_CONSTANTS::DEFAULT_SLEW_IDX);
 
     // NTP Server Address text field
     // NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
     // NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
+    std::string modbusDevPath = "";
+    for (int ii = 0; ii < 4; ii++)
+    {
+        char testDevPath[20];
+        sprintf(testDevPath, "/dev/ttyUSB%d", ii);
+        if (is_file_exist(testDevPath))
+        {
+            LOGF_INFO("FOUND: %s", testDevPath);
+            modbusDevPath = testDevPath;
+            break;
+        }
+    }
 
-    modbusCommPortTP[0].fill("MODBUS_COMM_DEV_TP", "Modbus Comm Port", "/dev/ttyUSB0");
-    modbusCommPortTP.fill(getDeviceName(), "MODBUS_COMM_DEV", "Modbus", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
-    defineProperty(&modbusCommPortTP);
+    // modbusDevPath = "/dev/ttyUSB0";
+    ModbusCommPortTP[0].fill("MODBUS_COMM_DEV_TP", "Modbus Comm Port", modbusDevPath);
+    ModbusCommPortTP.fill(getDeviceName(), "MODBUS_COMM_DEV", "Modbus", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
+    defineProperty(&ModbusCommPortTP);
 
     AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
     AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
@@ -232,6 +260,8 @@ bool LFAST_Mount::initProperties()
     TrackStateSP[SCOPE_IDLE].fill("STATE_INIT", "IDLE", ISS_ON);
     TrackStateSP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MAIN_CONTROL_TAB, IP_RO, ISR_1OFMANY, 60, IPS_IDLE);
 
+    HomeSP[0].fill("GO_HOME", "Home", ISS_OFF);
+    HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
     // Force the alignment system to always be on
     getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE")->sp[0].s = ISS_ON;
     SetApproximateMountAlignmentFromMountType(ALTAZ);
@@ -256,6 +286,7 @@ bool LFAST_Mount::updateProperties()
         deleteProperty(AbortSP.name);
 
         defineProperty(&TrackStateSP);
+        defineProperty(&HomeSP);
         defineProperty(&AzAltCoordsNP);
 
         defineProperty(&AbortSP);
@@ -274,6 +305,8 @@ bool LFAST_Mount::updateProperties()
         deleteProperty(GuideWENP.name);
         deleteProperty(GuideRateNP.getName());
         deleteProperty(TrackStateSP.getName());
+        deleteProperty(HomeSP.getName());
+        deleteProperty(AzAltCoordsNP.getName());
     }
     return true;
 }
@@ -283,6 +316,10 @@ bool LFAST_Mount::updateProperties()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Connect()
 {
+    if (ALT_SIMULATED)
+        LOG_WARN("ALTITUDE AXIS IN SIMULATED MODE.");
+    if (AZ_SIMULATED)
+        LOG_WARN("AZIMUTH AXIS IN SIMULATED MODE.");
     SetTimer(getCurrentPollingPeriod());
     return INDI::Telescope::Connect();
     // return true;
@@ -300,21 +337,24 @@ bool LFAST_Mount::Disconnect()
 bool LFAST_Mount::Handshake()
 {
     // LOG_WARN("Handshake not implemented yet.");
-    auto devPath = modbusCommPortTP[0].getText();
+    auto devPath = ModbusCommPortTP[0].getText();
     LOGF_INFO("Connecting to modbus comm port: %s", devPath);
     try
     {
-        bool successFlag = SlewDrive::connect(devPath);
-        if (successFlag)
-            LOG_INFO("Modbus connection successful");
-        else
-            LOG_INFO("Modbus connection failed");
-        AzimuthAxis->disable();
-        return successFlag;
+        if (!ALT_SIMULATED || !AZ_SIMULATED)
+            SlewDrive::initializeDriverBus(devPath);
+        AltitudeAxis->connectToDrivers();
+        AzimuthAxis->connectToDrivers();
+        // Zeros the encoders (probably will need to remove this!!)
+        AltitudeAxis->initializeStates();
+        AzimuthAxis->initializeStates();
+        
+        LOG_INFO("Modbus connection successful");
+        return true;
     }
     catch (const std::exception &e)
     {
-        LOGF_ERROR("UNABLE TO CONNECT TO DRIVERS: %s", e.what());
+        LOGF_ERROR("HANDSHAKE FAILED: %s", e.what());
         return false;
     }
 }
@@ -331,18 +371,14 @@ bool LFAST_Mount::Goto(double ra, double dec)
     fs_sexa(DecStr, m_SkyCurrentRADE.declination, 2, 3600);
     LOGF_DEBUG("Iterative GOTO RA %lf DEC %lf (Current Sky RA %s DE %s)", ra, dec, RAStr,
                DecStr);
-    // }
-    // else
-    // {
-    //     if (TrackState != SCOPE_IDLE)
-    //     {
-    //         Abort();
-    //         return false;
-    //     }
-    // }
 
     updateTrackingTarget(ra, dec);
 
+    if (TrackState == SCOPE_IDLE)
+    {
+        AltitudeAxis->enable();
+        AzimuthAxis->enable();
+    }
     // Call the alignment subsystem to translate the celestial reference frame coordinate
     // into a telescope reference frame coordinate
     // ALIGNMENT::TelescopeDirectionVector TDVCommand;
@@ -649,6 +685,18 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
+
+    if (HomeSP.isNameMatch(name))
+    {
+        // PLACEHOLDER
+        // Will need to redo this when we have limit switches etc.
+        HomeSP.reset();
+        IDSetSwitch(&HomeSP, nullptr);
+        AltitudeAxis->initializeStates();
+        AzimuthAxis->initializeStates();
+        HomeSP.setState(IPS_OK);
+        return true;
+    }
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
 }
@@ -662,6 +710,14 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
     {
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentTextProperties(this, name, texts, names, n);
+    }
+    if (ModbusCommPortTP.isNameMatch(name))
+    {
+        ModbusCommPortTP.setState(IPS_OK);
+        IUUpdateText(&ModbusCommPortTP, texts, names, n);
+        //  Update client display
+        IDSetText(&ModbusCommPortTP, nullptr);
+        return true;
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewText(dev, name, texts, names, n);
@@ -1106,8 +1162,7 @@ void LFAST_Mount::printSlewDriveStates()
         double azPosnErr = AzimuthAxis->getPositionCommand() - azPosnFb;
         double altPosnErr = AltitudeAxis->getPositionCommand() - altPosnFb;
         LOGF_INFO("POSN ERR: %10.8f, %10.8f", azPosnErr, altPosnErr);
-
-        // LOGF_INFO("POSN FB: %6.4f, %6.4f", AltitudeAxis->getPositionFeedback(), AzimuthAxis->getPositionFeedback());
+        LOGF_INFO("POSN FB: %6.4f, %6.4f", AltitudeAxis->getPositionFeedback(), AzimuthAxis->getPositionFeedback());
         LOGF_INFO("RATE CMD: %10.8f, %10.8f", AltitudeAxis->getVelocityCommand(), AzimuthAxis->getVelocityCommand());
         LOGF_INFO("RATE FB: %10.8f, %10.8f", altRateFb, azRateFb);
         count = 0;
@@ -1170,6 +1225,8 @@ void LFAST_Mount::TimerHit()
         break;
 
     case SCOPE_IDLE:
+        AltitudeAxis->slowStop();
+        AzimuthAxis->slowStop();
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
@@ -1202,13 +1259,13 @@ void LFAST_Mount::TimerHit()
         if (TrackState == SCOPE_TRACKING)
         {
             AltitudeAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
-            // AzimuthAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
+            AzimuthAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
         }
         else
         {
             AltitudeAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
-            LOGF_INFO("%6.4f", AltitudeAxis->getVelocityCommand());
-            // AzimuthAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
+            AzimuthAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
+            // LOGF_INFO("%6.4f", AltitudeAxis->getVelocityCommand());
         }
     }
     catch (const std::exception &e)
@@ -1216,10 +1273,8 @@ void LFAST_Mount::TimerHit()
         LOGF_ERROR("TimerHit Error:  %s", e.what());
     }
 
-#if SIM_MODE_ENABLED
     // Simulate mount movement
     updateSim(dt);
-#endif
 
 #if 0 // PRINT_DEBUG_STUFF
     auto itr = AltitudeAxis->debugStrings.begin();
@@ -1251,13 +1306,9 @@ void LFAST_Mount::hexDump(char *buf, const char *data, int size)
         buf[3 * size - 1] = '\0';
 }
 
-#if SIM_MODE_ENABLED
 void LFAST_Mount::updateSim(double dt)
 {
     LOG_DEBUG("LFAST_Mount::updateSim");
-#if SIM_MODE_ENABLED
-    AltitudeAxis->simulate(dt);
+    // AltitudeAxis->simulate(dt);
     AzimuthAxis->simulate(dt);
-#endif
 }
-#endif

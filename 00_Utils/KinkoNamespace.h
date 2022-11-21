@@ -92,12 +92,82 @@ namespace KINKO
         QUICK_STOP_DEC = 0x3300,
     };
 
+    const uint16_t MODBUS_ERROR = 0x81;
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    ///
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    struct STATUS_BITS
+    {
+        uint16_t READY_ON : 1;            // bit 0
+        uint16_t SWITCH_ON : 1;           // bit 1
+        uint16_t OPERATION_ENABLE : 1;    // bit 2
+        uint16_t FAULT : 1;               // bit 3
+        uint16_t VOLTAGE_ENABLE : 1;      // bit 4
+        uint16_t QUICK_STOP : 1;          // bit 5
+        uint16_t SWITCH_DISABLED : 1;     // bit 6
+        uint16_t UNSPECIFIED : 1;         // bit 7
+        uint16_t MANUFACTURE0 : 1;        // bit 8
+        uint16_t REMOTE : 1;              // bit 9
+        uint16_t TARGET_REACHED : 1;      // bit 10
+        uint16_t INT_LIM_ACTIVE : 1;      // bit 11
+        uint16_t SETPOINT_ACK : 1;        // bit 12
+        uint16_t FOLLOWING_ERROR : 1;     // bit 13
+        uint16_t COMMUNICATION_FOUND : 1; // bit 14
+        uint16_t REFERENCE_FOUND : 1;     // bit 15
+    };
+    typedef union
+    {
+        struct STATUS_BITS BITS;
+        uint16_t ALL;
+    } StatusWord_t;
+
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    ///
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    // struct CONTROL_BITS
+    // {
+    //     uint16_t READY_ON : 1;            // bit 0
+    //     uint16_t SWITCH_ON : 1;           // bit 1
+    //     uint16_t OPERATION_ENABLE : 1;    // bit 2
+    //     uint16_t FAULT : 1;               // bit 3
+    //     uint16_t VOLTAGE_ENABLE : 1;      // bit 4
+    //     uint16_t QUICK_STOP : 1;          // bit 5
+    //     uint16_t SWITCH_DISABLED : 1;     // bit 6
+    //     uint16_t UNSPECIFIED : 1;         // bit 7
+    //     uint16_t MANUFACTURE0 : 1;        // bit 8
+    //     uint16_t REMOTE : 1;              // bit 9
+    //     uint16_t TARGET_REACHED : 1;      // bit 10
+    //     uint16_t INT_LIM_ACTIVE : 1;      // bit 11
+    //     uint16_t SETPOINT_ACK : 1;        // bit 12
+    //     uint16_t FOLLOWING_ERROR : 1;     // bit 13
+    //     uint16_t COMMUNICATION_FOUND : 1; // bit 14
+    //     uint16_t REFERENCE_FOUND : 1;     // bit 15
+    // };
+    // typedef union
+    // {
+    //     struct STATUS_BITS BITS;
+    //     uint16_t ALL;
+    // } ControlWord_t;
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+    enum motor_direction_enum
+    {
+        CCW_IS_POSITIVE = 0,
+        CW_IS_POSITIVE = 1
+    };
+
     enum motor_state_enum
     {
         MOTOR_STATE_DISABLE = 0x02,
-        MOTOR_STATE_ENABLE = 0x06,
+        MOTOR_STATE_ENABLE = 0x06, // also powers off motor
         MOTOR_STATE_ESTOP = 0x0B,
-        MOTOR_STATE_ON = 0x0F
+        MOTOR_STATE_ON = 0x0F // power on motor
+
     };
 
     enum motor_mode_enum
@@ -108,5 +178,6 @@ namespace KINKO
         MOTOR_MODE_HOME = 6
     };
 
-        const uint32_t COUNTS_PER_REV = 10000;
+    const uint32_t COUNTS_PER_REV = 10000;
+
 }

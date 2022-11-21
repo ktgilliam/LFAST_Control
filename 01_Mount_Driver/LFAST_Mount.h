@@ -141,7 +141,7 @@ private:
 
     // static constexpr const char *DetailedMountInfoPage { "Detailed Mount Information" };
 
-    INDI::PropertyText modbusCommPortTP{1};
+    INDI::PropertyText ModbusCommPortTP{1};
     // INDI::PropertyText NtpServerTP{1};
     INDI::PropertyNumber AzAltCoordsNP{4};
     // INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
@@ -151,7 +151,7 @@ private:
 
     // INDI::PropertyLight TrackStateLP{5};
     INDI::PropertySwitch TrackStateSP{6};
-
+    INDI::PropertySwitch HomeSP{1};
     // enum
     // {
     //     FULL_STOP,
@@ -202,4 +202,10 @@ const std::string getDirString(INDI_DIR_WE dir)
         return "DIRECTION_EAST";
     else
         return "DIRECTION_ERROR";
+}
+
+inline bool is_file_exist(const char *fileName)
+{
+    std::ifstream infile(fileName);
+    return infile.good();
 }

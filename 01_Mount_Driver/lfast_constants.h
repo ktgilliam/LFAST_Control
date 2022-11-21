@@ -34,7 +34,16 @@ namespace LFAST_CONSTANTS
     constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
     constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
 
-     constexpr double max_slew = SLEW_DRIVE_MAX_SPEED_DPS/ SiderealRate_degpersec;
+    constexpr double max_slew = SLEW_DRIVE_MAX_SPEED_DPS / SiderealRate_degpersec;
+
+    enum MOTOR_IDS
+    {
+        BROADCAST = 0,
+        ALTITUDE_MOTOR_A_ID = 1,
+        ALTITUDE_MOTOR_B_ID = 2,
+        AZIMUTH_MOTOR_A_ID = 3,
+        AZIMUTH_MOTOR_B_ID = 4,
+    };
 }
 
 // INDI::IHorizontalCoordinates HorizontalRates_geocentric(double ha, double dec, double lat);
