@@ -152,6 +152,7 @@ private:
     // INDI::PropertyLight TrackStateLP{5};
     INDI::PropertySwitch TrackStateSP{6};
     INDI::PropertySwitch HomeSP{1};
+    bool homingRoutineActive;
     // enum
     // {
     //     FULL_STOP,
@@ -182,6 +183,7 @@ private:
     INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
     void updateSim(double dt);
+    bool startHomingRoutine();
 };
 
 const std::string getDirString(INDI_DIR_NS dir)

@@ -15,9 +15,11 @@
 
 typedef enum
 {
-    POSN_CONTROL_ONLY,
-    POSN_AND_RATE_CONTROL
+    SLEWING_TO_POSN,
+    TRACKING_COMMAND,
+    HOMING_IN_PROGRESS
 } ControlMode_t;
+
 
 class SlewDrive
 {
@@ -41,7 +43,17 @@ private:
     std::unique_ptr<KinkoDriver> pDriveB;
 
     bool simModeEnabled;
-
+    typedef enum
+    {
+        HOMING_IDLE,
+        HOME_COMMAND_RECEIVED,
+        PRE_HOME_ALIGNMENT,
+        HOMING_ACTIVE,
+        HOMING_COMPLETE
+    } homingStatus_t;
+    homingStatus_t homingRoutineStatus;
+    uint32_t alignmentCounter{0};
+        bool updateAlignment();
 public:
     SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, bool simMode = false);
     static bool initializeDriverBus(const char *devPath);
@@ -49,6 +61,10 @@ public:
     void enable();
     void disable();
     void initializeStates();
+
+    
+
+
     double getPositionCommand() { return std::fmod(positionCommand_deg, 360.0); }
     double getPositionFeedback();
     double processPositionFeedback(double currPosn);
@@ -70,6 +86,14 @@ public:
     void updateControlLoops(double dt, ControlMode_t mode);
     static double mapSlewDriveCommandToMotors(double);
     double mapMotorPositionToSlewDrive(double motorPosn_deg);
+
+
+
+    
+    void startHoming();
+
+    void updateHoming();
+    bool isHomingComplete();
     void simulate(double dt);
 
     std::vector<std::string> debugStrings;

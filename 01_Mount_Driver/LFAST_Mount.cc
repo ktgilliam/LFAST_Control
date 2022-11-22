@@ -67,6 +67,7 @@ const bool AZ_SIMULATED = true;
 LFAST_Mount::LFAST_Mount()
     : DBG_SIMULATOR(INDI::Logger::getInstance().addDebugLevel("Simulator Verbose", "SIMULATOR"))
 {
+    homingRoutineActive = false;
     // Set up the basic configuration for the mount
     setVersion(CDRIVER_VERSION_MAJOR, CDRIVER_VERSION_MINOR);
     setTelescopeConnection(CONNECTION_TCP);
@@ -261,7 +262,7 @@ bool LFAST_Mount::initProperties()
     TrackStateSP.fill(getDeviceName(), "SCOPE_STATE", "Mount State", MAIN_CONTROL_TAB, IP_RO, ISR_1OFMANY, 60, IPS_IDLE);
 
     HomeSP[0].fill("GO_HOME", "Home", ISS_OFF);
-    HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
     getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE")->sp[0].s = ISS_ON;
     SetApproximateMountAlignmentFromMountType(ALTAZ);
@@ -348,7 +349,7 @@ bool LFAST_Mount::Handshake()
         // Zeros the encoders (probably will need to remove this!!)
         AltitudeAxis->initializeStates();
         AzimuthAxis->initializeStates();
-        
+
         LOG_INFO("Modbus connection successful");
         return true;
     }
@@ -688,14 +689,10 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
 
     if (HomeSP.isNameMatch(name))
     {
-        // PLACEHOLDER
-        // Will need to redo this when we have limit switches etc.
-        HomeSP.reset();
+        HomeSP.setState(IPS_BUSY);
+        // HomeSP.reset();
         IDSetSwitch(&HomeSP, nullptr);
-        AltitudeAxis->initializeStates();
-        AzimuthAxis->initializeStates();
-        HomeSP.setState(IPS_OK);
-        return true;
+        return startHomingRoutine();
     }
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
@@ -721,6 +718,28 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewText(dev, name, texts, names, n);
+}
+
+bool LFAST_Mount::startHomingRoutine()
+{
+    try
+    {
+        if (TrackState == SCOPE_IDLE)
+        {
+            AltitudeAxis->enable();
+            AzimuthAxis->enable();
+        }
+        homingRoutineActive = true;
+        AltitudeAxis->startHoming();
+        AzimuthAxis->startHoming();
+        LOG_INFO("Homing Routine Started.");
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        LOGF_ERROR("Homing Error: %s", e.what());
+        return false;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -911,8 +930,17 @@ bool LFAST_Mount::ReadScopeStatus()
     // Calculate new RA DEC
     if (updatePointingCoordinates())
     {
-
         AzAltCoordsNP.apply();
+    }
+    
+    if (homingRoutineActive)
+    {
+        if (AltitudeAxis->isHomingComplete() && AzimuthAxis->isHomingComplete())
+        {
+            HomeSP.setState(IPS_OK);
+            homingRoutineActive = false;
+            LOG_INFO("Homing Routine Complete.");
+        }
     }
 
     if (TrackState == SCOPE_SLEWING)
@@ -977,7 +1005,7 @@ bool LFAST_Mount::updatePointingCoordinates()
     if (!TransformTelescopeToCelestial(TDV, RightAscension, Declination))
     {
         if (TraceThisTick)
-            DEBUG(DBG_SIMULATOR, "ReadScopeStatus - TransformTelescopeToCelestial failed");
+            DEBUG(DBG_SIMULATOR, "updatePointingCoordinates - TransformTelescopeToCelestial failed");
 
         ALIGNMENT::TelescopeDirectionVector RotatedTDV(TDV);
 
@@ -985,12 +1013,12 @@ bool LFAST_Mount::updatePointingCoordinates()
         {
         case ALIGNMENT::ZENITH:
             if (TraceThisTick)
-                DEBUG(DBG_SIMULATOR, "ReadScopeStatus - ApproximateMountAlignment ZENITH");
+                DEBUG(DBG_SIMULATOR, "updatePointingCoordinates - ApproximateMountAlignment ZENITH");
             break;
 
         case ALIGNMENT::NORTH_CELESTIAL_POLE:
             if (TraceThisTick)
-                DEBUG(DBG_SIMULATOR, "ReadScopeStatus - ApproximateMountAlignment NORTH_CELESTIAL_POLE");
+                DEBUG(DBG_SIMULATOR, "updatePointingCoordinates - ApproximateMountAlignment NORTH_CELESTIAL_POLE");
             // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 minus
             // the (positive)observatory latitude. The vector itself is rotated clockwise
             RotatedTDV.RotateAroundY(90.0 - m_Location.latitude);
@@ -999,7 +1027,7 @@ bool LFAST_Mount::updatePointingCoordinates()
 
         case ALIGNMENT::SOUTH_CELESTIAL_POLE:
             if (TraceThisTick)
-                DEBUG(DBG_SIMULATOR, "ReadScopeStatus - ApproximateMountAlignment SOUTH_CELESTIAL_POLE");
+                DEBUG(DBG_SIMULATOR, "updatePointingCoordinates - ApproximateMountAlignment SOUTH_CELESTIAL_POLE");
             // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 plus
             // the (negative)observatory latitude. The vector itself is rotated anticlockwise
             RotatedTDV.RotateAroundY(-90.0 - m_Location.latitude);
@@ -1015,7 +1043,7 @@ bool LFAST_Mount::updatePointingCoordinates()
     }
     if (TraceThisTick)
         // LOGF_INFO("ReadScopeStatus - RA %lf hours DEC %lf degrees", RightAscension, Declination);
-        DEBUGF(DBG_SIMULATOR, "ReadScopeStatus - RA %lf hours DEC %lf degrees", RightAscension, Declination);
+        DEBUGF(DBG_SIMULATOR, "updatePointingCoordinates - RA %lf hours DEC %lf degrees", RightAscension, Declination);
 
     m_SkyCurrentRADE.rightascension = RightAscension;
     m_SkyCurrentRADE.declination = Declination;
@@ -1202,97 +1230,87 @@ void LFAST_Mount::TimerHit()
     INDI::IHorizontalCoordinates altAzPosn{0, 0};
     INDI::IHorizontalCoordinates altAzRates{0, 0};
 
-    switch (TrackState)
+    if (homingRoutineActive)
     {
-    case SCOPE_SLEWING:
-        m_SkyGuideOffset = {0, 0};
-        altAzPosn = getTrackingTargetAltAzPosition();
-        AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
-        AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
-
-        if (AltitudeAxis->isSlewComplete() && AzimuthAxis->isSlewComplete())
+        AltitudeAxis->updateHoming();
+        AzimuthAxis->updateHoming();
+    }
+    else
+    {
+        switch (TrackState)
         {
-            LOG_INFO("SLEW COMPLETE.");
-            if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
+        case SCOPE_SLEWING:
+            m_SkyGuideOffset = {0, 0};
+            altAzPosn = getTrackingTargetAltAzPosition();
+            AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
+            AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
+
+            if (AltitudeAxis->isSlewComplete() && AzimuthAxis->isSlewComplete())
             {
-                TrackState = SCOPE_TRACKING;
+                LOG_INFO("SLEW COMPLETE.");
+                if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
+                {
+                    TrackState = SCOPE_TRACKING;
+                }
+                else
+                {
+                    TrackState = SCOPE_IDLE;
+                }
+            }
+            break;
+
+        case SCOPE_IDLE:
+            AltitudeAxis->slowStop();
+            AzimuthAxis->slowStop();
+            break;
+        case SCOPE_TRACKING:
+            altAzPosn = getTrackingTargetAltAzPosition();
+            altAzRates = getTrackingTargetAltAzRates();
+            AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
+            AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
+            break;
+        case SCOPE_PARKING:
+            if (!AzimuthAxis->isSlewComplete() && !AltitudeAxis->isSlewComplete())
+            {
+                AltitudeAxis->updateTrackCommands(default_park_posn_alt);
+                AzimuthAxis->updateTrackCommands(default_park_posn_az);
+                // LOG_DEBUG("Scope Parking");
             }
             else
             {
-                TrackState = SCOPE_IDLE;
+                SetParked(true);
+                // AzimuthAxis->slowStop();
+                // AltitudeAxis->slowStop();
+                // LOG_DEBUG("Scope Parked");
+                TrackState = SCOPE_PARKED;
+            }
+            break;
+        case SCOPE_PARKED:
+            break;
+        }
+
+        try
+        {
+            if (TrackState == SCOPE_TRACKING)
+            {
+                AltitudeAxis->updateControlLoops(dt, TRACKING_COMMAND);
+                AzimuthAxis->updateControlLoops(dt, TRACKING_COMMAND);
+            }
+            else
+            {
+                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                // LOGF_INFO("%6.4f", AltitudeAxis->getVelocityCommand());
             }
         }
-        break;
-
-    case SCOPE_IDLE:
-        AltitudeAxis->slowStop();
-        AzimuthAxis->slowStop();
-        break;
-    case SCOPE_TRACKING:
-        altAzPosn = getTrackingTargetAltAzPosition();
-        altAzRates = getTrackingTargetAltAzRates();
-        AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
-        AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
-        break;
-    case SCOPE_PARKING:
-        if (!AzimuthAxis->isSlewComplete() && !AltitudeAxis->isSlewComplete())
+        catch (const std::exception &e)
         {
-            AltitudeAxis->updateTrackCommands(default_park_posn_alt);
-            AzimuthAxis->updateTrackCommands(default_park_posn_az);
-            // LOG_DEBUG("Scope Parking");
-        }
-        else
-        {
-            SetParked(true);
-            // AzimuthAxis->slowStop();
-            // AltitudeAxis->slowStop();
-            // LOG_DEBUG("Scope Parked");
-            TrackState = SCOPE_PARKED;
-        }
-        break;
-    case SCOPE_PARKED:
-        break;
-    }
-
-    try
-    {
-        if (TrackState == SCOPE_TRACKING)
-        {
-            AltitudeAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
-            AzimuthAxis->updateControlLoops(dt, POSN_AND_RATE_CONTROL);
-        }
-        else
-        {
-            AltitudeAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
-            AzimuthAxis->updateControlLoops(dt, POSN_CONTROL_ONLY);
-            // LOGF_INFO("%6.4f", AltitudeAxis->getVelocityCommand());
+            LOGF_ERROR("TimerHit Error:  %s", e.what());
         }
     }
-    catch (const std::exception &e)
-    {
-        LOGF_ERROR("TimerHit Error:  %s", e.what());
-    }
-
     // Simulate mount movement
     updateSim(dt);
 
-#if 0 // PRINT_DEBUG_STUFF
-    auto itr = AltitudeAxis->debugStrings.begin();
-    while (itr != AltitudeAxis->debugStrings.end())
-    {
-        auto s = *itr;
-        LOG_INFO(s.c_str());
-        AltitudeAxis->debugStrings.erase(itr);
-    }
-
-    itr = AzimuthAxis->debugStrings.begin();
-    while (itr != AzimuthAxis->debugStrings.end())
-    {
-        auto s = *itr;
-        LOG_INFO(s.c_str());
-        AzimuthAxis->debugStrings.erase(itr);
-    }
-#endif
     INDI::Telescope::TimerHit();
     TraceThisTick = false;
 }

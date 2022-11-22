@@ -35,7 +35,7 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
-
+    homingRoutineStatus = HOMING_IDLE;
     // if (simModeEnabled)
     // {
     pid = std::unique_ptr<PID_Controller>(
@@ -286,17 +286,17 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     }
 
     double combinedRateCmd_dps{0};
-    static ControlMode_t prevMode = POSN_CONTROL_ONLY;
+    static ControlMode_t prevMode = SLEWING_TO_POSN;
     if (mode != prevMode)
     {
         pid->reset();
     }
 
-    if (mode == POSN_CONTROL_ONLY)
+    if (mode == SLEWING_TO_POSN)
     {
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim);
     }
-    else if (mode == POSN_AND_RATE_CONTROL)
+    else if (mode == TRACKING_COMMAND)
     {
 
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandOffset_dps;
@@ -389,12 +389,15 @@ double SlewDrive::getPositionFeedback()
 
         double drvPosnAve = (drvAPosn + drvBPosn) * 0.5;
         // Check difference between them?
-        if ((drvAPosn - drvBPosn) > 1.5)
+        if (homingRoutineStatus == HOMING_IDLE || homingRoutineStatus == HOMING_COMPLETE)
         {
-            disable();
-            char errbuff[100];
-            sprintf(errbuff, "Motor feedbacks not sync'd: A=%6.4f, B=%6.4f", drvAPosn, drvBPosn);
-            throw std::runtime_error(errbuff);
+            if (std::abs(drvAPosn - drvBPosn) > 1.5)
+            {
+                disable();
+                char errbuff[100];
+                sprintf(errbuff, "Motor feedbacks not sync'd: A=%6.4f, B=%6.4f", drvAPosn, drvBPosn);
+                throw std::runtime_error(errbuff);
+            }
         }
         // positionFeedback_deg = processPositionFeedback(drvPosnAve);
         positionFeedback_deg = mapMotorPositionToSlewDrive(drvPosnAve);
@@ -474,6 +477,13 @@ double SlewDrive::getVelocityFeedback()
         {
             drvAVel = pDriveA->getVelocityFeedback();
             drvBVel = pDriveB->getVelocityFeedback();
+            if (std::abs(drvAVel - drvBVel) > LFAST_CONSTANTS::MOTOR_MAX_SPEED_DPS)
+            {
+                disable();
+                std::stringstream ss;
+                ss << "Motor drive velocities out of range: A=" << drvAVel << ", B=" << drvBVel << ".\n";
+                throw std::runtime_error(ss.str().c_str());
+            }
         }
         catch (const std::exception &e)
         {
@@ -483,7 +493,7 @@ double SlewDrive::getVelocityFeedback()
             throw std::runtime_error(ss.str().c_str());
         }
 
-        double drvVelAve = (drvAVel - drvBVel) * 0.5;
+        double drvVelAve = (drvAVel + drvBVel) * 0.5;
         rateFeedback_dps = drvVelAve;
     }
     return rateFeedback_dps;
@@ -503,4 +513,85 @@ void SlewDrive::simulate(double dt)
     {
         throw std::runtime_error("simulate() called on non-simulated axis");
     }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void SlewDrive::startHoming()
+{
+    if (simModeEnabled)
+    {
+        homingRoutineStatus = HOMING_COMPLETE;
+        return;
+    }
+    pDriveA->setControlMode(KINKO::MOTOR_MODE_TORQUE);
+    pDriveB->setControlMode(KINKO::MOTOR_MODE_TORQUE);
+    if (homingRoutineStatus == HOMING_IDLE)
+        homingRoutineStatus = HOME_COMMAND_RECEIVED;
+    else
+    {
+        return;
+    }
+}
+
+bool SlewDrive::updateAlignment()
+{
+    bool done = false;
+    alignmentCounter++;
+    if (alignmentCounter < 30)
+    {
+        double step1Torque = -0.7;
+        pDriveA->updateTorqueCommand(step1Torque);
+        pDriveB->updateTorqueCommand(step1Torque);
+    }
+    else if (alignmentCounter < 35)
+    {
+        double step2Torque = 0.0;
+        pDriveA->updateTorqueCommand(step2Torque);
+        pDriveB->updateTorqueCommand(step2Torque);
+    }
+    else if (alignmentCounter < 65)
+    {
+        double step3Torque = 0.2;
+        pDriveA->updateTorqueCommand(step3Torque);
+        pDriveB->updateTorqueCommand(step3Torque);
+    }
+    else
+    {
+        double step4Torque = 0;
+        pDriveA->updateTorqueCommand(step4Torque);
+        pDriveB->updateTorqueCommand(step4Torque);
+        initializeStates();
+        done = true;
+    }
+    return done;
+}
+
+void SlewDrive::updateHoming()
+{
+    bool alignmentDone;
+    switch (homingRoutineStatus)
+    {
+    case HOMING_IDLE:
+        break;
+    case HOME_COMMAND_RECEIVED:
+        alignmentCounter = 0;
+        homingRoutineStatus = PRE_HOME_ALIGNMENT;
+        // Intentional fall-through
+    case PRE_HOME_ALIGNMENT:
+        alignmentDone = updateAlignment();
+        if (alignmentDone)
+            homingRoutineStatus = HOMING_ACTIVE;
+        break;
+    case HOMING_ACTIVE:
+        // TODO
+        homingRoutineStatus = HOMING_COMPLETE;
+        break;
+    }
+}
+
+bool SlewDrive::isHomingComplete()
+{
+    return (homingRoutineStatus == HOMING_COMPLETE);
 }

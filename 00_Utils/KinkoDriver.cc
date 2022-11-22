@@ -259,14 +259,15 @@ void KinkoDriver::updateVelocityCommand(double velocity_setpoint)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::updateTorqueCommand(double torque_setpoint)
 {
-    writeDriverRegisters<int32_t>(driverNodeId, KINKO::TARGET_TORQUE, torque_setpoint);
+    int16_t torque_sp_percent = (int16_t) (torque_setpoint * 100);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::TARGET_TORQUE, torque_sp_percent);
 #if defined(LFAST_TERMINAL)
     if (cli != nullptr)
     {
         if (driverNodeId == 1)
-            cli->updatePersistentField(KINKO::CMD_ROW_A, torque_setpoint);
+            cli->updatePersistentField(KINKO::CMD_ROW_A, torque_sp_percent);
         else if (driverNodeId == 2)
-            cli->updatePersistentField(KINKO::CMD_ROW_B, torque_setpoint);
+            cli->updatePersistentField(KINKO::CMD_ROW_B, torque_sp_percent);
     }
 #endif
 }
@@ -296,15 +297,16 @@ double KinkoDriver::getVelocityFeedback(bool updateConsole)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double KinkoDriver::getCurrentFeedback(bool updateConsole)
 {
-    auto real_current_units = readDriverRegister<int32_t>(driverNodeId, KINKO::REAL_CURRENT);
-    int32_t real_current_amps = convertCurrIUtoAmp(real_current_units);
+    auto real_current_units = readDriverRegister<int16_t>(driverNodeId, KINKO::REAL_CURRENT);
+    double real_current_amps = convertCurrIUtoAmp(real_current_units);
+
 #if defined(LFAST_TERMINAL)
     if (updateConsole && cli != nullptr)
     {
         if (driverNodeId == 1)
-            cli->updatePersistentField(KINKO::TRQ_FB_ROW_A, real_current_amps);
+            cli->updatePersistentField(KINKO::TRQ_FB_ROW_A, real_current_units);
         else if (driverNodeId == 2)
-            cli->updatePersistentField(KINKO::TRQ_FB_ROW_B, real_current_amps);
+            cli->updatePersistentField(KINKO::TRQ_FB_ROW_B, real_current_units);
     }
 #endif
     return real_current_amps;
@@ -358,7 +360,7 @@ int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double convertCurrIUtoAmp(int32_t current_units)
 {
-    return (double)current_units * KINKO::counts2amps * 100.0;
+    return (double)current_units * KINKO::counts2amps;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
