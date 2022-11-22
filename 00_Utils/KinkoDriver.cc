@@ -207,7 +207,7 @@ void KinkoDriver::setDirectionMode(uint8_t dir)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void KinkoDriver::setMaxSpeed(double maxRPM)
 {
-    int32_t max_rpm_IU = convertSpeedRPMtoIU(maxRPM);
+    int32_t max_rpm_IU = (int32_t)maxRPM;
     writeDriverRegisters<int32_t>(driverNodeId, KINKO::MAX_SPEED, max_rpm_IU);
 }
 
@@ -272,6 +272,14 @@ void KinkoDriver::updateTorqueCommand(double torque_setpoint)
 #endif
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void KinkoDriver::updateVelocityLimit(double velocity_limit)
+{
+    int32_t target_speed_value = convertSpeedRPMtoIU(velocity_limit);
+    writeDriverRegisters<int32_t>(driverNodeId, KINKO::MAX_SPEED, target_speed_value);
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -341,17 +349,15 @@ double KinkoDriver::getPositionFeedback(bool updateConsole)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 double convertSpeedIUtoRPM(int32_t speed_units)
 {
-    return (((double)speed_units * 1875) / (512 * 10000));
+    return (double)speed_units * KINKO::cps2rpm;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 int32_t convertSpeedRPMtoIU(int16_t speed_rpm)
 {
-    int32_t speed_units = 0;
-    double holder = 0;
-    holder = (double)speed_rpm * KINKO::rpm2cps;
-    speed_units = (int32_t)holder;
+    double holder = (double)speed_rpm * KINKO::rpm2cps;
+    int32_t speed_units = (int32_t)holder;
     return speed_units;
 }
 

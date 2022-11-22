@@ -17,7 +17,7 @@ constexpr double MAX_RATE_CMD = 0.25 * MULT;
 constexpr double MIN_RATE_CMD = -0.25 * MULT;
 double FAKE_SLEW_DRIVE_MAX_SPEED_DPS = 500;
 
-namespace lfc = LFAST_CONSTANTS;
+// namespace lfc = LFAST_CONSTANTS;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -40,9 +40,9 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
     // {
     pid = std::unique_ptr<PID_Controller>(
         new PID_Controller(
-            lfc::SLEW_POSN_KP,
-            lfc::SLEW_POSN_KI,
-            lfc::SLEW_POSN_KD));
+            SLEWDRIVE::SLEW_POSN_KP,
+            SLEWDRIVE::SLEW_POSN_KI,
+            SLEWDRIVE::SLEW_POSN_KD));
     // }
 
     driveModelPtr = std::unique_ptr<DF2_IIR<double>>(
@@ -94,6 +94,12 @@ bool SlewDrive::connectToDrivers()
 
 void SlewDrive::initializeStates()
 {
+    positionFeedback_deg = 0.0;
+    positionCommand_deg = 0.0;
+    rateCommandOffset_dps = 0.0;
+    rateFeedback_dps = 0.0;
+    rateRef_dps = 0.0;
+    combinedRateCmdSaturated_dps = 0.0;
     if (!simModeEnabled)
     {
         try
@@ -133,8 +139,8 @@ void SlewDrive::abortSlew()
     rateCommandOffset_dps = 0.0;
     try
     {
-        pDriveA->setDriverState(KINKO::MOTOR_STATE_ESTOP);
-        pDriveB->setDriverState(KINKO::MOTOR_STATE_ESTOP);
+        pDriveA->setDriverState(KINKO::ESTOP_VOLTAGE_OFF);
+        pDriveB->setDriverState(KINKO::ESTOP_VOLTAGE_OFF);
     }
     catch (const std::exception &e)
     {
@@ -220,10 +226,12 @@ void SlewDrive::enable()
         }
         try
         {
-            pDriveA->setDriverState(KINKO::MOTOR_STATE_ENABLE);
-            pDriveB->setDriverState(KINKO::MOTOR_STATE_ENABLE);
-            pDriveA->setDriverState(KINKO::MOTOR_STATE_ON);
-            pDriveB->setDriverState(KINKO::MOTOR_STATE_ON);
+            pDriveA->setDriverState(KINKO::POWER_OFF_MOTOR);
+            pDriveB->setDriverState(KINKO::POWER_OFF_MOTOR);
+            pDriveA->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
+            pDriveB->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
+            pDriveA->setDriverState(KINKO::POWER_ON_MOTOR);
+            pDriveB->setDriverState(KINKO::POWER_ON_MOTOR);
             pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
             pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
         }
@@ -249,8 +257,8 @@ void SlewDrive::disable()
         {
             try
             {
-                pDriveA->setDriverState(KINKO::MOTOR_STATE_DISABLE);
-                pDriveB->setDriverState(KINKO::MOTOR_STATE_DISABLE);
+                pDriveA->setDriverState(KINKO::POWER_OFF_MOTOR);
+                pDriveB->setDriverState(KINKO::POWER_OFF_MOTOR);
             }
             catch (const std::exception &e)
             {
@@ -269,14 +277,17 @@ void SlewDrive::disable()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
 {
-
+    if (homingRoutineStatus != HOMING_IDLE)
+    {
+        throw std::runtime_error("updateControlLoops called while homing");
+    }
     double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
     while (std::abs(posnError) > 180.0)
     {
         posnError -= 360.0 * errSign;
     }
-    if (std::abs(posnError) < lfc::POSN_PID_ENABLE_THRESH_DEG)
+    if (std::abs(posnError) < SLEWDRIVE::POSN_PID_ENABLE_THRESH_DEG)
     {
         pid->update(posnError, dt, &rateRef_dps);
     }
@@ -309,8 +320,8 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
                                             FAKE_SLEW_DRIVE_MAX_SPEED_DPS);
 #else
     combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps,
-                                            -1 * LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS,
-                                            LFAST_CONSTANTS::SLEW_DRIVE_MAX_SPEED_DPS);
+                                            -1 * SLEWDRIVE::SLEW_DRIVE_MAX_SPEED_DPS,
+                                            SLEWDRIVE::SLEW_DRIVE_MAX_SPEED_DPS);
 
     double motorVelCommand_RPM = mapSlewDriveCommandToMotors(combinedRateCmdSaturated_dps);
 
@@ -345,7 +356,7 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
 double SlewDrive::mapSlewDriveCommandToMotors(double slewRateCmd_dps)
 {
     // TODO: Implement proper state estimation
-    double motorSpeed_dps = slewRateCmd_dps * LFAST_CONSTANTS::TOTAL_GEAR_RATIO;
+    double motorSpeed_dps = slewRateCmd_dps * SLEWDRIVE::TOTAL_GEAR_RATIO;
     double motorSpeed_rpm = motorSpeed_dps / 6;
     return (motorSpeed_rpm);
 }
@@ -356,7 +367,7 @@ double SlewDrive::mapSlewDriveCommandToMotors(double slewRateCmd_dps)
 double SlewDrive::mapMotorPositionToSlewDrive(double motorPosn_deg)
 {
     // TODO: Implement proper state estimation
-    return (motorPosn_deg * LFAST_CONSTANTS::INV_TOTAL_GEAR_RATIO);
+    return (motorPosn_deg * SLEWDRIVE::INV_TOTAL_GEAR_RATIO);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -389,9 +400,9 @@ double SlewDrive::getPositionFeedback()
 
         double drvPosnAve = (drvAPosn + drvBPosn) * 0.5;
         // Check difference between them?
-        if (homingRoutineStatus == HOMING_IDLE || homingRoutineStatus == HOMING_COMPLETE)
+        if (homingRoutineStatus == HOMING_IDLE)
         {
-            if (std::abs(drvAPosn - drvBPosn) > 1.5)
+            if (std::abs(drvAPosn - drvBPosn) > SLEWDRIVE::MOTOR_MISMATCH_ERROR_THRESH)
             {
                 disable();
                 char errbuff[100];
@@ -472,17 +483,21 @@ double SlewDrive::getVelocityFeedback()
             throw std::runtime_error("getVelocityFeedback:: Drivers not connected.");
         }
 
-        double drvAVel, drvBVel;
+        double drvAVel_rpm, drvBVel_rpm, drvVelAve_dps;
         try
         {
-            drvAVel = pDriveA->getVelocityFeedback();
-            drvBVel = pDriveB->getVelocityFeedback();
-            if (std::abs(drvAVel - drvBVel) > LFAST_CONSTANTS::MOTOR_MAX_SPEED_DPS)
+            drvAVel_rpm = pDriveA->getVelocityFeedback();
+            drvBVel_rpm = pDriveB->getVelocityFeedback();
+            drvVelAve_dps = RPM2degpersec((drvAVel_rpm + drvBVel_rpm) * 0.5);
+            if (homingRoutineStatus == HOMING_IDLE)
             {
-                disable();
-                std::stringstream ss;
-                ss << "Motor drive velocities out of range: A=" << drvAVel << ", B=" << drvBVel << ".\n";
-                throw std::runtime_error(ss.str().c_str());
+                if (std::abs(drvVelAve_dps) > KINKO::MOTOR_MAX_SPEED_DPS)
+                {
+                    disable();
+                    std::stringstream ss;
+                    ss << "Motor drive velocities out of range: A=" << drvAVel_rpm << ", B=" << drvBVel_rpm << ".\n";
+                    throw std::runtime_error(ss.str().c_str());
+                }
             }
         }
         catch (const std::exception &e)
@@ -493,8 +508,7 @@ double SlewDrive::getVelocityFeedback()
             throw std::runtime_error(ss.str().c_str());
         }
 
-        double drvVelAve = (drvAVel + drvBVel) * 0.5;
-        rateFeedback_dps = drvVelAve;
+        rateFeedback_dps = drvVelAve_dps * SLEWDRIVE::INV_TOTAL_GEAR_RATIO;
     }
     return rateFeedback_dps;
 }
@@ -520,78 +534,140 @@ void SlewDrive::simulate(double dt)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::startHoming()
 {
-    if (simModeEnabled)
-    {
-        homingRoutineStatus = HOMING_COMPLETE;
-        return;
-    }
-    pDriveA->setControlMode(KINKO::MOTOR_MODE_TORQUE);
-    pDriveB->setControlMode(KINKO::MOTOR_MODE_TORQUE);
     if (homingRoutineStatus == HOMING_IDLE)
+    {
         homingRoutineStatus = HOME_COMMAND_RECEIVED;
+        initializeStates();
+    }
     else
     {
-        return;
+        throw std::runtime_error("Homing already in progress");
     }
 }
 
 bool SlewDrive::updateAlignment()
 {
     bool done = false;
-    alignmentCounter++;
-    if (alignmentCounter < 30)
+
+    switch (alignmentCounter++)
     {
-        double step1Torque = -0.7;
-        pDriveA->updateTorqueCommand(step1Torque);
-        pDriveB->updateTorqueCommand(step1Torque);
-    }
-    else if (alignmentCounter < 35)
-    {
-        double step2Torque = 0.0;
-        pDriveA->updateTorqueCommand(step2Torque);
-        pDriveB->updateTorqueCommand(step2Torque);
-    }
-    else if (alignmentCounter < 65)
-    {
-        double step3Torque = 0.2;
-        pDriveA->updateTorqueCommand(step3Torque);
-        pDriveB->updateTorqueCommand(step3Torque);
-    }
-    else
-    {
-        double step4Torque = 0;
-        pDriveA->updateTorqueCommand(step4Torque);
-        pDriveB->updateTorqueCommand(step4Torque);
+    case SLEWDRIVE::ALIGNMENT_STEP_0_START:
+        pDriveA->setControlMode(KINKO::MOTOR_MODE_TORQUE);
+        pDriveB->setControlMode(KINKO::MOTOR_MODE_TORQUE);
+        pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        break;
+    case SLEWDRIVE::ALIGNMENT_STEP_1_START:
+        pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_TORQUE_HARD_BACK);
+        pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_TORQUE_HARD_BACK);
+        break;
+    case SLEWDRIVE::ALIGNMENT_STEP_2_START:
+        pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        break;
+    case SLEWDRIVE::ALIGNMENT_STEP_3_START:
+        pDriveA->setMaxSpeed(degpersec2RPM(180));
+        pDriveB->setMaxSpeed(degpersec2RPM(180));
+        pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_TORQUE_SOFT_FORWARD);
+        pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_TORQUE_SOFT_FORWARD);
+        break;
+    case SLEWDRIVE::ALIGNMENT_STEP_4_START:
+        pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        break;
+    case SLEWDRIVE::ALIGNMENT_COMPLETE:
         initializeStates();
+        // for some reason changing them back causes them to move even if vcmd is zero
+        pDriveA->updateVelocityCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        pDriveB->updateVelocityCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
+        pDriveA->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
+        pDriveB->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
+        pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
+        pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
         done = true;
+        break;
+    default:
+        // do nothing
+        break;
     }
+
     return done;
 }
 
-void SlewDrive::updateHoming()
+bool SlewDrive::prepForHoming()
 {
-    bool alignmentDone;
-    switch (homingRoutineStatus)
+    bool done = false;
+    double drvAVel, drvBVel;
+
+    drvAVel = RPM2degpersec(pDriveA->getVelocityFeedback());
+    drvBVel = RPM2degpersec(pDriveB->getVelocityFeedback());
+
+    bool aStopped = std::abs(drvAVel) < 1.0;
+    bool bStopped = std::abs(drvBVel) < 1.0;
+
+    if (aStopped && bStopped)
     {
-    case HOMING_IDLE:
-        break;
-    case HOME_COMMAND_RECEIVED:
-        alignmentCounter = 0;
-        homingRoutineStatus = PRE_HOME_ALIGNMENT;
-        // Intentional fall-through
-    case PRE_HOME_ALIGNMENT:
-        alignmentDone = updateAlignment();
-        if (alignmentDone)
-            homingRoutineStatus = HOMING_ACTIVE;
-        break;
-    case HOMING_ACTIVE:
-        // TODO
+
+        // Send homing command to drivers
+        done = true;
+    }
+
+    return done;
+}
+
+void SlewDrive::serviceHomingRoutine()
+{
+    if (simModeEnabled)
+    {
         homingRoutineStatus = HOMING_COMPLETE;
-        break;
+    }
+    else
+    {
+        bool alignmentDone, homeCommandSent;
+        switch (homingRoutineStatus)
+        {
+        case HOMING_IDLE:
+            break;
+        case HOME_COMMAND_RECEIVED:
+            alignmentCounter = 0;
+            homingRoutineStatus = PRE_HOME_ALIGNMENT;
+            break;
+        case PRE_HOME_ALIGNMENT:
+            alignmentDone = updateAlignment();
+            if (alignmentDone)
+                homingRoutineStatus = PREPARE_FOR_HOMING;
+            break;
+        case PREPARE_FOR_HOMING:
+            homeCommandSent = prepForHoming();
+            if (homeCommandSent)
+                homingRoutineStatus = HOMING_ACTIVE;
+            break;
+        case HOMING_ACTIVE:
+            // TODO
+            homingRoutineStatus = HOMING_CLEANUP;
+            break;
+        case HOMING_CLEANUP:
+            disable();
+            initializeStates();
+            homingRoutineStatus = HOMING_COMPLETE;
+            break;
+        case HOMING_COMPLETE:
+
+            break;
+        }
     }
 }
 
 bool SlewDrive::isHomingComplete()
 {
+    if (simModeEnabled)
+    {
+        return true;
+    }
     return (homingRoutineStatus == HOMING_COMPLETE);
+}
+
+void SlewDrive::resetHomingRoutine()
+{
+    homingRoutineStatus = HOMING_IDLE;
 }

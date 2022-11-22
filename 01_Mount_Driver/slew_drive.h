@@ -20,7 +20,6 @@ typedef enum
     HOMING_IN_PROGRESS
 } ControlMode_t;
 
-
 class SlewDrive
 {
 
@@ -48,12 +47,19 @@ private:
         HOMING_IDLE,
         HOME_COMMAND_RECEIVED,
         PRE_HOME_ALIGNMENT,
+        PREPARE_FOR_HOMING,
         HOMING_ACTIVE,
+        HOMING_CLEANUP,
         HOMING_COMPLETE
-    } homingStatus_t;
-    homingStatus_t homingRoutineStatus;
+    } axisHomingStatus_t;
+
+    axisHomingStatus_t homingRoutineStatus;
+
     uint32_t alignmentCounter{0};
-        bool updateAlignment();
+
+    bool updateAlignment();
+    bool prepForHoming();
+
 public:
     SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, bool simMode = false);
     static bool initializeDriverBus(const char *devPath);
@@ -61,9 +67,6 @@ public:
     void enable();
     void disable();
     void initializeStates();
-
-    
-
 
     double getPositionCommand() { return std::fmod(positionCommand_deg, 360.0); }
     double getPositionFeedback();
@@ -78,7 +81,6 @@ public:
     void syncPosition(double posn);
     bool isSlewComplete();
     void slowStop();
-    bool isStopped() { return rateFeedback_dps == 0; }
     // SlewDriveMode_t poll();
     void updateRateOffset(double rate);
     void updateSlewRate(double slewRate);
@@ -87,13 +89,12 @@ public:
     static double mapSlewDriveCommandToMotors(double);
     double mapMotorPositionToSlewDrive(double motorPosn_deg);
 
-
-
-    
     void startHoming();
 
-    void updateHoming();
+    void serviceHomingRoutine();
     bool isHomingComplete();
+    void resetHomingRoutine();
+
     void simulate(double dt);
 
     std::vector<std::string> debugStrings;

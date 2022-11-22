@@ -32,7 +32,7 @@ constexpr double INV_360  =  1/360.0; //0.00277777777777777777777777777778
 constexpr double INV_3600  = 1/3600.0; //0.00027777777777777777777777777778
 constexpr double INV_24    = 1/24.0; //0.04166666666666666666666666666666
 constexpr double INV_30    = 1/30.0; //0.03333333333333333333333333333333
-
+constexpr double INV_60    = 1/60.0; 
 
 template <typename T, typename U>
 inline T ulim(T val, U upper)
@@ -148,6 +148,22 @@ inline double RPM2radpersec(T val)
     constexpr double mult = M_PI * INV_30;
     return val * mult;
 }
+
+
+template <typename T>
+inline double degpersec2RPM(T val)
+{
+    constexpr double mult = 60 * INV_360;
+    return val * mult;
+}
+
+template <typename T>
+inline double RPM2degpersec(T val)
+{
+    constexpr double mult = 360 * INV_60;
+    return val * mult;
+}
+
 
 template <typename T>
 inline double sind(T val)

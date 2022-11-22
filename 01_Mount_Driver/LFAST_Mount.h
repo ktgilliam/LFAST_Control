@@ -150,9 +150,11 @@ private:
     // INDI::PropertyText TrackStateTP{1};
 
     // INDI::PropertyLight TrackStateLP{5};
-    INDI::PropertySwitch TrackStateSP{6};
+    // INDI::PropertySwitch TrackStateSP{6};
     INDI::PropertySwitch HomeSP{1};
     bool homingRoutineActive;
+    bool altHomingComplete;
+    bool azHomingComplete;
     // enum
     // {
     //     FULL_STOP,

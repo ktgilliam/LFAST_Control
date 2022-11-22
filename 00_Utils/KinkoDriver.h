@@ -18,6 +18,7 @@ namespace KINKO
     constexpr int drive_i_peak = 36;
     constexpr double amps2counts = (2048.0 / drive_i_peak) / 1.414;
     constexpr double counts2amps = 1.0 / amps2counts;
+    constexpr double cps2rpm = 1875 / (512 * 10000);
     constexpr double rpm2cps = 512 * 10000.0 / 1875;
     constexpr int32_t deg2counts = (int32_t)COUNTS_PER_REV / 360;
     constexpr double counts2deg = 360.0 / COUNTS_PER_REV;
@@ -76,6 +77,8 @@ public:
     void updatePositionCommand(double) override;
     void updateVelocityCommand(double) override;
     void updateTorqueCommand(double) override;
+    
+    void updateVelocityLimit(double velocity_limit);
 
     double getVelocityFeedback(bool updateConsole = false) override;
     double getCurrentFeedback(bool updateConsole = false) override;
