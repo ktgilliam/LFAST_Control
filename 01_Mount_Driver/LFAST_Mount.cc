@@ -237,7 +237,7 @@ bool LFAST_Mount::initProperties()
     // modbusDevPath = "/dev/ttyUSB0";
     ModbusCommPortTP[0].fill("MODBUS_COMM_DEV_TP", "Modbus Comm Port", modbusDevPath);
     ModbusCommPortTP.fill(getDeviceName(), "MODBUS_COMM_DEV", "Modbus", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
-    defineProperty(&ModbusCommPortTP);
+    defineProperty(ModbusCommPortTP);
 
     AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
     AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
@@ -264,9 +264,10 @@ bool LFAST_Mount::initProperties()
     HomeSP[0].fill("GO_HOME", "Home", ISS_OFF);
     HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
-    getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE")->sp[0].s = ISS_ON;
+    // getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE").sp[0].s = ISS_ON;
+    auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
+    sw[0].s = ISS_ON;
     SetApproximateMountAlignmentFromMountType(ALTAZ);
-
     // LOG_WARN("Initial Park status hardcoded");
     // SetParked(true);
 
@@ -287,15 +288,15 @@ bool LFAST_Mount::updateProperties()
         deleteProperty(AbortSP.name);
 
         // defineProperty(&TrackStateSP);
-        defineProperty(&HomeSP);
-        defineProperty(&AzAltCoordsNP);
+        defineProperty(HomeSP);
+        defineProperty(AzAltCoordsNP);
 
         defineProperty(&AbortSP);
 
         // defineProperty(&MountSlewRateSP);
         defineProperty(&GuideNSNP);
         defineProperty(&GuideWENP);
-        defineProperty(&GuideRateNP);
+        defineProperty(GuideRateNP);
 
         // defineProperty(&AxisOneStateSP);
     }
@@ -610,7 +611,8 @@ bool LFAST_Mount::Abort()
         AltitudeAxis->resetHomingRoutine();
         AzimuthAxis->resetHomingRoutine();
         HomeSP.setState(IPS_IDLE);
-        IDSetSwitch(&HomeSP, nullptr);
+        // IDSetSwitch(&HomeSP, nullptr);
+        HomeSP.apply();
         homingRoutineActive = false;
     }
     TrackState = SCOPE_IDLE;
@@ -667,9 +669,9 @@ bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[]
     // Guiding Rate
     if (GuideRateNP.isNameMatch(name))
     {
-        IUUpdateNumber(&GuideRateNP, values, names, n);
+        GuideRateNP.update(values, names, n);
         GuideRateNP.setState(IPS_OK);
-        IDSetNumber(&GuideRateNP, nullptr);
+        GuideRateNP.apply();
         return true;
     }
     if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
@@ -698,7 +700,7 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
     {
         HomeSP.setState(IPS_BUSY);
         // HomeSP.reset();
-        IDSetSwitch(&HomeSP, nullptr);
+        HomeSP.apply();
         return startHomingRoutine();
     }
     //  Nobody has claimed this, so, ignore it
@@ -718,9 +720,9 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
     if (ModbusCommPortTP.isNameMatch(name))
     {
         ModbusCommPortTP.setState(IPS_OK);
-        IUUpdateText(&ModbusCommPortTP, texts, names, n);
+        ModbusCommPortTP.update(texts, names, n);
         //  Update client display
-        IDSetText(&ModbusCommPortTP, nullptr);
+        ModbusCommPortTP.apply();
         return true;
     }
     // Pass it up the chain
@@ -949,7 +951,7 @@ bool LFAST_Mount::updatePointingCoordinates()
         LOGF_ERROR("updatePointingCoordinates Error:%s", e.what());
         TrackState = SCOPE_IDLE;
         AzAltCoordsNP.setState(IPS_ALERT);
-        IDSetNumber(&AzAltCoordsNP, nullptr);
+        AzAltCoordsNP.apply();
         successFlag = false;
     }
 
@@ -1161,10 +1163,9 @@ bool LFAST_Mount::ReadScopeStatus()
             if (altHomingComplete && azHomingComplete)
             {
                 HomeSP.setState(IPS_OK);
-                IDSetSwitch(&HomeSP, nullptr);
+                HomeSP.apply();
                 AzAltCoordsNP.setState(IPS_OK);
-                IDSetNumber(&AzAltCoordsNP, nullptr);
-
+                AzAltCoordsNP.apply();
                 AltitudeAxis->resetHomingRoutine();
                 AzimuthAxis->resetHomingRoutine();
 
