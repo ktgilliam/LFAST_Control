@@ -264,7 +264,6 @@ bool LFAST_Mount::initProperties()
     HomeSP[0].fill("GO_HOME", "Home", ISS_OFF);
     HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
-    // getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE").sp[0].s = ISS_ON;
     auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
     sw[0].s = ISS_ON;
     SetApproximateMountAlignmentFromMountType(ALTAZ);
