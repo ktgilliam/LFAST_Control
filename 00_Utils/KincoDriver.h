@@ -6,20 +6,20 @@
 // #include <memory>
 
 #include "ServoInterface.h"
-#include "KinkoNamespace.h"
+#include "KincoNamespace.h"
 #include "modbus/modbus.h"
 
 /* Temporary readability macro to avoid unused variables warnings */
 #define KINCO_UNUSED(x) (void)x
 
-namespace KINKO
+namespace KINCO
 {
 
     constexpr int drive_i_peak = 36;
     constexpr double amps2counts = (2048.0 / drive_i_peak) / 1.414;
     constexpr double counts2amps = 1.0 / amps2counts;
-    constexpr double cps2rpm = 1875 / (512 * 10000);
-    constexpr double rpm2cps = 512 * 10000.0 / 1875;
+    constexpr double cps2rpm = 1875.0 / (512 * 10000);
+    constexpr double rpm2cps = 512.0 * 10000.0 / 1875;
     constexpr int32_t deg2counts = (int32_t)COUNTS_PER_REV / 360;
     constexpr double counts2deg = 360.0 / COUNTS_PER_REV;
 
@@ -42,7 +42,7 @@ namespace KINKO
     };
 }
 
-class KinkoDriver : public ServoInterface
+class KincoDriver : public ServoInterface
 {
 private:
     static modbus_t *ctx;
@@ -52,19 +52,19 @@ private:
 protected:
     int16_t driverNodeId;
 
+
+    static std::vector<KincoDriver *> connectedDrives;
+
+    int32_t encoderOffset;
+    // std::vector<uint16_t>
+public:
     template <typename T>
     static T readDriverRegister(uint8_t devId, uint16_t modBusAddr);
 
     template <typename T>
     static uint16_t writeDriverRegisters(uint8_t devId, uint16_t modBusAddr, T reg_value);
-
-    static std::vector<KinkoDriver *> connectedDrives;
-
-    int32_t encoderOffset;
-    // std::vector<uint16_t>
-public:
-    KinkoDriver(int16_t driverId);
-    virtual ~KinkoDriver(){};
+    KincoDriver(int16_t driverId);
+    virtual ~KincoDriver(){};
     static bool readyForModbus();
     void setDriverState(uint16_t) override;
     void getDriverState() override{};

@@ -7,7 +7,7 @@
 #include "lfast_constants.h"
 #include "../00_Utils/math_util.h"
 #include "../00_Utils/PID_Controller.h"
-#include "../00_Utils/KinkoDriver.h"
+#include "../00_Utils/KincoDriver.h"
 
 /////////////////////////////////////////////////////////////////////////
 ////////////////////// PUBLIC MEMBER FUNCTIONS //////////////////////////
@@ -51,8 +51,8 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
             DIGITAL_CONTROL::lpf_3_a,
             2));
 
-    pDriveA = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveA_ID));
-    pDriveB = std::unique_ptr<KinkoDriver>(new KinkoDriver(DriveB_ID));
+    pDriveA = std::unique_ptr<KincoDriver>(new KincoDriver(DriveA_ID));
+    pDriveB = std::unique_ptr<KincoDriver>(new KincoDriver(DriveB_ID));
 
     updateSlewRate(MAX_RATE_CMD);
     pid->reset();
@@ -62,8 +62,8 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
 
 bool SlewDrive::initializeDriverBus(const char *devPath)
 {
-    KinkoDriver::initializeRTU(devPath);
-    return KinkoDriver::rtuIsActive();
+    KincoDriver::initializeRTU(devPath);
+    return KincoDriver::rtuIsActive();
 }
 
 bool SlewDrive::connectToDrivers()
@@ -104,8 +104,8 @@ void SlewDrive::initializeStates()
     {
         try
         {
-            pDriveA->setDirectionMode(KINKO::CCW_IS_POSITIVE);
-            pDriveB->setDirectionMode(KINKO::CW_IS_POSITIVE);
+            pDriveA->setDirectionMode(KINCO::CCW_IS_POSITIVE);
+            pDriveB->setDirectionMode(KINCO::CW_IS_POSITIVE);
 
             pDriveA->zeroPositionOffset();
             pDriveB->zeroPositionOffset();
@@ -139,8 +139,8 @@ void SlewDrive::abortSlew()
     rateCommandOffset_dps = 0.0;
     try
     {
-        pDriveA->setDriverState(KINKO::ESTOP_VOLTAGE_OFF);
-        pDriveB->setDriverState(KINKO::ESTOP_VOLTAGE_OFF);
+        pDriveA->setDriverState(KINCO::ESTOP_VOLTAGE_OFF);
+        pDriveB->setDriverState(KINCO::ESTOP_VOLTAGE_OFF);
     }
     catch (const std::exception &e)
     {
@@ -220,20 +220,20 @@ void SlewDrive::enable()
 {
     if (!simModeEnabled)
     {
-        if (!KinkoDriver::rtuIsActive())
+        if (!KincoDriver::rtuIsActive())
         {
             throw std::runtime_error("enable:: Drivers not connected.");
         }
         try
         {
-            pDriveA->setDriverState(KINKO::POWER_OFF_MOTOR);
-            pDriveB->setDriverState(KINKO::POWER_OFF_MOTOR);
-            pDriveA->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
-            pDriveB->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
-            pDriveA->setDriverState(KINKO::POWER_ON_MOTOR);
-            pDriveB->setDriverState(KINKO::POWER_ON_MOTOR);
-            pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
-            pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
+            pDriveA->setDriverState(KINCO::POWER_OFF_MOTOR);
+            pDriveB->setDriverState(KINCO::POWER_OFF_MOTOR);
+            pDriveA->setMaxSpeed(KINCO::MOTOR_MAX_SPEED_RPM);
+            pDriveB->setMaxSpeed(KINCO::MOTOR_MAX_SPEED_RPM);
+            pDriveA->setDriverState(KINCO::POWER_ON_MOTOR);
+            pDriveB->setDriverState(KINCO::POWER_ON_MOTOR);
+            pDriveA->setControlMode(KINCO::MOTOR_MODE_SPEED);
+            pDriveB->setControlMode(KINCO::MOTOR_MODE_SPEED);
         }
         catch (const std::exception &e)
         {
@@ -253,12 +253,12 @@ void SlewDrive::disable()
 {
     if (!simModeEnabled)
     {
-        if (KinkoDriver::rtuIsActive())
+        if (KincoDriver::rtuIsActive())
         {
             try
             {
-                pDriveA->setDriverState(KINKO::POWER_OFF_MOTOR);
-                pDriveB->setDriverState(KINKO::POWER_OFF_MOTOR);
+                pDriveA->setDriverState(KINCO::POWER_OFF_MOTOR);
+                pDriveB->setDriverState(KINCO::POWER_OFF_MOTOR);
             }
             catch (const std::exception &e)
             {
@@ -327,7 +327,7 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
 
     if (!simModeEnabled)
     {
-        if (!KinkoDriver::rtuIsActive())
+        if (!KincoDriver::rtuIsActive())
         {
             throw std::runtime_error("updateControlLoops:: Drivers not connected.");
         }
@@ -380,7 +380,7 @@ double SlewDrive::getPositionFeedback()
     }
     else
     {
-        if (!KinkoDriver::rtuIsActive())
+        if (!KincoDriver::rtuIsActive())
         {
             throw std::runtime_error("getPositionFeedback:: Drivers not connected.");
         }
@@ -478,7 +478,7 @@ double SlewDrive::getVelocityFeedback()
     }
     else
     {
-        if (!KinkoDriver::rtuIsActive())
+        if (!KincoDriver::rtuIsActive())
         {
             throw std::runtime_error("getVelocityFeedback:: Drivers not connected.");
         }
@@ -491,7 +491,7 @@ double SlewDrive::getVelocityFeedback()
             drvVelAve_dps = RPM2degpersec((drvAVel_rpm + drvBVel_rpm) * 0.5);
             if (homingRoutineStatus == HOMING_IDLE)
             {
-                if (std::abs(drvVelAve_dps) > KINKO::MOTOR_MAX_SPEED_DPS)
+                if (std::abs(drvVelAve_dps) > KINCO::MOTOR_MAX_SPEED_DPS)
                 {
                     disable();
                     std::stringstream ss;
@@ -552,8 +552,8 @@ bool SlewDrive::updateAlignment()
     switch (alignmentCounter++)
     {
     case SLEWDRIVE::ALIGNMENT_STEP_0_START:
-        pDriveA->setControlMode(KINKO::MOTOR_MODE_TORQUE);
-        pDriveB->setControlMode(KINKO::MOTOR_MODE_TORQUE);
+        pDriveA->setControlMode(KINCO::MOTOR_MODE_TORQUE);
+        pDriveB->setControlMode(KINCO::MOTOR_MODE_TORQUE);
         pDriveA->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
         pDriveB->updateTorqueCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
         break;
@@ -580,10 +580,10 @@ bool SlewDrive::updateAlignment()
         // for some reason changing them back causes them to move even if vcmd is zero
         pDriveA->updateVelocityCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
         pDriveB->updateVelocityCommand(SLEWDRIVE::ALIGNMENT_ZERO_TORQUE_SPEED);
-        pDriveA->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
-        pDriveB->setMaxSpeed(KINKO::MOTOR_MAX_SPEED_RPM);
-        pDriveA->setControlMode(KINKO::MOTOR_MODE_SPEED);
-        pDriveB->setControlMode(KINKO::MOTOR_MODE_SPEED);
+        pDriveA->setMaxSpeed(KINCO::MOTOR_MAX_SPEED_RPM);
+        pDriveB->setMaxSpeed(KINCO::MOTOR_MAX_SPEED_RPM);
+        pDriveA->setControlMode(KINCO::MOTOR_MODE_SPEED);
+        pDriveB->setControlMode(KINCO::MOTOR_MODE_SPEED);
         done = true;
         break;
     default:

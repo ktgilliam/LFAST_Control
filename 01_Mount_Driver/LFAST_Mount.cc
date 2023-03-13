@@ -59,7 +59,7 @@ const char azLabel[] = "Az. Axis";
 const char altLabel[] = "Alt. Axis";
 
 const bool ALT_SIMULATED = false;
-const bool AZ_SIMULATED = true;
+const bool AZ_SIMULATED = false;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -1317,7 +1317,10 @@ void LFAST_Mount::updateSim(double dt)
 {
     LOG_DEBUG("LFAST_Mount::updateSim");
     // AltitudeAxis->simulate(dt);
-    AzimuthAxis->simulate(dt);
+    if (AZ_SIMULATED)
+        AzimuthAxis->simulate(dt);
+    if (ALT_SIMULATED)
+        AltitudeAxis->simulate(dt);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

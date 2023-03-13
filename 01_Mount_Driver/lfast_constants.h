@@ -3,7 +3,7 @@
 // #include <map>
 // #include "math_util.h"
 // #include "libastro.h"
-#include "../00_Utils/KinkoNamespace.h"
+#include "../00_Utils/KincoNamespace.h"
 namespace LFAST_CONSTANTS
 {
 #define EARTH_ROTATIONS_PER_UT1_DAY 1.002737811906
@@ -47,7 +47,7 @@ namespace SLEWDRIVE
 
     constexpr double DERATE_RATIO = 0.5;
 
-    constexpr double SLEW_DRIVE_MAX_SPEED_DPS = KINKO::MOTOR_MAX_SPEED_DPS * INV_TOTAL_GEAR_RATIO * DERATE_RATIO;
+    constexpr double SLEW_DRIVE_MAX_SPEED_DPS = KINCO::MOTOR_MAX_SPEED_DPS * INV_TOTAL_GEAR_RATIO * DERATE_RATIO;
 
     constexpr double slewGearBacklash_deg = 1.5;
     constexpr double inputGearBacklash_deg = 0.1;

@@ -6,7 +6,7 @@
 #include <memory>
 #include "../00_Utils/PID_Controller.h"
 #include "../00_Utils/df2_filter.h"
-#include "../00_Utils/KinkoDriver.h"
+#include "../00_Utils/KincoDriver.h"
 
 #define SLEW_COMPLETE_THRESH_POSN 0.05
 #define SLEW_COMPLETE_THRESH_RATE 0.003
@@ -38,8 +38,8 @@ private:
     std::unique_ptr<PID_Controller> pid;
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;
 
-    std::unique_ptr<KinkoDriver> pDriveA;
-    std::unique_ptr<KinkoDriver> pDriveB;
+    std::unique_ptr<KincoDriver> pDriveA;
+    std::unique_ptr<KincoDriver> pDriveB;
 
     bool simModeEnabled;
     typedef enum

@@ -17,7 +17,7 @@ set(PROJECT_INCLUDES
 	${INDI_LIBRARIES}
 	${NOVA_LIBRARIES} 
 	PID_Controller 
-	KinkoDriver)
+	KincoDriver)
 
 # add_library(slew_drive_control slew_drive.cc)
 add_executable(LFAST_Mount LFAST_Mount.cc slew_drive.cc)

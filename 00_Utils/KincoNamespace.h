@@ -1,6 +1,6 @@
 #pragma once
 
-namespace KINKO
+namespace KINCO
 {
     enum register_map_enum
     {
