@@ -13,8 +13,8 @@
 
 #include "LFAST_Mount.h"
 
-#include "indicom.h"
-#include "alignment/DriverCommon.h"
+#include "libindi/indicom.h"
+#include "libindi/alignment/DriverCommon.h"
 #include "config.h"
 
 #include <libnova/julian_day.h>
@@ -55,8 +55,8 @@ const unsigned int defaultPollingPeriod = 100;
 std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 
 // Axis labels:
-const char azLabel[] = "Az. Axis";
-const char altLabel[] = "Alt. Axis";
+const char azLabel[] = "Azimuth";
+const char altLabel[] = "Altitutde";
 
 const bool ALT_SIMULATED = false;
 const bool AZ_SIMULATED = false;
@@ -265,7 +265,7 @@ bool LFAST_Mount::initProperties()
     HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
     auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
-    sw[0].s = ISS_ON;
+    sw[0].s = IPS_OK;
     SetApproximateMountAlignmentFromMountType(ALTAZ);
     // LOG_WARN("Initial Park status hardcoded");
     // SetParked(true);
@@ -493,8 +493,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
 bool LFAST_Mount::SetSlewRate(int index)
 {
     // int currentIndex = IUFindOnSwitchIndex(&SlewRateSP);
-    double raVal{0};
-    double deVal{0};
+    // double raVal{0};
+    // double deVal{0};
     double slewRateTmp{0};
     double azVal{0};
     double altVal{0};

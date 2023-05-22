@@ -67,13 +67,13 @@ T DF2_IIR<T>::update(T x_n)
     T &v_n = v.front();
     v_n = x_n;
 
-    for (int ii = 1; ii < a.size(); ii++)
+    for (int ii = 1; ii < (int)a.size(); ii++)
     {
         v_n -= a.at(ii) * v.at(ii);
     }
 
     T y_n = 0;
-    for (int ii = 0; ii < b.size(); ii++)
+    for (int ii = 0; ii < (int)b.size(); ii++)
     {
         T b_ii = b.at(ii);
         T v_cur = v.at(ii);

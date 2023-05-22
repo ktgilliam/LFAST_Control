@@ -22,10 +22,10 @@ namespace LFAST_CONSTANTS
     enum MOTOR_IDS
     {
         BROADCAST = 0,
-        ALTITUDE_MOTOR_A_ID = 1,
-        ALTITUDE_MOTOR_B_ID = 2,
-        AZIMUTH_MOTOR_A_ID = 3,
-        AZIMUTH_MOTOR_B_ID = 4,
+        ALTITUDE_MOTOR_A_ID = 3,
+        ALTITUDE_MOTOR_B_ID = 4,
+        AZIMUTH_MOTOR_A_ID = 1,
+        AZIMUTH_MOTOR_B_ID = 2,
     };
 
 }
@@ -41,7 +41,7 @@ namespace SLEWDRIVE
     const double POSN_PID_ENABLE_THRESH_DEG = 1.5;
 
     const unsigned int GEAR_BOX_RATIO = 60;
-    const unsigned int SLEW_DRIVE_RATIO = 100;
+    const unsigned int SLEW_DRIVE_RATIO = 150;
     constexpr unsigned int TOTAL_GEAR_RATIO = GEAR_BOX_RATIO * SLEW_DRIVE_RATIO;
     constexpr double INV_TOTAL_GEAR_RATIO = 1.0 / (double)TOTAL_GEAR_RATIO;
 

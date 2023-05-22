@@ -34,6 +34,9 @@ private:
     double combinedRateCmdSaturated_dps;
     bool isEnabled;
     double rateLim;
+    bool drvAConnected;
+    bool drvBConnected;
+
     // const PID_Controller *pid;
     std::unique_ptr<PID_Controller> pid;
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;

@@ -73,8 +73,9 @@ bool SlewDrive::connectToDrivers()
     {
         try
         {
-            result = pDriveA->driverHandshake();
-            result &= pDriveB->driverHandshake();
+            drvAConnected = pDriveA->driverHandshake();
+            drvBConnected &= pDriveB->driverHandshake();
+            result = drvAConnected && drvBConnected;
         }
         catch (const std::exception &e)
         {
@@ -104,8 +105,8 @@ void SlewDrive::initializeStates()
     {
         try
         {
-            pDriveA->setDirectionMode(KINCO::CCW_IS_POSITIVE);
-            pDriveB->setDirectionMode(KINCO::CW_IS_POSITIVE);
+            pDriveA->setDirectionMode(KINCO::CW_IS_POSITIVE);
+            pDriveB->setDirectionMode(KINCO::CCW_IS_POSITIVE);
 
             pDriveA->zeroPositionOffset();
             pDriveB->zeroPositionOffset();
@@ -152,6 +153,9 @@ void SlewDrive::abortSlew()
 }
 void SlewDrive::slowStop()
 {
+    if (!drvAConnected || !drvBConnected)
+        return;
+
     if (!simModeEnabled)
     {
         try
@@ -402,13 +406,13 @@ double SlewDrive::getPositionFeedback()
         // Check difference between them?
         if (homingRoutineStatus == HOMING_IDLE)
         {
-            if (std::abs(drvAPosn - drvBPosn) > SLEWDRIVE::MOTOR_MISMATCH_ERROR_THRESH)
-            {
-                disable();
-                char errbuff[100];
-                sprintf(errbuff, "Motor feedbacks not sync'd: A=%6.4f, B=%6.4f", drvAPosn, drvBPosn);
-                throw std::runtime_error(errbuff);
-            }
+            // if (std::abs(drvAPosn - drvBPosn) > SLEWDRIVE::MOTOR_MISMATCH_ERROR_THRESH)
+            // {
+            //     disable();
+            //     char errbuff[100];
+            //     sprintf(errbuff, "Motor feedbacks not sync'd: Ax: %s, A=%6.4f, B=%6.4f", axisLabel, drvAPosn, drvBPosn);
+            //     throw std::runtime_error(errbuff);
+            // }
         }
         // positionFeedback_deg = processPositionFeedback(drvPosnAve);
         positionFeedback_deg = mapMotorPositionToSlewDrive(drvPosnAve);
@@ -435,9 +439,9 @@ double SlewDrive::processPositionFeedback(double currPosn)
 
     const unsigned NUM_SECTORS = 10;
     const unsigned MAX_SECTOR = NUM_SECTORS - 1;
-    const double SECTOR_SIZE = 360.0 / NUM_SECTORS;
+    // const double SECTOR_SIZE = 360.0 / NUM_SECTORS;
 
-    double deltaPosn = currPosn - prevPosn;
+    // double deltaPosn = currPosn - prevPosn;
     currSector = (unsigned)currPosn / NUM_SECTORS;
 
     // bool wrapOccurred = false;

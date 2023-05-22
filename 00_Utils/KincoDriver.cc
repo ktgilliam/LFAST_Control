@@ -228,6 +228,7 @@ void KincoDriver::zeroPositionOffset()
 {
     if (!DriveIsConnected)
         throw std::runtime_error("zeroPositionOffset: Driver connection not established (call driverHandshake() first).");
+    writeDriverRegisters<int32_t>(driverNodeId, KINCO::POS_ACTUAL, 0);
     encoderOffset = readDriverRegister<int32_t>(driverNodeId, KINCO::POS_ACTUAL);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////

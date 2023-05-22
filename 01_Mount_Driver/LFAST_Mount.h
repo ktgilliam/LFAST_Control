@@ -1,13 +1,13 @@
 
 #pragma once
 
-#include "indidriver.h"
-#include "indiguiderinterface.h"
-#include "inditelescope.h"
-#include "indipropertytext.h"
-#include "indipropertynumber.h"
-#include "alignment/AlignmentSubsystemForDrivers.h"
-#include "inditimer.h"
+#include "libindi/indidriver.h"
+#include "libindi/indiguiderinterface.h"
+#include "libindi/inditelescope.h"
+#include "libindi/indipropertytext.h"
+#include "libindi/indipropertynumber.h"
+#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
+#include "libindi/inditimer.h"
 #include "slew_drive.h"
 #include <memory>
 
