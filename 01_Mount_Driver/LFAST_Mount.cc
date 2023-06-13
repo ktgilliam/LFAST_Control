@@ -523,32 +523,32 @@ INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
     double ha = hrs2rad(lst - ra);
     // LOGF_DEBUG("HA: %6.5f", rad2deg(ha));
 
-    double cHA = std::cos(ha);
+    // double cHA = std::cos(ha);
     double sHA = std::sin(ha);
 
     double cDEC = std::cos(deg2rad(dec));
-    double sDEC = std::sin(deg2rad(dec));
+    // double sDEC = std::sin(deg2rad(dec));
 
     double lat = deg2rad(LocationN[LOCATION_LATITUDE].value);
     double cLAT = std::cos(lat);
-    double sLAT = std::sin(lat);
+    // double sLAT = std::sin(lat);
 
     double alt = deg2rad(m_MountAltAz.altitude);
     // LOGF_DEBUG("ALT: %6.5f", rad2deg(alt));
-    double sALT = std::sin(alt);
+    // double sALT = std::sin(alt);
     double cALT = std::cos(alt);
 
     double az = deg2rad(m_MountAltAz.azimuth);
     // LOGF_DEBUG("AZ: %6.5f", rad2deg(az));
     double sAZ = std::sin(az);
-    double cAZ = std::cos(az);
+    // double cAZ = std::cos(az);
 
     double sPAR = sHA * cLAT / cALT;
     double PAR = std::asin(sPAR);
     // LOGF_DEBUG("PAR: %6.5f", rad2deg(PAR));
     double cPAR = std::cos(PAR);
 
-    double sum = PAR + ha + M_PI_2 - az;
+    // double sum = PAR + ha + M_PI_2 - az;
     // LOGF_DEBUG("ANGLE SUM (deg): %6.4f", rad2deg(sum));
     // LOGF_DEBUG("ANGLE SUM (rad): %6.4f",(sum));
 
@@ -894,7 +894,7 @@ bool LFAST_Mount::Park()
     // fs_sexa(DecStr, EquatorialCoordinates.declination, 2, 3600);
     // LOGF_INFO("Parked RA: %s Parked DEC: %s", RAStr, DecStr);
     // gotoPending = true;
-
+    
     m_SkyGuideOffset = {0, 0};
     AltitudeAxis->updateTrackCommands(default_park_posn_alt);
     AzimuthAxis->updateTrackCommands(default_park_posn_az);
