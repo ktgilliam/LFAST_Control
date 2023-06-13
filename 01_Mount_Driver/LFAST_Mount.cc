@@ -835,23 +835,22 @@ bool LFAST_Mount::Sync(double ra, double dec)
     {
         LOGF_ERROR("Sync Error: %s", e.what());
     }
-
     m_MountAltAz.azimuth = azFb;
     m_MountAltAz.altitude = altFb;
 
-    // INDI::IHorizontalCoordinates newAltAz{0, 0};
-    // INDI::IEquatorialCoordinates syncRaDec{0, 0};
-    // syncRaDec.declination = dec;
-    // syncRaDec.rightascension = ra;
-    // INDI::EquatorialToHorizontal(&syncRaDec, &m_Location, ln_get_julian_from_sys(), &newAltAz);
-    // AltitudeAxis->syncPosition(newAltAz.altitude);
-    // AzimuthAxis->syncPosition(newAltAz.azimuth);
+    INDI::IHorizontalCoordinates newAltAz{0, 0};
+    INDI::IEquatorialCoordinates syncRaDec{0, 0};
+    syncRaDec.rightascension = ra;
+    syncRaDec.declination = dec; 
+    INDI::EquatorialToHorizontal(&syncRaDec, &m_Location, ln_get_julian_from_sys(), &newAltAz);
+    AltitudeAxis->syncPosition(newAltAz.altitude);
+    AzimuthAxis->syncPosition(newAltAz.azimuth);
 
     // Syncing is treated specially when the telescope position is known in park position to spare
     // "a huge-jump point" in the alignment model.
     if (isParked())
     {
-        // GetAlignmentDatabase().clear();
+        GetAlignmentDatabase().clear();
         return false;
     }
 
