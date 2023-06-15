@@ -48,7 +48,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
-const double constexpr default_park_posn_alt = 30.0;
+const double constexpr default_park_posn_alt = 0.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
@@ -894,7 +894,7 @@ bool LFAST_Mount::Park()
     // fs_sexa(DecStr, EquatorialCoordinates.declination, 2, 3600);
     // LOGF_INFO("Parked RA: %s Parked DEC: %s", RAStr, DecStr);
     // gotoPending = true;
-    
+
     m_SkyGuideOffset = {0, 0};
     AltitudeAxis->updateTrackCommands(default_park_posn_alt);
     AzimuthAxis->updateTrackCommands(default_park_posn_az);
@@ -1281,15 +1281,24 @@ void LFAST_Mount::TimerHit()
         {
             AltitudeAxis->updateTrackCommands(default_park_posn_alt);
             AzimuthAxis->updateTrackCommands(default_park_posn_az);
-            // LOG_DEBUG("Scope Parking");
+            // LOGF_INFO("Scope Parking: %6.2f, %6.2f", default_park_posn_alt, default_park_posn_az);
+            try
+            {
+                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+            }
         }
         else
         {
             SetParked(true);
             // AzimuthAxis->slowStop();
             // AltitudeAxis->slowStop();
-            // LOG_DEBUG("Scope Parked");
             TrackState = SCOPE_PARKED;
+            LOG_INFO("Scope Parked");
         }
         break;
     case SCOPE_PARKED:
