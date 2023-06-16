@@ -25,6 +25,8 @@
 #include "../00_Utils/math_util.h"
 #include "lfast_constants.h"
 
+
+#define SIM_MODE true
 #define PRINT_DEBUG_STUFF 1
 
 // #include "mountConfig.h"
@@ -48,7 +50,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
-const double constexpr default_park_posn_alt = 0.0;
+const double constexpr default_park_posn_alt = -20.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
@@ -58,8 +60,11 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 const char azLabel[] = "Azimuth";
 const char altLabel[] = "Altitutde";
 
-const bool ALT_SIMULATED = false;
-const bool AZ_SIMULATED = false;
+#ifndef SIM_MODE
+#define SIM_MODE false
+#endif
+const bool ALT_SIMULATED = SIM_MODE;
+const bool AZ_SIMULATED = SIM_MODE;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -194,16 +199,16 @@ bool LFAST_Mount::initProperties()
     // Set default speed
     SlewRateSP.sp[LFAST_CONSTANTS::DEFAULT_SLEW_IDX].s = ISS_ON;
 
-    LOG_WARN("Initial position hardcoded to parking position");
-    try
-    {
-        AltitudeAxis->syncPosition(default_park_posn_alt);
-        AzimuthAxis->syncPosition(default_park_posn_az);
-    }
-    catch (const std::exception &e)
-    {
-        LOGF_ERROR("Error: %s", e.what());
-    }
+    // LOG_WARN("Initial position hardcoded to parking position");
+    // try
+    // {
+    //     AltitudeAxis->syncPosition(default_park_posn_alt);
+    //     AzimuthAxis->syncPosition(default_park_posn_az);
+    // }
+    // catch (const std::exception &e)
+    // {
+    //     LOGF_ERROR("Error: %s", e.what());
+    // }
 
     addAuxControls();
 
@@ -380,18 +385,6 @@ bool LFAST_Mount::Goto(double ra, double dec)
         AltitudeAxis->enable();
         AzimuthAxis->enable();
     }
-    // Call the alignment subsystem to translate the celestial reference frame coordinate
-    // into a telescope reference frame coordinate
-    // ALIGNMENT::TelescopeDirectionVector TDVCommand;
-    // INDI::IHorizontalCoordinates AltAzCommand{0, 0};
-    // INDI::IHorizontalCoordinates AltAzCommand = getTrackingTargetAltAzPosition();
-
-    // DEBUGF(DBG_SIMULATOR, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAzCommand.altitude,
-    //        AltAzCommand.azimuth);
-
-    // // TODO: Try/Catch
-    // AltitudeAxis->updateTrackCommands(AltAzCommand.altitude);
-    // AzimuthAxis->updateTrackCommands(AltAzCommand.azimuth);
 
     TrackState = SCOPE_SLEWING;
 
@@ -730,31 +723,33 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
 
 bool LFAST_Mount::startHomingRoutine()
 {
-    try
-    {
-        if (TrackState == SCOPE_IDLE)
-        {
-            AltitudeAxis->enable();
-            AzimuthAxis->enable();
-        }
+    LOG_ERROR("Homing Routine Not Implemented (Has a homing mechanism been installed?)");
+    return false;
+    // try
+    // {
+    //     if (TrackState == SCOPE_IDLE)
+    //     {
+    //         AltitudeAxis->enable();
+    //         AzimuthAxis->enable();
+    //     }
 
-        homingRoutineActive = true;
+    //     homingRoutineActive = true;
 
-        altHomingComplete = false;
-        AltitudeAxis->startHoming();
+    //     altHomingComplete = false;
+    //     AltitudeAxis->startHoming();
 
-        azHomingComplete = false;
-        AzimuthAxis->startHoming();
+    //     azHomingComplete = false;
+    //     AzimuthAxis->startHoming();
 
-        TrackState = SCOPE_SLEWING;
-        LOG_INFO("Homing Routine Started.");
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        LOGF_ERROR("Homing Error: %s", e.what());
-        return false;
-    }
+    //     TrackState = SCOPE_SLEWING;
+    //     LOG_INFO("Homing Routine Started.");
+    //     return true;
+    // }
+    // catch (const std::exception &e)
+    // {
+    //     LOGF_ERROR("Homing Error: %s", e.what());
+    //     return false;
+    // }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -825,7 +820,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 bool LFAST_Mount::Sync(double ra, double dec)
 {
     double azFb, altFb;
-    LOG_WARN("Initial position hardcoded to parking position");
+    // LOG_WARN("Initial position hardcoded to parking position");
     try
     {
         azFb = AzimuthAxis->getPositionFeedback();
@@ -1277,11 +1272,8 @@ void LFAST_Mount::TimerHit()
         }
         break;
     case SCOPE_PARKING:
-        if (!AzimuthAxis->isSlewComplete() && !AltitudeAxis->isSlewComplete())
+        if (!AzimuthAxis->isSlewComplete() || !AltitudeAxis->isSlewComplete())
         {
-            AltitudeAxis->updateTrackCommands(default_park_posn_alt);
-            AzimuthAxis->updateTrackCommands(default_park_posn_az);
-            // LOGF_INFO("Scope Parking: %6.2f, %6.2f", default_park_posn_alt, default_park_posn_az);
             try
             {
                 AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
