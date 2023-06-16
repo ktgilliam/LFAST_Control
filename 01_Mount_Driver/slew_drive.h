@@ -28,6 +28,7 @@ private:
 
     double positionFeedback_deg;
     double positionCommand_deg;
+    double positionOffset_deg;
     double rateFeedback_dps;
     double rateCommandOffset_dps;
     double rateRef_dps;
@@ -81,7 +82,7 @@ public:
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
 
     void abortSlew();
-    void syncPosition(double posn);
+    void syncPosition(double sync_posn);
     bool isSlewComplete();
     void slowStop();
     // SlewDriveMode_t poll();

@@ -31,6 +31,7 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
 
     positionFeedback_deg = 0.0;
     positionCommand_deg = 0.0;
+    positionOffset_deg = 0.0;
     rateCommandOffset_dps = 0.0;
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
@@ -176,11 +177,13 @@ void SlewDrive::slowStop()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-void SlewDrive::syncPosition(double posn)
+void SlewDrive::syncPosition(double sync_posn)
 {
     rateCommandOffset_dps = 0.0;
-    positionCommand_deg = posn;
-    positionFeedback_deg = posn;
+    positionOffset_deg = 0.0;
+    positionOffset_deg = sync_posn - getPositionFeedback();
+    positionCommand_deg = getPositionFeedback();
+    // positionFeedback_deg = sync_posn;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -368,10 +371,12 @@ double SlewDrive::mapSlewDriveCommandToMotors(double slewRateCmd_dps)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-double SlewDrive::mapMotorPositionToSlewDrive(double motorPosn_deg)
+double SlewDrive::mapMotorPositionToSlewDrive(double drvPosnAve)
 {
     // TODO: Implement proper state estimation
-    return (motorPosn_deg * SLEWDRIVE::INV_TOTAL_GEAR_RATIO);
+    double motorPosn_deg_tmp = drvPosnAve * SLEWDRIVE::INV_TOTAL_GEAR_RATIO;
+    double motorPosn_deg_offs = motorPosn_deg_tmp + positionOffset_deg;
+    return motorPosn_deg_offs;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -391,6 +396,7 @@ double SlewDrive::getPositionFeedback()
         double drvAPosn, drvBPosn;
         try
         {
+            // Rename these
             drvAPosn = pDriveA->getPositionFeedback();
             drvBPosn = pDriveB->getPositionFeedback();
         }

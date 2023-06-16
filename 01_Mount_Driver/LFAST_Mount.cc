@@ -25,8 +25,7 @@
 #include "../00_Utils/math_util.h"
 #include "lfast_constants.h"
 
-
-#define SIM_MODE true
+#define SIM_MODE false
 #define PRINT_DEBUG_STUFF 1
 
 // #include "mountConfig.h"
@@ -50,7 +49,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
-const double constexpr default_park_posn_alt = -20.0;
+const double constexpr default_park_posn_alt = -10.0;
 const unsigned int defaultPollingPeriod = 100;
 
 // We declare an auto pointer to LFAST_Mount.
@@ -142,10 +141,12 @@ const char *LFAST_Mount::getDefaultName()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::initProperties()
 {
+    // https://indilib.org/develop/developer-manual/101-standard-properties.html
     /* Make sure to init parent properties first */
     INDI::Telescope::initProperties();
 
     // Let's simulate it to be an F/10 8" telescope
+    // Not sure about these, may need to remove or update for actual hardware? Where did these come from?
     ScopeParametersN[0].value = 203;
     ScopeParametersN[1].value = 2000;
     ScopeParametersN[2].value = 203;
@@ -158,10 +159,16 @@ bool LFAST_Mount::initProperties()
     if (InitPark())
     {
         // If loading parking data is successful, we just set the default parking values.
-        // Axis 1 is ALT
-        // Axis 2 is AZ
-        SetAxis1ParkDefault(default_park_posn_az);
-        SetAxis2ParkDefault(default_park_posn_alt);
+        // alignment.latitude = Angle(LocationN[LOCATION_LATITUDE].value);
+        // alignment.longitude = Angle(LocationN[LOCATION_LONGITUDE].value);
+        // currentRA = (alignment.lst() - Angle(, Angle::ANGLE_UNITS::HOURS)).Hours();
+        // currentDEC = ParkPositionN[AXIS_DE].value;
+
+        m_MountAltAz.altitude = ParkPositionN[AXIS_ALT].value;
+        m_MountAltAz.azimuth = ParkPositionN[AXIS_AZ].value;
+        INDI::IEquatorialCoordinates EquatorialCoordinates{0, 0};
+        INDI::HorizontalToEquatorial(&m_MountAltAz, &m_Location, ln_get_julian_from_sys(), &EquatorialCoordinates);
+        Sync(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
     }
     else
     {
@@ -170,8 +177,10 @@ bool LFAST_Mount::initProperties()
         SetAxis1ParkDefault(default_park_posn_az);
         SetAxis2Park(default_park_posn_alt);
         SetAxis2ParkDefault(default_park_posn_alt);
+        m_MountAltAz.altitude = default_park_posn_alt;
+        m_MountAltAz.azimuth = default_park_posn_az;
     }
-
+    
     initGuiderProperties(getDeviceName(), MOTION_TAB);
 
     // How fast do we guide compared to sidereal rate
@@ -244,8 +253,8 @@ bool LFAST_Mount::initProperties()
     ModbusCommPortTP.fill(getDeviceName(), "MODBUS_COMM_DEV", "Modbus", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
     defineProperty(ModbusCommPortTP);
 
-    AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, default_park_posn_az);
-    AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, default_park_posn_alt);
+    AzAltCoordsNP[AXIS_AZ].fill("AZ_COORDINATE", "Az Posn [deg]", "%6.4f", 0, 360, 0.001, m_MountAltAz.azimuth);
+    AzAltCoordsNP[AXIS_ALT].fill("ALT_COORDINATE", "Alt Posn [deg]", "%6.4f", -90, 90, 0.001, m_MountAltAz.altitude);
     AzAltCoordsNP[AXIS_AZ_VEL].fill("AZ_VEL_COORDINATE", "Az Rate [deg/s]", "%6.4f", 0, 10000, 0.0001, 0);
     AzAltCoordsNP[AXIS_ALT_VEL].fill("ALT_VEL_COORDINATE", "Alt Rate [deg/s]", "%6.4f", 0, 10000, 0.0001, 0);
 
@@ -347,15 +356,18 @@ bool LFAST_Mount::Handshake()
     LOGF_INFO("Connecting to modbus comm port: %s", devPath);
     try
     {
-        if (!ALT_SIMULATED || !AZ_SIMULATED)
+        if (!SIM_MODE)
+        {
             SlewDrive::initializeDriverBus(devPath);
-        AltitudeAxis->connectToDrivers();
-        AzimuthAxis->connectToDrivers();
-        // Zeros the encoders (probably will need to remove this!!)
-        AltitudeAxis->initializeStates();
-        AzimuthAxis->initializeStates();
-
-        LOG_INFO("Modbus connection successful");
+            AltitudeAxis->connectToDrivers();
+            AzimuthAxis->connectToDrivers();
+            // Zeros the encoders (probably will need to remove this!!)
+            AltitudeAxis->initializeStates();
+            AzimuthAxis->initializeStates();
+            AltitudeAxis->syncPosition(m_MountAltAz.altitude);
+            AzimuthAxis->syncPosition(m_MountAltAz.azimuth);
+            LOG_INFO("Modbus connection successful");
+        }
         return true;
     }
     catch (const std::exception &e)
@@ -370,6 +382,7 @@ bool LFAST_Mount::Handshake()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Goto(double ra, double dec)
 {
+    bool success = true;
     // if (gotoPending)
     // {
     char RAStr[32], DecStr[32];
@@ -381,14 +394,22 @@ bool LFAST_Mount::Goto(double ra, double dec)
     updateTrackingTarget(ra, dec);
 
     if (TrackState == SCOPE_IDLE)
-    {
-        AltitudeAxis->enable();
-        AzimuthAxis->enable();
+    {   
+        try
+        {
+            AltitudeAxis->enable();
+            AzimuthAxis->enable();
+            TrackState = SCOPE_SLEWING;
+            success = true;
+        }
+        catch(const std::exception& e)
+        {
+            LOGF_ERROR("Goto Error: %s", e.what());
+            success = false;
+        }
     }
 
-    TrackState = SCOPE_SLEWING;
-
-    return true;
+    return success;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -819,8 +840,9 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Sync(double ra, double dec)
 {
+    bool success = true;
     double azFb, altFb;
-    // LOG_WARN("Initial position hardcoded to parking position");
+    LOG_WARN("INSIDE SYNC!!!!!!!!!!!!!!!!111111111111");
     try
     {
         azFb = AzimuthAxis->getPositionFeedback();
@@ -829,14 +851,19 @@ bool LFAST_Mount::Sync(double ra, double dec)
     catch (const std::exception &e)
     {
         LOGF_ERROR("Sync Error: %s", e.what());
+        success = false;
     }
+    // TODO: This is bad do better:
+    if (!success)
+        return false;
+
     m_MountAltAz.azimuth = azFb;
     m_MountAltAz.altitude = altFb;
 
     INDI::IHorizontalCoordinates newAltAz{0, 0};
     INDI::IEquatorialCoordinates syncRaDec{0, 0};
     syncRaDec.rightascension = ra;
-    syncRaDec.declination = dec; 
+    syncRaDec.declination = dec;
     INDI::EquatorialToHorizontal(&syncRaDec, &m_Location, ln_get_julian_from_sys(), &newAltAz);
     AltitudeAxis->syncPosition(newAltAz.altitude);
     AzimuthAxis->syncPosition(newAltAz.azimuth);
@@ -889,13 +916,15 @@ bool LFAST_Mount::Park()
     // fs_sexa(DecStr, EquatorialCoordinates.declination, 2, 3600);
     // LOGF_INFO("Parked RA: %s Parked DEC: %s", RAStr, DecStr);
     // gotoPending = true;
-
-    m_SkyGuideOffset = {0, 0};
-    AltitudeAxis->updateTrackCommands(default_park_posn_alt);
-    AzimuthAxis->updateTrackCommands(default_park_posn_az);
+    if (TrackState != SCOPE_PARKED && TrackState != SCOPE_PARKING)
+    {
+        m_SkyGuideOffset = {0, 0};
+        AltitudeAxis->updateTrackCommands(default_park_posn_alt);
+        AzimuthAxis->updateTrackCommands(default_park_posn_az);
 
     // NewRaDec(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
-    TrackState = SCOPE_PARKING;
+        TrackState = SCOPE_PARKING;
+    }
 
     return true;
 }
@@ -905,12 +934,30 @@ bool LFAST_Mount::Park()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::UnPark()
 {
+    bool success = true;
     LOG_DEBUG("LFAST_Mount::UnPark");
-    AltitudeAxis->enable();
-    AzimuthAxis->enable();
-    SetParked(false);
-    TrackState = SCOPE_IDLE;
-    return true;
+    if (TrackState != SCOPE_PARKING)
+    {
+        try
+        {
+            AltitudeAxis->enable();
+            AzimuthAxis->enable();
+            SetParked(false);
+            TrackState = SCOPE_IDLE;
+            success = true;
+        }
+        catch(const std::exception& e)
+        {
+            LOGF_ERROR("UnPark Error:%s", e.what());
+            success = false;
+        }
+    }
+    else
+    {
+        success = false;
+        LOG_WARN("UNPARK WHILE PARKING");
+    }
+    return success;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -947,7 +994,9 @@ bool LFAST_Mount::updatePointingCoordinates()
         AzAltCoordsNP.apply();
         successFlag = false;
     }
-
+    if (!successFlag)
+        return successFlag;
+        
     m_MountAltAz.altitude = altPosnFb;
     m_MountAltAz.azimuth = azPosnFb;
 
@@ -1272,27 +1321,34 @@ void LFAST_Mount::TimerHit()
         }
         break;
     case SCOPE_PARKING:
-        if (!AzimuthAxis->isSlewComplete() || !AltitudeAxis->isSlewComplete())
+    {
+        bool azParked = AzimuthAxis->isSlewComplete();
+        bool altParked = AltitudeAxis->isSlewComplete();
+        try
         {
-            try
+            if (!azParked)
             {
-                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
                 AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
             }
-            catch (const std::exception &e)
+            if (!altParked)
             {
-                LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
             }
         }
-        else
+        catch (const std::exception &e)
+        {
+            LOGF_ERROR("TimerHit Error (SCOPE_PARKING:  %s", e.what());
+        }
+        if (azParked && altParked)
         {
             SetParked(true);
-            // AzimuthAxis->slowStop();
-            // AltitudeAxis->slowStop();
+            AzimuthAxis->slowStop();
+            AltitudeAxis->slowStop();
             TrackState = SCOPE_PARKED;
             LOG_INFO("Scope Parked");
         }
         break;
+    }
     case SCOPE_PARKED:
         break;
     }
