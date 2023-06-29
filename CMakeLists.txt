@@ -6,13 +6,14 @@ endif (POLICY CMP0048)
 project(lfast_mount_controller LANGUAGES C CXX VERSION 0.0.1)
 cmake_minimum_required(VERSION 3.10)
 
-
+# Driver development setup guide: http://docs.indilib.org/drivers/project-setup.html
 
 # specify the C++ standard
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_INSTALL_PREFIX /usr)
 set(BUILD_TESTS TRUE)
 
 
@@ -42,6 +43,7 @@ find_package(Nova REQUIRED)
 if(INDI_FOUND)
    include_directories(${INDI_INCLUDE_DIR})
    add_subdirectory(00_Utils)
+   add_subdirectory(05_AHRS_Driver)
    add_subdirectory(01_Mount_Driver)
    
    if (BUILD_TESTS)
