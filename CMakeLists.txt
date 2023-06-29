@@ -13,6 +13,8 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
+set(BUILD_TESTS TRUE)
+
 
 #=================================================================================================#
 #========================================= Version Info  =========================================#
@@ -22,18 +24,18 @@ set(CDRIVER_VERSION_MAJOR 0)
 set(CDRIVER_VERSION_MINOR 1)
 
 
-
 #=================================================================================================#
 #========================================= Dependencies  =========================================#
 #=================================================================================================#
 # add our cmake_modules folder
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/02_CMake_Modules/")
 
-set(BUILD_TESTS true)
+
+find_package(Modbus REQUIRED)
 
 
-message("Checking for INDI Library")
 #Require INDI 1.4 or later
+message("Checking for INDI Library")
 find_package(INDI 1.4 REQUIRED)
 find_package(Nova REQUIRED)
 

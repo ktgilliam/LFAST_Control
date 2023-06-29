@@ -1,13 +1,13 @@
 
 #pragma once
 
-#include "indidriver.h"
-#include "indiguiderinterface.h"
-#include "inditelescope.h"
-#include "indipropertytext.h"
-#include "indipropertynumber.h"
-#include "alignment/AlignmentSubsystemForDrivers.h"
-#include "inditimer.h"
+#include "libindi/indidriver.h"
+#include "libindi/indiguiderinterface.h"
+#include "libindi/inditelescope.h"
+#include "libindi/indipropertytext.h"
+#include "libindi/indipropertynumber.h"
+#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
+#include "libindi/inditimer.h"
 #include "slew_drive.h"
 #include <memory>
 
@@ -141,6 +141,7 @@ private:
 
     // static constexpr const char *DetailedMountInfoPage { "Detailed Mount Information" };
 
+    INDI::PropertyText ModbusCommPortTP{1};
     // INDI::PropertyText NtpServerTP{1};
     INDI::PropertyNumber AzAltCoordsNP{4};
     // INDI::PropertySwitch MountSlewRateSP{LFAST::NUM_SLEW_SPEEDS};
@@ -149,8 +150,11 @@ private:
     // INDI::PropertyText TrackStateTP{1};
 
     // INDI::PropertyLight TrackStateLP{5};
-    INDI::PropertySwitch TrackStateSP{6};
-
+    // INDI::PropertySwitch TrackStateSP{6};
+    INDI::PropertySwitch HomeSP{1};
+    bool homingRoutineActive;
+    bool altHomingComplete;
+    bool azHomingComplete;
     // enum
     // {
     //     FULL_STOP,
@@ -181,6 +185,7 @@ private:
     INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
     void updateSim(double dt);
+    bool startHomingRoutine();
 };
 
 const std::string getDirString(INDI_DIR_NS dir)
@@ -201,4 +206,10 @@ const std::string getDirString(INDI_DIR_WE dir)
         return "DIRECTION_EAST";
     else
         return "DIRECTION_ERROR";
+}
+
+inline bool is_file_exist(const char *fileName)
+{
+    std::ifstream infile(fileName);
+    return infile.good();
 }
