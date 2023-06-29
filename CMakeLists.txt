@@ -14,6 +14,8 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_INSTALL_PREFIX /usr)
+set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin")
+set(RULES_INSTALL_DIR "/etc/udev/rules.d")
 set(BUILD_TESTS TRUE)
 
 
@@ -43,8 +45,8 @@ find_package(Nova REQUIRED)
 if(INDI_FOUND)
    include_directories(${INDI_INCLUDE_DIR})
    add_subdirectory(00_Utils)
-   add_subdirectory(05_AHRS_Driver)
    add_subdirectory(01_Mount_Driver)
+   # add_subdirectory(05_AHRS_Driver)
    
    if (BUILD_TESTS)
 	message("BUILD_TESTS=TRUE, unit tests will be built.")
