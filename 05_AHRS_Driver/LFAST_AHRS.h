@@ -11,22 +11,16 @@
 
 */
 
-/** \file LFAST_AHRS.h
-    \brief Construct a basic INDI device with only one property to connect and disconnect.
-    \author Jasem Mutlaq
-
-    \example LFAST_AHRS.h
-    A very minimal device! It also allows you to connect/disconnect and performs no other functions.
-*/
 
 #pragma once
 
-#include "defaultdevice.h"
+#include "libindi/defaultdevice.h"
 
+#define TEST1234 5
 class LFAST_AHRS : public INDI::DefaultDevice
 {
     public:
-        LFAST_AHRS();
+        LFAST_AHRS() = default;
 
     protected:
         bool Connect() override;

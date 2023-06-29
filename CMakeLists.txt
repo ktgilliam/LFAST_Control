@@ -46,7 +46,7 @@ if(INDI_FOUND)
    include_directories(${INDI_INCLUDE_DIR})
    add_subdirectory(00_Utils)
    add_subdirectory(01_Mount_Driver)
-   # add_subdirectory(05_AHRS_Driver)
+   add_subdirectory(05_AHRS_Driver)
    
    if (BUILD_TESTS)
 	message("BUILD_TESTS=TRUE, unit tests will be built.")

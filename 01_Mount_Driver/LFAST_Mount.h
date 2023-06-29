@@ -6,8 +6,10 @@
 #include "libindi/inditelescope.h"
 #include "libindi/indipropertytext.h"
 #include "libindi/indipropertynumber.h"
-#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
 #include "libindi/inditimer.h"
+#include "libindi/indicom.h"
+#include "libindi/alignment/DriverCommon.h"
+#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
 #include "slew_drive.h"
 #include <memory>
 

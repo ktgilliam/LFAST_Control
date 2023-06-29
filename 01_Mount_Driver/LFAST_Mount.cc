@@ -12,17 +12,14 @@
 */
 
 #include "LFAST_Mount.h"
-
-#include "libindi/indicom.h"
-#include "libindi/alignment/DriverCommon.h"
 #include "config.h"
 
 #include <libnova/julian_day.h>
 #include <memory>
 #include <exception>
 
-#include "slew_drive.h"
 #include "../00_Utils/math_util.h"
+#include "slew_drive.h"
 #include "lfast_constants.h"
 
 #define SIM_MODE false

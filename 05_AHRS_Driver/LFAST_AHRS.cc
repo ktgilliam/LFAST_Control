@@ -21,10 +21,13 @@
 
 #include "LFAST_AHRS.h"
 
+#include <cstdio>
 #include <memory>
 
-std::unique_ptr<LFAST_AHRS> LFAST_AHRS(new LFAST_AHRS());
+const uint64_t tmp = TEST1234;
 
+// std::unique_ptr<LFAST_AHRS> LFAST_AHRS(new LFAST_AHRS());
+// LFAST_AHRS
 /**************************************************************************************
 ** Client is asking us to establish connection to the device
 ***************************************************************************************/

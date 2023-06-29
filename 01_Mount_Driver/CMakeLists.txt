@@ -12,10 +12,10 @@ configure_file(
 
 # set our include directories to look for header files
 include_directories( ${CMAKE_BINARY_DIR})
-include_directories( ${CMAKE_SOURCE_DIR})
+# include_directories( ${CMAKE_SOURCE_DIR})
 include_directories( ${CMAKE_CURRENT_BINARY_DIR})
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR})
-include_directories( ${INDI_INCLUDE_DIR})
+
 
 # find our required packages
 find_package(INDI REQUIRED)
@@ -25,6 +25,7 @@ find_package(Nova REQUIRED)
 
 
 if(INDI_FOUND)
+include_directories( ${INDI_INCLUDE_DIR})
 set(PROJECT_INCLUDES 
 	${INDI_LIBRARIES}
 	${NOVA_LIBRARIES} 
