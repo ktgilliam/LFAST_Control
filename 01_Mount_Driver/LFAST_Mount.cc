@@ -37,11 +37,11 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
             | TELESCOPE_CAN_ABORT   \
             | TELESCOPE_CAN_SYNC    \
             )
-            // | TELESCOPE_CAN_CONTROL_TRACK \
-// | TELESCOPE_HAS_TIME 
-// | TELESCOPE_HAS_TRACK_MODE
-// | TELESCOPE_HAS_TRACK_RATE
-// | TELESCOPE_HAS_PIER_SID
+/* | TELESCOPE_CAN_CONTROL_TRACK 
+   | TELESCOPE_HAS_TIME 
+   | TELESCOPE_HAS_TRACK_MODE
+   | TELESCOPE_HAS_TRACK_RATE
+   | TELESCOPE_HAS_PIER_SIDE */
 // clang-format on
 
 /* Preset Slew Speeds */
@@ -276,7 +276,8 @@ bool LFAST_Mount::initProperties()
     HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
     auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
-    sw[0].s = IPS_OK;
+    sw[0].s = ISS_ON;
+    INDI::PropertySwitch
     SetApproximateMountAlignmentFromMountType(ALTAZ);
     // LOG_WARN("Initial Park status hardcoded");
     // SetParked(true);

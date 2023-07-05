@@ -16,7 +16,6 @@
 
 #include "libindi/defaultdevice.h"
 
-#define TEST1234 5
 class LFAST_AHRS : public INDI::DefaultDevice
 {
     public:

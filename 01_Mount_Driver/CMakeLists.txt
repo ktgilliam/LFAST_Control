@@ -25,7 +25,7 @@ find_package(Nova REQUIRED)
 
 
 if(INDI_FOUND)
-include_directories( ${INDI_INCLUDE_DIR})
+include_directories(${INDI_INCLUDE_DIR})
 set(PROJECT_INCLUDES 
 	${INDI_LIBRARIES}
 	${NOVA_LIBRARIES} 

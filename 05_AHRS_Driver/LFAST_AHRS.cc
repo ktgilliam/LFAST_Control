@@ -24,9 +24,8 @@
 #include <cstdio>
 #include <memory>
 
-const uint64_t tmp = TEST1234;
 
-// std::unique_ptr<LFAST_AHRS> LFAST_AHRS(new LFAST_AHRS());
+std::unique_ptr<LFAST_AHRS> lfast_ahrs(new LFAST_AHRS());
 // LFAST_AHRS
 /**************************************************************************************
 ** Client is asking us to establish connection to the device

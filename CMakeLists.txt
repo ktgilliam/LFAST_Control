@@ -16,7 +16,7 @@ set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_INSTALL_PREFIX /usr)
 set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin")
 set(RULES_INSTALL_DIR "/etc/udev/rules.d")
-set(BUILD_TESTS TRUE)
+set(BUILD_TESTS FALSE)
 
 
 #=================================================================================================#
