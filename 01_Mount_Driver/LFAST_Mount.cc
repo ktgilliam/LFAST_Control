@@ -47,7 +47,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
 const double constexpr default_park_posn_alt = -10.0;
-const unsigned int defaultPollingPeriod = 100;
+const unsigned int defaultPollingPeriod = 50;
 
 // We declare an auto pointer to LFAST_Mount.
 std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
@@ -144,6 +144,7 @@ bool LFAST_Mount::initProperties()
 
     // Let's simulate it to be an F/10 8" telescope
     // Not sure about these, may need to remove or update for actual hardware? Where did these come from?
+    // These are for the celestron, so they will need to be updated for the primary mirror
     ScopeParametersN[0].value = 203;
     ScopeParametersN[1].value = 2000;
     ScopeParametersN[2].value = 203;
@@ -204,17 +205,6 @@ bool LFAST_Mount::initProperties()
 
     // Set default speed
     SlewRateSP.sp[LFAST_CONSTANTS::DEFAULT_SLEW_IDX].s = ISS_ON;
-
-    // LOG_WARN("Initial position hardcoded to parking position");
-    // try
-    // {
-    //     AltitudeAxis->syncPosition(default_park_posn_alt);
-    //     AzimuthAxis->syncPosition(default_park_posn_az);
-    // }
-    // catch (const std::exception &e)
-    // {
-    //     LOGF_ERROR("Error: %s", e.what());
-    // }
 
     addAuxControls();
 
@@ -524,10 +514,10 @@ bool LFAST_Mount::SetSlewRate(int index)
     AltitudeAxis->updateSlewRate(altVal);
     return true;
 }
-
+// TODO: Update to accept an INDI::TelescopeTrackMode argument and calculate rates accordingly
 INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
-    // LOG_DEBUG("\n=================");
+    //Assumes sidereal target.
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
 
@@ -576,7 +566,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 // //////////////////////////////////////////////////////////////////////////////////////////////////
 // /// Tracking Rates V0
 // //////////////////////////////////////////////////////////////////////////////////////////////////
-INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzRates()
+INDI::IHorizontalCoordinates LFAST_Mount::getSiderealTargetAltAzRates()
 {
 
     ALIGNMENT::TelescopeDirectionVector TDVCommand;
@@ -1305,7 +1295,7 @@ void LFAST_Mount::TimerHit()
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
-        altAzRates = getTrackingTargetAltAzRates();
+        altAzRates = getSiderealTargetAltAzRates();
         AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
         AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
         try

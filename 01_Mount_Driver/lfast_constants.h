@@ -15,7 +15,7 @@ namespace LFAST_CONSTANTS
     // const double SiderealRate_radpersec = (0.000072921); //(15.041067 / 3600.0 * M_PI / 180.0)
     // #define SIDEREAL_RATE_DPS 0.004166667
 
-    const double slewspeeds[] = {16.0, 32.0, 64.0, 128.0, 256.0, 512.0};
+    const double slewspeeds[] = {5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 400.0};
     constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
     constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
 
@@ -34,11 +34,11 @@ namespace SLEWDRIVE
 {
 
 
-    const double SLEW_POSN_KP = 0.8;
+    const double SLEW_POSN_KP = 0.6;
     const double SLEW_POSN_KI = 0.0;
     const double SLEW_POSN_KD = 0.0;
 
-    const double POSN_PID_ENABLE_THRESH_DEG = 1.5;
+
 
     const unsigned int GEAR_BOX_RATIO = 60;
     const unsigned int SLEW_DRIVE_RATIO = 150;
@@ -48,6 +48,8 @@ namespace SLEWDRIVE
     constexpr double DERATE_RATIO = 0.5;
 
     constexpr double SLEW_DRIVE_MAX_SPEED_DPS = KINCO::MOTOR_MAX_SPEED_DPS * INV_TOTAL_GEAR_RATIO * DERATE_RATIO;
+
+    constexpr double POSN_PID_ENABLE_THRESH_DEG = SLEW_DRIVE_MAX_SPEED_DPS * 2;
 
     constexpr double slewGearBacklash_deg = 1.5;
     constexpr double inputGearBacklash_deg = 0.1;

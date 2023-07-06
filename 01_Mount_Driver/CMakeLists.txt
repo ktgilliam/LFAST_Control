@@ -25,7 +25,6 @@ find_package(Nova REQUIRED)
 
 
 if(INDI_FOUND)
-include_directories(${INDI_INCLUDE_DIR})
 set(PROJECT_INCLUDES 
 	${INDI_LIBRARIES}
 	${NOVA_LIBRARIES} 
@@ -37,8 +36,10 @@ include(CMakeCommon)
 add_executable(indi_lfast_mount LFAST_Mount.cc slew_drive.cc)
 # add_executable(LFAST_Mount_testable LFAST_Mount.cc)
 
-
 target_link_libraries( indi_lfast_mount   ${PROJECT_INCLUDES} )
+
+
+############ Installation directives ############
 
 # tell cmake where to install our executable
 install(TARGETS indi_lfast_mount RUNTIME DESTINATION bin)

@@ -16,6 +16,7 @@
 typedef enum
 {
     SLEWING_TO_POSN,
+    MANUAL_SLEW,
     TRACKING_COMMAND,
     HOMING_IN_PROGRESS
 } ControlMode_t;
@@ -30,7 +31,7 @@ private:
     double positionCommand_deg;
     double positionOffset_deg;
     double rateFeedback_dps;
-    double rateCommandOffset_dps;
+    double rateCommandFeedforward_dps;
     double rateRef_dps;
     double combinedRateCmdSaturated_dps;
     bool isEnabled;
@@ -76,7 +77,7 @@ public:
     double getPositionFeedback();
     double processPositionFeedback(double currPosn);
 
-    double getVelocityCommand() { return rateCommandOffset_dps + rateRef_dps; }
+    double getVelocityCommand() { return rateCommandFeedforward_dps + rateRef_dps; }
     double getVelocityFeedback();
 
     void updateTrackCommands(double pcmd, double rcmd = 0.0);

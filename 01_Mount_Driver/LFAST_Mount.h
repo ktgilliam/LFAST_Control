@@ -181,7 +181,7 @@ private:
     /// Helper Functions
     ///////////////////////////////////////////////////////////////////////////////
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
-    INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
+    INDI::IHorizontalCoordinates getSiderealTargetAltAzRates();
     bool updatePointingCoordinates();
     void printSlewDriveStates();
     INDI::IHorizontalCoordinates getHorizontalRates();

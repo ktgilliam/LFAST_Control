@@ -54,9 +54,11 @@ protected:
 
 
     static std::vector<KincoDriver *> connectedDrives;
-
     int32_t encoderOffset;
+    KINCO::StatusWord_t kincoStatusData;
     // std::vector<uint16_t>
+    void readDriverStatus(bool);
+
 public:
     template <typename T>
     static T readDriverRegister(uint8_t devId, uint16_t modBusAddr);
@@ -70,6 +72,7 @@ public:
     void getDriverState() override{};
     void setControlMode(uint16_t) override;
     void getControlMode() override{};
+
     void setDirectionMode(uint8_t dir);
     void setMaxSpeed(double maxRPM);
     void zeroPositionOffset();
@@ -87,6 +90,10 @@ public:
     static void initializeRTU(const char *device, int baud = 19200, char parity = 'N', int data_bit = 8, int stop_bit = 1);
     static bool rtuIsActive();
     bool driverHandshake();
+
+
+
+
 #if defined(LFAST_TERMINAL)
     void connectTerminalInterface(TerminalInterface *_cli) override;
     void setupPersistentFields() override;

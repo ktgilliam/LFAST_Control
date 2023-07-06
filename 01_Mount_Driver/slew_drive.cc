@@ -32,7 +32,7 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
     positionFeedback_deg = 0.0;
     positionCommand_deg = 0.0;
     positionOffset_deg = 0.0;
-    rateCommandOffset_dps = 0.0;
+    rateCommandFeedforward_dps = 0.0;
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
@@ -98,7 +98,7 @@ void SlewDrive::initializeStates()
 {
     positionFeedback_deg = 0.0;
     positionCommand_deg = 0.0;
-    rateCommandOffset_dps = 0.0;
+    rateCommandFeedforward_dps = 0.0;
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
@@ -127,7 +127,7 @@ void SlewDrive::initializeStates()
 void SlewDrive::updateTrackCommands(double pcmd, double rcmd)
 {
     positionCommand_deg = pcmd;
-    rateCommandOffset_dps = rcmd;
+    rateCommandFeedforward_dps = rcmd;
     // delete pid;
 }
 
@@ -138,7 +138,7 @@ void SlewDrive::abortSlew()
 {
     positionCommand_deg = positionFeedback_deg;
     rateRef_dps = 0.0;
-    rateCommandOffset_dps = 0.0;
+    rateCommandFeedforward_dps = 0.0;
     try
     {
         pDriveA->setDriverState(KINCO::ESTOP_VOLTAGE_OFF);
@@ -179,7 +179,8 @@ void SlewDrive::slowStop()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::syncPosition(double sync_posn)
 {
-    rateCommandOffset_dps = 0.0;
+    pid->resetIntegrator();
+    rateCommandFeedforward_dps = 0.0;
     positionOffset_deg = 0.0;
     positionOffset_deg = sync_posn - getPositionFeedback();
     positionCommand_deg = getPositionFeedback();
@@ -217,7 +218,7 @@ void SlewDrive::updateSlewRate(double slewRate)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::updateRateOffset(double rate)
 {
-    rateCommandOffset_dps = rate;
+    rateCommandFeedforward_dps = rate;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -317,8 +318,8 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     else if (mode == TRACKING_COMMAND)
     {
 
-        combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandOffset_dps;
-        // combinedRateCmd_dps = saturate(rateCommandOffset_dps, -1 * rateLim, rateLim);
+        combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandFeedforward_dps;
+        // combinedRateCmd_dps = saturate(rateCommandFeedforward_dps, -1 * rateLim, rateLim);
     }
 
 #if SIM_MODE_ENABLED
