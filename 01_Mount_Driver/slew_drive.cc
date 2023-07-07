@@ -154,6 +154,9 @@ void SlewDrive::abortSlew()
 }
 void SlewDrive::slowStop()
 {
+    combinedRateCmdSaturated_dps = 0.0;
+    rateCommandFeedforward_dps = 0.0;
+    rateRef_dps = 0.0;
     if (!drvAConnected || !drvBConnected)
         return;
 
@@ -172,7 +175,10 @@ void SlewDrive::slowStop()
             throw std::runtime_error(ss.str().c_str());
         }
     }
-    // abortSlew();
+    else
+    {
+
+    }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///

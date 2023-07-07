@@ -766,17 +766,18 @@ bool LFAST_Mount::startHomingRoutine()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
-
     if (command == MOTION_STOP)
     {
         manualMotionActive = false;
-        LOG_WARN("Manual Slew Stopped.");
+        AltitudeAxis->updateManualRateCommand(0.0);
         AltitudeAxis->slowStop();
+        LOG_WARN("Manual Slew Stopped.");
+        TrackState = SCOPE_IDLE;
     }
     else
     {
         double speed = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
-        LOGF_WARN("Manual Slew Command: %4.2f", speed);
+        LOGF_WARN("Manual Altitude Slew Command: %4.2f", speed);
 
         switch (TrackState)
         {
@@ -794,23 +795,6 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
             break;
         }
     }
-
-    // switch (command)
-    // {
-    // case MOTION_START:
-    //     DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
-    //     // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
-    //     // AzimuthAxis->updateRateOffset(speed);
-    //     // manualMotionActive = true;
-    //     LOG_ERROR("MoveNS Not Implemented");
-    //     break;
-
-    // case MOTION_STOP:
-    //     DEBUGF(DBG_SCOPE, "Stopping Slew %s", dirStr);
-    //     AltitudeAxis->slowStop();
-    //     AzimuthAxis->slowStop();
-    //     break;
-    // }
     return true;
 }
 
@@ -819,29 +803,35 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 {
-    // double speed =
-    //     (dir == DIRECTION_WEST) ? -GetSlewRate() : GetSlewRate();
-    double movement = (dir == DIRECTION_WEST) ? -1 * command : command;
-
-    const char *dirStr = (dir == DIRECTION_WEST) ? "West" : "East";
-    LOGF_INFO("MoveWE: %6.4f", movement);
-    switch (command)
+    if (command == MOTION_STOP)
     {
-    case MOTION_START:
-        DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
-        // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
-        // AzimuthAxis->updateRateOffset(speed);
-        // manualMotionActive = true;
-        LOG_ERROR("MoveWE Not Implemented");
-        break;
-
-    case MOTION_STOP:
-        DEBUGF(DBG_SCOPE, "Stopping Slew %s", dirStr);
-        AltitudeAxis->slowStop();
+        manualMotionActive = false;
+        AzimuthAxis->updateManualRateCommand(0.0);
         AzimuthAxis->slowStop();
-        break;
+        LOG_WARN("Manual Slew Stopped.");
+        TrackState = SCOPE_IDLE;
     }
+    else
+    {
+        double speed = (dir == DIRECTION_EAST) ? GetSlewRate() : -1 * GetSlewRate();
+        LOGF_WARN("Manual Azimuth Slew Command: %4.2f", speed);
 
+        switch (TrackState)
+        {
+        case SCOPE_IDLE:
+        case SCOPE_TRACKING:
+        case SCOPE_SLEWING:
+        case SCOPE_PARKING:
+            TrackState = SCOPE_SLEWING;
+            manualMotionActive = true;
+            AzimuthAxis->updateManualRateCommand(speed);
+            break;
+        case SCOPE_PARKED:
+            LOG_WARN("WARNING: Cannot slew while scope is parked.");
+        default:
+            break;
+        }
+    }
     return true;
 }
 
@@ -1295,9 +1285,9 @@ void LFAST_Mount::TimerHit()
         {
             if (manualMotionActive)
             {
-                LOG_INFO("Manual slewing active");
+                // LOG_INFO("Manual slewing active");
                 AltitudeAxis->updateControlLoops(dt, MANUAL_SLEW);
-                // AzimuthAxis->updateControlLoops(dt, MANUAL_SLEW);
+                AzimuthAxis->updateControlLoops(dt, MANUAL_SLEW);
             }
             else
             {
