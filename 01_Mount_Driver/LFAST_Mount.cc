@@ -22,7 +22,7 @@
 #include "slew_drive.h"
 #include "lfast_constants.h"
 
-#define SIM_MODE false
+#define SIM_MODE 1
 #define PRINT_DEBUG_STUFF 1
 
 // #include "mountConfig.h"
@@ -178,7 +178,7 @@ bool LFAST_Mount::initProperties()
         m_MountAltAz.altitude = default_park_posn_alt;
         m_MountAltAz.azimuth = default_park_posn_az;
     }
-    
+
     initGuiderProperties(getDeviceName(), MOTION_TAB);
 
     // How fast do we guide compared to sidereal rate
@@ -268,7 +268,7 @@ bool LFAST_Mount::initProperties()
     auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
     sw[0].s = ISS_ON;
     INDI::PropertySwitch
-    SetApproximateMountAlignmentFromMountType(ALTAZ);
+        SetApproximateMountAlignmentFromMountType(ALTAZ);
     // LOG_WARN("Initial Park status hardcoded");
     // SetParked(true);
 
@@ -382,7 +382,7 @@ bool LFAST_Mount::Goto(double ra, double dec)
     updateTrackingTarget(ra, dec);
 
     if (TrackState == SCOPE_IDLE)
-    {   
+    {
         try
         {
             AltitudeAxis->enable();
@@ -390,7 +390,7 @@ bool LFAST_Mount::Goto(double ra, double dec)
             TrackState = SCOPE_SLEWING;
             success = true;
         }
-        catch(const std::exception& e)
+        catch (const std::exception &e)
         {
             LOGF_ERROR("Goto Error: %s", e.what());
             success = false;
@@ -517,7 +517,7 @@ bool LFAST_Mount::SetSlewRate(int index)
 // TODO: Update to accept an INDI::TelescopeTrackMode argument and calculate rates accordingly
 INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
-    //Assumes sidereal target.
+    // Assumes sidereal target.
     double ra = m_SkyTrackingTarget.rightascension;
     double dec = m_SkyTrackingTarget.declination;
 
@@ -766,29 +766,51 @@ bool LFAST_Mount::startHomingRoutine()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
-    // double speed =
-    //     (dir == DIRECTION_NORTH) ? -GetSlewRate() : GetSlewRate();
-    double movement = (dir == DIRECTION_NORTH) ? -1 * command : command;
-    const char *dirStr = (dir == DIRECTION_NORTH) ? "North" : "South";
-    LOGF_INFO("MoveNS: %6.4f", movement);
 
-    switch (command)
+    if (command == MOTION_STOP)
     {
-    case MOTION_START:
-        DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
-        // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
-        // AzimuthAxis->updateRateOffset(speed);
-        // m_ManualMotionActive = true;
-        LOG_ERROR("MoveNS Not Implemented");
-        break;
-
-    case MOTION_STOP:
-        DEBUGF(DBG_SCOPE, "Stopping Slew %s", dirStr);
+        manualMotionActive = false;
+        LOG_WARN("Manual Slew Stopped.");
         AltitudeAxis->slowStop();
-        AzimuthAxis->slowStop();
-        break;
+    }
+    else
+    {
+        double speed = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
+        LOGF_WARN("Manual Slew Command: %4.2f", speed);
+
+        switch (TrackState)
+        {
+        case SCOPE_IDLE:
+        case SCOPE_TRACKING:
+        case SCOPE_SLEWING:
+        case SCOPE_PARKING:
+            TrackState = SCOPE_SLEWING;
+            manualMotionActive = true;
+            AltitudeAxis->updateManualRateCommand(speed);
+            break;
+        case SCOPE_PARKED:
+            LOG_WARN("WARNING: Cannot slew while scope is parked.");
+        default:
+            break;
+        }
     }
 
+    // switch (command)
+    // {
+    // case MOTION_START:
+    //     DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
+    //     // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
+    //     // AzimuthAxis->updateRateOffset(speed);
+    //     // manualMotionActive = true;
+    //     LOG_ERROR("MoveNS Not Implemented");
+    //     break;
+
+    // case MOTION_STOP:
+    //     DEBUGF(DBG_SCOPE, "Stopping Slew %s", dirStr);
+    //     AltitudeAxis->slowStop();
+    //     AzimuthAxis->slowStop();
+    //     break;
+    // }
     return true;
 }
 
@@ -809,7 +831,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         DEBUGF(DBG_SCOPE, "Starting Slew %s", dirStr);
         // Ignore the silent mode because MoveNS() is called by the manual motion UI controls.
         // AzimuthAxis->updateRateOffset(speed);
-        // m_ManualMotionActive = true;
+        // manualMotionActive = true;
         LOG_ERROR("MoveWE Not Implemented");
         break;
 
@@ -910,7 +932,7 @@ bool LFAST_Mount::Park()
         AltitudeAxis->updateTrackCommands(default_park_posn_alt);
         AzimuthAxis->updateTrackCommands(default_park_posn_az);
 
-    // NewRaDec(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
+        // NewRaDec(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
         TrackState = SCOPE_PARKING;
     }
 
@@ -934,7 +956,7 @@ bool LFAST_Mount::UnPark()
             TrackState = SCOPE_IDLE;
             success = true;
         }
-        catch(const std::exception& e)
+        catch (const std::exception &e)
         {
             LOGF_ERROR("UnPark Error:%s", e.what());
             success = false;
@@ -984,7 +1006,7 @@ bool LFAST_Mount::updatePointingCoordinates()
     }
     if (!successFlag)
         return successFlag;
-        
+
     m_MountAltAz.altitude = altPosnFb;
     m_MountAltAz.azimuth = azPosnFb;
 
@@ -1240,13 +1262,12 @@ void LFAST_Mount::TimerHit()
         0, 0
     }; // new system time
 
-    double dt; // Elapsed time in seconds since last tick
-
     gettimeofday(&currTime, nullptr);
 
     if (prevTime.tv_sec == 0 && prevTime.tv_usec == 0)
         prevTime = currTime;
 
+    double dt; // Elapsed time in seconds since last tick
     dt = currTime.tv_sec - prevTime.tv_sec + (currTime.tv_usec - prevTime.tv_usec) * 1e-6;
     prevTime = currTime;
 
@@ -1264,7 +1285,6 @@ void LFAST_Mount::TimerHit()
     switch (TrackState)
     {
     case SCOPE_SLEWING:
-
         if (homingRoutineActive)
         {
             m_SkyGuideOffset = {0, 0};
@@ -1273,22 +1293,30 @@ void LFAST_Mount::TimerHit()
         }
         else
         {
-            m_SkyGuideOffset = {0, 0};
-            altAzPosn = getTrackingTargetAltAzPosition();
-            AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
-            AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
-            try
+            if (manualMotionActive)
             {
-                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
-                AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                LOG_INFO("Manual slewing active");
+                AltitudeAxis->updateControlLoops(dt, MANUAL_SLEW);
+                // AzimuthAxis->updateControlLoops(dt, MANUAL_SLEW);
             }
-            catch (const std::exception &e)
+            else
             {
-                LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+                m_SkyGuideOffset = {0, 0};
+                altAzPosn = getTrackingTargetAltAzPosition();
+                AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
+                AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
+                try
+                {
+                    AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                    AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                }
+                catch (const std::exception &e)
+                {
+                    LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+                }
             }
         }
         break;
-
     case SCOPE_IDLE:
         AltitudeAxis->slowStop();
         AzimuthAxis->slowStop();

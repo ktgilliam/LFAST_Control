@@ -32,6 +32,7 @@ private:
     double positionOffset_deg;
     double rateFeedback_dps;
     double rateCommandFeedforward_dps;
+    double manualRateCommand_dps;
     double rateRef_dps;
     double combinedRateCmdSaturated_dps;
     bool isEnabled;
@@ -88,6 +89,7 @@ public:
     void slowStop();
     // SlewDriveMode_t poll();
     void updateRateOffset(double rate);
+    void updateManualRateCommand(double rate);
     void updateSlewRate(double slewRate);
     const char *getModeString();
     void updateControlLoops(double dt, ControlMode_t mode);

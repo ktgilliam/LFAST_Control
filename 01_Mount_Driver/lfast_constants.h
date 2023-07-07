@@ -35,7 +35,7 @@ namespace SLEWDRIVE
 
 
     const double SLEW_POSN_KP = 0.6;
-    const double SLEW_POSN_KI = 0.0;
+    const double SLEW_POSN_KI = 0.01;
     const double SLEW_POSN_KD = 0.0;
 
 

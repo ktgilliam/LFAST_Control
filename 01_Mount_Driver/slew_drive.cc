@@ -224,6 +224,14 @@ void SlewDrive::updateRateOffset(double rate)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
+void SlewDrive::updateManualRateCommand(double rate)
+{
+    manualRateCommand_dps = rate;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::enable()
 {
     if (!simModeEnabled)
@@ -315,11 +323,13 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     {
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim);
     }
+    else if (mode == MANUAL_SLEW)
+    {
+        combinedRateCmd_dps = manualRateCommand_dps; //saturate(manualRateCommand_dps, -1 * rateLim, rateLim);
+    }
     else if (mode == TRACKING_COMMAND)
     {
-
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandFeedforward_dps;
-        // combinedRateCmd_dps = saturate(rateCommandFeedforward_dps, -1 * rateLim, rateLim);
     }
 
 #if SIM_MODE_ENABLED
