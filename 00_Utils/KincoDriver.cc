@@ -67,22 +67,35 @@ bool KincoDriver::driverHandshake()
     }
 
     modbus_flush(ctx);
-    KINCO::StatusWord_t driveStatus;
-    driveStatus.ALL = readDriverRegister<uint16_t>(driverNodeId, KINCO::STATUS_WORD);
-    bool commsFound = driveStatus.BITS.COMMUNICATION_FOUND;
+    readDriverStatus(false);
+    checkFaults();
+    bool commsFound = kincoStatusData.BITS.COMMUNICATION_FOUND;
     if (commsFound)
     {
         DriveIsConnected = true;
         connectedDrives.push_back(this);
     }
     else
-    {
+    { 
         DriveIsConnected = false;
         char errBuff[ERR_BUFF_SIZE];
         sprintf(errBuff, "driverHandshake ID %d, Connection failed. Modbuss Error: %s\n", driverNodeId, modbus_strerror(errno));
         throw std::runtime_error(errBuff);
     }
     return commsFound;
+}
+
+void KincoDriver::checkFaults()
+{
+    if(kincoStatusData.BITS.FAULT == 1)
+    {
+        // writeDriverRegisters<uint16_t>(driverNodeId, KINCO::CONTROL_WORD, KINCO::POWER_OFF_MOTOR);
+        // writeDriverRegisters<uint16_t>(driverNodeId, KINCO::CONTROL_WORD, KINCO::POWER_ON_MOTOR);
+        // readDriverStatus(false);
+        char errBuff[ERR_BUFF_SIZE];
+        sprintf(errBuff, "driverHandshake ID %d, Driver Fault: %s\n", driverNodeId, modbus_strerror(errno));
+        throw std::runtime_error(errBuff);
+    }
 }
 
 bool KincoDriver::readyForModbus()
@@ -93,6 +106,7 @@ bool KincoDriver::readyForModbus()
     }
     return true;
 }
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -203,6 +217,18 @@ void KincoDriver::setControlMode(uint16_t motor_mode)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
+void KincoDriver::readDriverStatus(bool checkForHandshake)
+{
+    if (checkForHandshake)
+    {
+        if (!DriveIsConnected)
+            throw std::runtime_error("readDriverStatus: Driver connection not established (call driverHandshake() first).");
+    }
+    kincoStatusData.ALL = readDriverRegister<int16_t>(driverNodeId, KINCO::STATUS_WORD);
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
 void KincoDriver::setDirectionMode(uint8_t dir)
 {
     if (!DriveIsConnected)
@@ -258,7 +284,7 @@ void KincoDriver::updateVelocityCommand(double velocity_setpoint)
     if (!DriveIsConnected)
         throw std::runtime_error("updateVelocityCommand: Driver connection not established (call driverHandshake() first).");
 
-    double vsp_saturated = saturate(velocity_setpoint, - KINCO::MOTOR_MAX_SPEED_RPM,  KINCO::MOTOR_MAX_SPEED_RPM);
+    double vsp_saturated = saturate(velocity_setpoint, -KINCO::MOTOR_MAX_SPEED_RPM, KINCO::MOTOR_MAX_SPEED_RPM);
     int32_t vsp_IU = convertSpeedRPMtoIU(vsp_saturated);
     writeDriverRegisters<int32_t>(driverNodeId, KINCO::TARGET_SPEED, vsp_IU);
 #if defined(LFAST_TERMINAL)

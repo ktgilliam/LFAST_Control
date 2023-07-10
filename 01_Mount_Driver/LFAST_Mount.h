@@ -6,8 +6,10 @@
 #include "libindi/inditelescope.h"
 #include "libindi/indipropertytext.h"
 #include "libindi/indipropertynumber.h"
-#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
 #include "libindi/inditimer.h"
+#include "libindi/indicom.h"
+#include "libindi/alignment/DriverCommon.h"
+#include "libindi/alignment/AlignmentSubsystemForDrivers.h"
 #include "slew_drive.h"
 #include <memory>
 
@@ -135,6 +137,8 @@ private:
     int TraceThisTickCount{0};
     bool TraceThisTick{false};
 
+    
+    bool manualMotionActive{false};
     ///////////////////////////////////////////////////////////////////////////////
     /// Additional Properties
     ///////////////////////////////////////////////////////////////////////////////
@@ -179,7 +183,7 @@ private:
     /// Helper Functions
     ///////////////////////////////////////////////////////////////////////////////
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
-    INDI::IHorizontalCoordinates getTrackingTargetAltAzRates();
+    INDI::IHorizontalCoordinates getSiderealTargetAltAzRates();
     bool updatePointingCoordinates();
     void printSlewDriveStates();
     INDI::IHorizontalCoordinates getHorizontalRates();
