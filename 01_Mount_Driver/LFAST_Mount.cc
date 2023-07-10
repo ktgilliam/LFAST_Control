@@ -151,8 +151,8 @@ bool LFAST_Mount::initProperties()
 
     // Guider aperture and focal length
     // The celestron is an F/10 8" telescope
-    ScopeParametersN[2].value = 203;
-    ScopeParametersN[3].value = 2000;
+    ScopeParametersN[2].value = 203.0;
+    ScopeParametersN[3].value = 2032;
 
     TrackState = SCOPE_IDLE;
 
