@@ -58,7 +58,7 @@ protected:
     KINCO::StatusWord_t kincoStatusData;
     // std::vector<uint16_t>
     void readDriverStatus(bool);
-
+    void checkFaults();
 public:
     template <typename T>
     static T readDriverRegister(uint8_t devId, uint16_t modBusAddr);

@@ -33,7 +33,6 @@
 
 # build directory
 **build/
-**.vscode/
 
 # test resources
 **Testing

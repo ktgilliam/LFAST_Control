@@ -75,7 +75,7 @@ bool SlewDrive::connectToDrivers()
         try
         {
             drvAConnected = pDriveA->driverHandshake();
-            drvBConnected &= pDriveB->driverHandshake();
+            drvBConnected = pDriveB->driverHandshake();
             result = drvAConnected && drvBConnected;
         }
         catch (const std::exception &e)
@@ -154,6 +154,7 @@ void SlewDrive::abortSlew()
 }
 void SlewDrive::slowStop()
 {
+    manualRateCommand_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
     rateCommandFeedforward_dps = 0.0;
     rateRef_dps = 0.0;

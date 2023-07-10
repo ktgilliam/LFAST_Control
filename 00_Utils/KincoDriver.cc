@@ -68,6 +68,7 @@ bool KincoDriver::driverHandshake()
 
     modbus_flush(ctx);
     readDriverStatus(false);
+    checkFaults();
     bool commsFound = kincoStatusData.BITS.COMMUNICATION_FOUND;
     if (commsFound)
     {
@@ -75,13 +76,26 @@ bool KincoDriver::driverHandshake()
         connectedDrives.push_back(this);
     }
     else
-    {
+    { 
         DriveIsConnected = false;
         char errBuff[ERR_BUFF_SIZE];
         sprintf(errBuff, "driverHandshake ID %d, Connection failed. Modbuss Error: %s\n", driverNodeId, modbus_strerror(errno));
         throw std::runtime_error(errBuff);
     }
     return commsFound;
+}
+
+void KincoDriver::checkFaults()
+{
+    if(kincoStatusData.BITS.FAULT == 1)
+    {
+        // writeDriverRegisters<uint16_t>(driverNodeId, KINCO::CONTROL_WORD, KINCO::POWER_OFF_MOTOR);
+        // writeDriverRegisters<uint16_t>(driverNodeId, KINCO::CONTROL_WORD, KINCO::POWER_ON_MOTOR);
+        // readDriverStatus(false);
+        char errBuff[ERR_BUFF_SIZE];
+        sprintf(errBuff, "driverHandshake ID %d, Driver Fault: %s\n", driverNodeId, modbus_strerror(errno));
+        throw std::runtime_error(errBuff);
+    }
 }
 
 bool KincoDriver::readyForModbus()
@@ -92,6 +106,7 @@ bool KincoDriver::readyForModbus()
     }
     return true;
 }
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///

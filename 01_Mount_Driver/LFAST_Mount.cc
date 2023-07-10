@@ -22,9 +22,12 @@
 #include "slew_drive.h"
 #include "lfast_constants.h"
 
-#define SIM_MODE 1
+#define SIM_MODE 0
 #define PRINT_DEBUG_STUFF 1
 
+// http://docs.indilib.org/drivers/
+// http://docs.indilib.org/drivers/project-setup.html
+// http://docs.indilib.org/drivers/coming-from-ascom.html
 // #include "mountConfig.h"
 
 // using namespace INDI::AlignmentSubsystem;
@@ -142,11 +145,12 @@ bool LFAST_Mount::initProperties()
     /* Make sure to init parent properties first */
     INDI::Telescope::initProperties();
 
-    // Let's simulate it to be an F/10 8" telescope
-    // Not sure about these, may need to remove or update for actual hardware? Where did these come from?
-    // These are for the celestron, so they will need to be updated for the primary mirror
-    ScopeParametersN[0].value = 203;
-    ScopeParametersN[1].value = 2000;
+    // Primary aperture and focal length
+    ScopeParametersN[0].value = 762;
+    ScopeParametersN[1].value = 2667;
+
+    // Guider aperture and focal length
+    // The celestron is an F/10 8" telescope
     ScopeParametersN[2].value = 203;
     ScopeParametersN[3].value = 2000;
 
@@ -219,9 +223,6 @@ bool LFAST_Mount::initProperties()
     // MountSlewRateSP[LFAST::DEFAULT_SLEW_IDX].s = ISS_ON;
     SetSlewRate(LFAST_CONSTANTS::DEFAULT_SLEW_IDX);
 
-    // NTP Server Address text field
-    // NtpServerTP[0].fill("NTP_SERVER_ADDR", "NTP Server", "0.pool.ntp.arizona.edu");
-    // NtpServerTP.fill(getDeviceName(), "NTP_SERVER_ADDR", "NTP Server", CONNECTION_TAB, IP_RW, 60, IPS_IDLE);
     std::string modbusDevPath = "";
     for (int ii = 0; ii < 4; ii++)
     {
@@ -266,7 +267,13 @@ bool LFAST_Mount::initProperties()
     HomeSP.fill(getDeviceName(), "TELESCOPE_HOME", "Homing", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 300, IPS_IDLE);
     // Force the alignment system to always be on
     auto sw = getSwitch("ALIGNMENT_SUBSYSTEM_ACTIVE");
-    sw[0].s = ISS_ON;
+
+    // NOTE:
+    // For some reason this needs to be ISS_ON on some computers, and IPS_OK on others.
+    // If it won't compile, switch which line is commented out;
+    // sw[0].s = ISS_ON;
+    sw[0].s = IPS_OK;
+    
     INDI::PropertySwitch
         SetApproximateMountAlignmentFromMountType(ALTAZ);
     // LOG_WARN("Initial Park status hardcoded");
@@ -494,9 +501,6 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::SetSlewRate(int index)
 {
-    // int currentIndex = IUFindOnSwitchIndex(&SlewRateSP);
-    // double raVal{0};
-    // double deVal{0};
     double slewRateTmp{0};
     double azVal{0};
     double altVal{0};
@@ -514,6 +518,9 @@ bool LFAST_Mount::SetSlewRate(int index)
     AltitudeAxis->updateSlewRate(altVal);
     return true;
 }
+
+// Calculate the feedforward rates for tracking whatever
+// Currently only works for sidereal targets (nothing in the solar system)
 // TODO: Update to accept an INDI::TelescopeTrackMode argument and calculate rates accordingly
 INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
 {
@@ -732,7 +739,7 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
 
 bool LFAST_Mount::startHomingRoutine()
 {
-    LOG_ERROR("Homing Routine Not Implemented (Has a homing mechanism been installed?)");
+    LOG_ERROR("Homing Routine Not Implemented (Has a homing switch been installed yet?)");
     return false;
     // try
     // {
@@ -768,20 +775,30 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
     if (command == MOTION_STOP)
     {
-        manualMotionActive = false;
-        AltitudeAxis->updateManualRateCommand(0.0);
-        AltitudeAxis->slowStop();
-        LOG_WARN("Manual Slew Stopped.");
-        TrackState = SCOPE_IDLE;
+        try
+        {
+            manualMotionActive = false;
+            AltitudeAxis->updateManualRateCommand(0.0);
+            AltitudeAxis->slowStop();
+            TrackState = SCOPE_IDLE;
+            LOG_INFO("Manual Slew Stopped.");
+        }
+        catch(const std::exception& e)
+        {
+            LOGF_ERROR("MoveNS Error: %s", e.what());
+        }
+
     }
     else
     {
-        double speed = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
-        LOGF_WARN("Manual Altitude Slew Command: %4.2f", speed);
+        double speedMult = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
+        double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
+        LOGF_INFO("Manual Altitude Slew Command: %4.2f", speed);
 
         switch (TrackState)
         {
         case SCOPE_IDLE:
+            AltitudeAxis->enable();
         case SCOPE_TRACKING:
         case SCOPE_SLEWING:
         case SCOPE_PARKING:
@@ -805,20 +822,29 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 {
     if (command == MOTION_STOP)
     {
-        manualMotionActive = false;
-        AzimuthAxis->updateManualRateCommand(0.0);
-        AzimuthAxis->slowStop();
-        LOG_WARN("Manual Slew Stopped.");
-        TrackState = SCOPE_IDLE;
+        try
+        {
+            manualMotionActive = false;
+            AzimuthAxis->updateManualRateCommand(0.0);
+            AzimuthAxis->slowStop();
+            LOG_INFO("Manual Slew Stopped.");
+            TrackState = SCOPE_IDLE;
+        }
+        catch(const std::exception& e)
+        {
+            LOGF_ERROR("MoveWE Error: %s", e.what());
+        }
     }
     else
     {
-        double speed = (dir == DIRECTION_EAST) ? GetSlewRate() : -1 * GetSlewRate();
-        LOGF_WARN("Manual Azimuth Slew Command: %4.2f", speed);
+        double speedMult = (dir == DIRECTION_EAST) ? GetSlewRate() : -1 * GetSlewRate();
+        double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
+        LOGF_INFO("Manual Azimuth Slew Command: %4.2f", speed);
 
         switch (TrackState)
         {
         case SCOPE_IDLE:
+            AzimuthAxis->enable();
         case SCOPE_TRACKING:
         case SCOPE_SLEWING:
         case SCOPE_PARKING:
@@ -842,7 +868,7 @@ bool LFAST_Mount::Sync(double ra, double dec)
 {
     bool success = true;
     double azFb, altFb;
-    LOG_WARN("INSIDE SYNC!!!!!!!!!!!!!!!!111111111111");
+    // LOG_WARN("INSIDE SYNC!!!!!!!!!!!!!!!!111111111111");
     try
     {
         azFb = AzimuthAxis->getPositionFeedback();
