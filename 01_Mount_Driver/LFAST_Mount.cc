@@ -50,7 +50,7 @@ namespace ALIGNMENT = INDI::AlignmentSubsystem;
 /* Preset Slew Speeds */
 const double constexpr default_park_posn_az = 00.0;
 const double constexpr default_park_posn_alt = -10.0;
-const unsigned int defaultPollingPeriod = 50;
+const unsigned int defaultPollingPeriod_ms = 50;
 
 // We declare an auto pointer to LFAST_Mount.
 std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
@@ -109,18 +109,29 @@ void LFAST_Mount::initializeTimers()
     m_WETimer.setSingleShot(true);
     // Called when timer is up
     m_NSTimer.callOnTimeout([this]()
-                            {
-        GuideNSNP.s = IPS_IDLE;
-        GuideNSN[0].value = GuideNSN[1].value = 0;
-        IDSetNumber(&GuideNSNP, nullptr); });
+                            { terminateNSGuide(); });
 
     m_WETimer.callOnTimeout([this]()
-                            {
-        GuideWENP.s = IPS_IDLE;
-        GuideWEN[0].value = GuideWEN[1].value = 0;
-        IDSetNumber(&GuideWENP, nullptr); });
+                            { terminateEWGuide(); });
 }
 
+void LFAST_Mount::terminateNSGuide()
+{
+    guideManeuverActive = false;
+    m_EqSkyGuideDelta.declination = 0;
+    GuideNSNP.s = IPS_IDLE;
+    GuideNSN[0].value = GuideNSN[1].value = 0;
+    IDSetNumber(&GuideNSNP, nullptr);
+}
+
+void LFAST_Mount::terminateEWGuide()
+{
+    guideManeuverActive = false;
+    m_EqSkyGuideDelta.rightascension = 0;
+    GuideWENP.s = IPS_IDLE;
+    GuideWEN[0].value = GuideWEN[1].value = 0;
+    IDSetNumber(&GuideWENP, nullptr);
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,8 +223,8 @@ bool LFAST_Mount::initProperties()
 
     addAuxControls();
 
-    setDefaultPollingPeriod(defaultPollingPeriod);
-    setCurrentPollingPeriod(defaultPollingPeriod);
+    setDefaultPollingPeriod(defaultPollingPeriod_ms);
+    setCurrentPollingPeriod(defaultPollingPeriod_ms);
 
     // Add alignment properties
     InitAlignmentProperties(this);
@@ -432,7 +443,11 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
 {
-
+    if (guideManeuverActive)
+    {
+        m_SkyGuideOffset.rightascension += m_EqSkyGuideDelta.rightascension;
+        m_SkyGuideOffset.declination += m_EqSkyGuideDelta.declination;
+    }
     double ra = m_SkyTrackingTarget.rightascension + m_SkyGuideOffset.rightascension;
     double dec = m_SkyTrackingTarget.declination + m_SkyGuideOffset.declination;
     ALIGNMENT::TelescopeDirectionVector TDVCommand;
@@ -1122,23 +1137,23 @@ IPState LFAST_Mount::GuideSouth(uint32_t ms)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-IPState LFAST_Mount::GuideEast(uint32_t ms)
-{
-    return GuideWE(static_cast<int>(ms));
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-///
-//////////////////////////////////////////////////////////////////////////////////////////////////
 IPState LFAST_Mount::GuideWest(uint32_t ms)
 {
     return GuideWE(static_cast<int>(ms));
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+IPState LFAST_Mount::GuideEast(uint32_t ms)
+{
+    return GuideWE(-static_cast<int>(ms));
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-IPState LFAST_Mount::GuideNS(int32_t ms)
+IPState LFAST_Mount::GuideNS(int32_t guideDuration_ms)
 {
     LOG_DEBUG("LFAST_Mount::GuideNS");
     if (TrackState == SCOPE_PARKED)
@@ -1146,23 +1161,14 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-    // LFAST_CONSTANTS::SiderealRate_degpersec
-    // constexpr double tm = TRACKRATE_SIDEREAL;
-    // Movement in arcseconds
-    // Send async
-    double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
-    // double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
 
-    m_SkyGuideOffset.declination += dDec;
-    // m_SkyGuideOffset.rightascension += dRA;
-    // LFAST::MessageGenerator guideNSDataMessage("MountMessage");
-    // guideNSDataMessage.addArgument("dRA", 0.0);
-    // guideNSDataMessage.addArgument("dDEC", dDec);
-
-    // if (!sendMountOKCommand(guideNSDataMessage, "issuing NS guide command"))
-    //     return IPS_ALERT;
-
-    m_NSTimer.start(ms);
+    double numGuideSteps = abs(guideDuration_ms) / (double)defaultPollingPeriod_ms;
+    double guideRate = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec;
+    double guideManeuverTotalDistanceDeg = guideRate * guideDuration_ms / 1000.0;
+    double guideStepSizeDeg = guideManeuverTotalDistanceDeg / numGuideSteps;
+    m_EqSkyGuideDelta.declination =  guideStepSizeDeg;
+    guideManeuverActive = true;
+    m_NSTimer.start(abs(guideDuration_ms));
 
     return IPS_BUSY;
 }
@@ -1170,7 +1176,7 @@ IPState LFAST_Mount::GuideNS(int32_t ms)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
-IPState LFAST_Mount::GuideWE(int32_t ms)
+IPState LFAST_Mount::GuideWE(int32_t guideDuration_ms)
 {
     LOG_DEBUG("LFAST_Mount::GuideWE");
     if (TrackState == SCOPE_PARKED)
@@ -1178,22 +1184,13 @@ IPState LFAST_Mount::GuideWE(int32_t ms)
         LOG_ERROR("Please unpark the mount before issuing any motion commands.");
         return IPS_ALERT;
     }
-
-    // double dDec = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
-    double dRA = GuideRateNP[AXIS_RA].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec * ms / 1000.0;
-
-    // m_SkyGuideOffset.declination += dDec;
-    m_SkyGuideOffset.rightascension += dRA;
-    // Movement in arcseconds
-    // Send async
-    // double dRA = GuideRateN[LFAST::RA_AXIS].value * TRACKRATE_SIDEREAL * ms / 1000.0;
-    // LFAST::MessageGenerator guideNSDataMessage("MountMessage");
-    // guideNSDataMessage.addArgument("dRA", dRA);
-    // guideNSDataMessage.addArgument("dDEC", 0.0);
-    // if (!sendMountOKCommand(guideNSDataMessage, "issuing NS guide command"))
-    //     return IPS_ALERT;
-
-    m_WETimer.start(ms);
+    double numGuideSteps = abs(guideDuration_ms) / defaultPollingPeriod_ms;
+    double guideRate = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec;
+    double guideManeuverTotalDistanceDeg = guideRate * guideDuration_ms / 1000.0;
+    double guideStepSizeDeg = guideManeuverTotalDistanceDeg / numGuideSteps;
+    m_EqSkyGuideDelta.rightascension =  guideStepSizeDeg;
+    guideManeuverActive = true;
+    m_WETimer.start(abs(guideDuration_ms));
 
     return IPS_BUSY;
 }

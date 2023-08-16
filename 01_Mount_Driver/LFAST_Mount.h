@@ -110,6 +110,8 @@ protected:
     void updateTrackingTarget(double ra, double dec);
     bool SetSlewRate(int index) override;
     void initializeTimers();
+    void terminateNSGuide();
+    void terminateEWGuide();
     /**
      * @brief hexDump Helper function to print non-string commands to the logger so it is easier to debug
      * @param buf buffer to format the command into hex strings.
@@ -133,13 +135,14 @@ private:
     INDI::IEquatorialCoordinates m_SkyCurrentRADE{0, 0};
     INDI::IHorizontalCoordinates m_MountAltAz{0, 0};
 
-    INDI::IEquatorialCoordinates m_SkyGuideRate{0, 0};
+    INDI::IEquatorialCoordinates m_EqSkyGuideDelta{0, 0};
+    // INDI::IHorizontalCoordinates m_HzSkyGuideRate{0, 0};
 
     // Tracing in timer tick
     int TraceThisTickCount{0};
     bool TraceThisTick{false};
 
-    
+    bool guideManeuverActive{false};
     bool manualMotionActive{false};
 
     ///////////////////////////////////////////////////////////////////////////////
