@@ -122,6 +122,8 @@ protected:
 private:
     unsigned int DBG_SCOPE{0};
 
+    TelescopeStatus PrevTrackState{SCOPE_IDLE};
+    
     std::unique_ptr<SlewDrive> AltitudeAxis;
     std::unique_ptr<SlewDrive> AzimuthAxis;
 
@@ -139,6 +141,7 @@ private:
 
     
     bool manualMotionActive{false};
+
     ///////////////////////////////////////////////////////////////////////////////
     /// Additional Properties
     ///////////////////////////////////////////////////////////////////////////////

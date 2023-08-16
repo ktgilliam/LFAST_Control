@@ -122,7 +122,32 @@ namespace KINCO
         uint16_t ALL;
     } StatusWord_t;
 
+    struct ERROR_BITS
+    {
+        uint16_t EXTENDED : 1;            // bit 0
+        uint16_t ENCODER_ABZ_NOCONNECT : 1;           // bit 1
+        uint16_t ENCODER_UVW_INTERNAL : 1;    // bit 2
+        uint16_t ENCODER_COUNT_CRC : 1;               // bit 3
+        uint16_t DRIVE_TEMP : 1;      // bit 4
+        uint16_t OVER_VOLTAGE : 1;          // bit 5
+        uint16_t UNDER_VOLTAGE : 1;     // bit 6
+        uint16_t OVER_CURRENT : 1;         // bit 7
+        uint16_t CHOP_RESISTOR : 1;        // bit 8
+        uint16_t POSITION_FOLLOWING : 1;              // bit 9
+        uint16_t LOW_LOGIC_VOLTAGE : 1;      // bit 10
+        uint16_t MOTOR_DRIVER_IIT : 1;      // bit 11
+        uint16_t OVER_FREQUENCY : 1;        // bit 12
+        uint16_t MOTOR_TEMP : 1;     // bit 13
+        uint16_t MOTOR_COMMS : 1; // bit 14
+        uint16_t EEPROM_DATA : 1;     // bit 15
+    };
 
+    typedef union
+    {
+        struct ERROR_BITS BITS;
+        uint16_t ALL;
+    } ErrorWord_t;
+    
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
