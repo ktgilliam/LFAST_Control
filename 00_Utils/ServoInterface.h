@@ -23,9 +23,9 @@ public:
     }
 #endif
     virtual void setDriverState(uint16_t) = 0;
-    virtual void getDriverState() = 0;
+    virtual uint16_t getDriverState() = 0;
     virtual void setControlMode(uint16_t) = 0;
-    virtual void getControlMode() = 0;
+    virtual uint16_t getControlMode() = 0;
 
     virtual void updatePositionCommand(double) = 0;
     virtual void updateVelocityCommand(double) = 0;

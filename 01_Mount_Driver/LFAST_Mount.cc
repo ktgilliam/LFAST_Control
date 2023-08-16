@@ -273,7 +273,7 @@ bool LFAST_Mount::initProperties()
     // If it won't compile, switch which line is commented out;
     // sw[0].s = ISS_ON;
     sw[0].s = IPS_OK;
-    
+
     INDI::PropertySwitch
         SetApproximateMountAlignmentFromMountType(ALTAZ);
     // LOG_WARN("Initial Park status hardcoded");
@@ -783,11 +783,10 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
             TrackState = SCOPE_IDLE;
             LOG_INFO("Manual Slew Stopped.");
         }
-        catch(const std::exception& e)
+        catch (const std::exception &e)
         {
             LOGF_ERROR("MoveNS Error: %s", e.what());
         }
-
     }
     else
     {
@@ -798,7 +797,15 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
         switch (TrackState)
         {
         case SCOPE_IDLE:
-            AltitudeAxis->enable();
+            try
+            {
+                AltitudeAxis->enable();
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_ERROR("MoveNS Error: %s", e.what());
+            }
+            // fall-through
         case SCOPE_TRACKING:
         case SCOPE_SLEWING:
         case SCOPE_PARKING:
@@ -830,7 +837,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
             LOG_INFO("Manual Slew Stopped.");
             TrackState = SCOPE_IDLE;
         }
-        catch(const std::exception& e)
+        catch (const std::exception &e)
         {
             LOGF_ERROR("MoveWE Error: %s", e.what());
         }
@@ -844,7 +851,15 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         switch (TrackState)
         {
         case SCOPE_IDLE:
-            AzimuthAxis->enable();
+            try
+            {
+                AzimuthAxis->enable();
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_ERROR("MoveNS Error: %s", e.what());
+            }
+            // fall-through
         case SCOPE_TRACKING:
         case SCOPE_SLEWING:
         case SCOPE_PARKING:
@@ -1300,6 +1315,32 @@ void LFAST_Mount::TimerHit()
 
     switch (TrackState)
     {
+    case SCOPE_IDLE:
+        if (PrevTrackState != TrackState)
+        {
+            try
+            {
+                AltitudeAxis->slowStop();
+                AzimuthAxis->slowStop();
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_ERROR("TimerHit Error (SCOPE_IDLE):  %s", e.what());
+            }
+        }
+        else
+        {
+            try
+            {
+                AltitudeAxis->checkDriveStatus();
+                AzimuthAxis->checkDriveStatus();
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_WARN("TimerHit Warning (SCOPE_IDLE):  %s", e.what());
+            }
+        }
+        break;
     case SCOPE_SLEWING:
         if (homingRoutineActive)
         {
@@ -1312,8 +1353,16 @@ void LFAST_Mount::TimerHit()
             if (manualMotionActive)
             {
                 // LOG_INFO("Manual slewing active");
-                AltitudeAxis->updateControlLoops(dt, MANUAL_SLEW);
-                AzimuthAxis->updateControlLoops(dt, MANUAL_SLEW);
+                try
+                {
+                    AltitudeAxis->updateControlLoops(dt, MANUAL_SLEW);
+                    AzimuthAxis->updateControlLoops(dt, MANUAL_SLEW);
+                }
+                catch (const std::exception &e)
+                {
+                    LOGF_ERROR("TimerHit Error (MANUAL_SLEW):  %s", e.what());
+                    TrackState = SCOPE_IDLE;
+                }
             }
             else
             {
@@ -1329,13 +1378,10 @@ void LFAST_Mount::TimerHit()
                 catch (const std::exception &e)
                 {
                     LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+                    TrackState = SCOPE_IDLE;
                 }
             }
         }
-        break;
-    case SCOPE_IDLE:
-        AltitudeAxis->slowStop();
-        AzimuthAxis->slowStop();
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
@@ -1350,6 +1396,7 @@ void LFAST_Mount::TimerHit()
         catch (const std::exception &e)
         {
             LOGF_ERROR("TimerHit Error (SCOPE_TRACKING):  %s", e.what());
+            TrackState = SCOPE_IDLE;
         }
         break;
     case SCOPE_PARKING:
@@ -1370,14 +1417,23 @@ void LFAST_Mount::TimerHit()
         catch (const std::exception &e)
         {
             LOGF_ERROR("TimerHit Error (SCOPE_PARKING:  %s", e.what());
+            TrackState = SCOPE_IDLE;
         }
         if (azParked && altParked)
         {
             SetParked(true);
-            AzimuthAxis->slowStop();
-            AltitudeAxis->slowStop();
-            TrackState = SCOPE_PARKED;
-            LOG_INFO("Scope Parked");
+            try
+            {
+                AzimuthAxis->slowStop();
+                AltitudeAxis->slowStop();
+                TrackState = SCOPE_PARKED;
+                LOG_INFO("Scope Parked");
+            }
+            catch (const std::exception &e)
+            {
+                LOGF_ERROR("TimerHit Error (SCOPE_PARKING):  %s", e.what());
+                TrackState = SCOPE_IDLE;
+            }
         }
         break;
     }
@@ -1385,6 +1441,7 @@ void LFAST_Mount::TimerHit()
         break;
     }
 
+    PrevTrackState = TrackState;
     // Simulate mount movement
     updateSim(dt);
 

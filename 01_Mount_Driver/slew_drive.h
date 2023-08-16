@@ -101,7 +101,7 @@ public:
     void serviceHomingRoutine();
     bool isHomingComplete();
     void resetHomingRoutine();
-
+    void checkDriveStatus();
     void simulate(double dt);
 
     std::vector<std::string> debugStrings;

@@ -152,6 +152,11 @@ void SlewDrive::abortSlew()
         throw std::runtime_error(ss.str().c_str());
     }
 }
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::slowStop()
 {
     manualRateCommand_dps = 0.0;
@@ -176,9 +181,30 @@ void SlewDrive::slowStop()
             throw std::runtime_error(ss.str().c_str());
         }
     }
-    else
-    {
+}
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void SlewDrive::checkDriveStatus()
+{
+    if (!drvAConnected || !drvBConnected)
+        return;
+
+    if (!simModeEnabled)
+    {
+        try
+        {
+            pDriveA->checkIfDriverIsOkay();
+            pDriveB->checkIfDriverIsOkay();
+        }
+        catch (const std::exception &e)
+        {
+            std::stringstream ss;
+            ss << "SlewDrive::checkDriveStatus() Error [" << axisLabel << "]\n"
+               << e.what();
+            throw std::runtime_error(ss.str().c_str());
+        }
     }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,7 +225,6 @@ void SlewDrive::syncPosition(double sync_posn)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool SlewDrive::isSlewComplete()
 {
-
     double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
     while (std::abs(posnError) > 180.0)
@@ -368,7 +393,8 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
                 std::stringstream ss;
                 ss << "SlewDrive::updateControlLoops() Error [" << axisLabel << "]\n"
                    << e.what();
-                throw std::runtime_error(ss.str().c_str());
+                std::string msg = ss.str();
+                throw std::runtime_error(msg.c_str());
             }
         }
     }

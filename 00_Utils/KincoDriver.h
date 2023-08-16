@@ -46,9 +46,9 @@ class KincoDriver : public ServoInterface
 {
 private:
     static modbus_t *ctx;
+    static bool drivesDisabled;
     bool modbusNodeIsSet;
     bool DriveIsConnected;
-
 protected:
     int16_t driverNodeId;
 
@@ -56,9 +56,12 @@ protected:
     static std::vector<KincoDriver *> connectedDrives;
     int32_t encoderOffset;
     KINCO::StatusWord_t kincoStatusData;
+    KINCO::ErrorWord_t kincoErrorData;
     // std::vector<uint16_t>
-    void readDriverStatus(bool);
-    void checkFaults();
+    void readDriverStatusWord();
+    bool checkForDriverErrors();
+
+    void checkDriverStatusAndErrors();
 public:
     template <typename T>
     static T readDriverRegister(uint8_t devId, uint16_t modBusAddr);
@@ -69,9 +72,10 @@ public:
     virtual ~KincoDriver(){};
     static bool readyForModbus();
     void setDriverState(uint16_t) override;
-    void getDriverState() override{};
+    uint16_t getDriverState() override;
     void setControlMode(uint16_t) override;
-    void getControlMode() override{};
+    uint16_t getControlMode() override{return 0x0;};
+    void resetDriverState();
 
     void setDirectionMode(uint8_t dir);
     void setMaxSpeed(double maxRPM);
@@ -91,9 +95,12 @@ public:
     static bool rtuIsActive();
     bool driverHandshake();
 
+    void drive_error_handler();
+    static void disable_all();
 
 
-
+    void checkIfDriverIsOkay();
+    static bool drivesEnabled() {return !KincoDriver::drivesDisabled;}
 #if defined(LFAST_TERMINAL)
     void connectTerminalInterface(TerminalInterface *_cli) override;
     void setupPersistentFields() override;
