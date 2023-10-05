@@ -8,7 +8,7 @@
 #include "../00_Utils/df2_filter.h"
 #include "../00_Utils/KincoDriver.h"
 
-#define SLEW_COMPLETE_THRESH_POSN 0.05
+#define SLEW_COMPLETE_THRESH_POSN 0.025
 #define SLEW_COMPLETE_THRESH_RATE 0.003
 // #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
