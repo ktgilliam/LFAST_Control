@@ -8,7 +8,7 @@
 #include "../00_Utils/df2_filter.h"
 #include "../00_Utils/KincoDriver.h"
 
-#define SLEW_COMPLETE_THRESH_POSN 0.025
+#define SLEW_COMPLETE_THRESH_POSN 0.08
 #define SLEW_COMPLETE_THRESH_RATE 0.003
 // #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
@@ -39,7 +39,8 @@ private:
     double rateLim;
     bool drvAConnected;
     bool drvBConnected;
-
+    double posnError;
+    double rateError;
     // const PID_Controller *pid;
     std::unique_ptr<PID_Controller> pid;
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;
@@ -76,11 +77,13 @@ public:
 
     double getPositionCommand() { return std::fmod(positionCommand_deg, 360.0); }
     double getPositionFeedback();
+    double getPositionState();
     double processPositionFeedback(double currPosn);
 
     double getVelocityCommand() { return rateCommandFeedforward_dps + rateRef_dps; }
     double getVelocityFeedback();
-
+    double getVelocityState();
+    
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
 
     void abortSlew();

@@ -13,6 +13,10 @@
 #include "slew_drive.h"
 #include <memory>
 
+#define TM_LOG telemetryLogger
+#define LOGF_TM(fmt, ...)  DEBUGF(telemetryLogger, (fmt), __VA_ARGS__)
+#define LOG_TM(txt)   DEBUG(telemetryLogger, (txt))
+#define DEFAULT_TM_TICKS_PER_UPDATE 60
 // #include "indielapsedtimer.h"
 namespace LFAST
 {
@@ -38,11 +42,11 @@ public:
 
     bool ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[],
                    char *formats[], char *names[], int n) override;
-    bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-    bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
-    bool ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n) override;
-    const char *getDefaultName() override;
-    void TimerHit() override;
+    virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+    virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
+    virtual bool ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n) override;
+    virtual const char *getDefaultName() override;
+    virtual void TimerHit() override;
 
 protected:
     /** \brief Called to initialize basic properties required all the time */
@@ -120,9 +124,13 @@ protected:
      * @note This is called internally by sendCommand, no need to call it directly.
      */
     void hexDump(char *buf, const char *data, int size);
+    // void logfTelemetry(const char* format, ...);
+    void tmLogMountStates();
+    virtual bool saveConfigItems(FILE *fp) override;
+    virtual void ISGetProperties(const char *dev) override;
 
 private:
-    unsigned int DBG_SCOPE{0};
+    unsigned int TM_LOG{0};
 
     TelescopeStatus PrevTrackState{SCOPE_IDLE};
     
@@ -148,7 +156,6 @@ private:
     ///////////////////////////////////////////////////////////////////////////////
     /// Additional Properties
     ///////////////////////////////////////////////////////////////////////////////
-
     // static constexpr const char *DetailedMountInfoPage { "Detailed Mount Information" };
 
     INDI::PropertyText ModbusCommPortTP{1};
@@ -165,6 +172,9 @@ private:
     bool homingRoutineActive;
     bool altHomingComplete;
     bool azHomingComplete;
+
+    INDI::PropertyNumber TelemetryDownsampleNP{1};
+
     // enum
     // {
     //     FULL_STOP,
@@ -183,7 +193,7 @@ private:
     INDI::Timer m_NSTimer;
     INDI::Timer m_WETimer;
     // INDI::ElapsedTimer m_TrackingRateTimer;
-    unsigned int DBG_SIMULATOR{0};
+    // unsigned int DBG_SIMULATOR{0};
 
     ///////////////////////////////////////////////////////////////////////////////
     /// Helper Functions
@@ -191,7 +201,6 @@ private:
     INDI::IHorizontalCoordinates getTrackingTargetAltAzPosition();
     INDI::IHorizontalCoordinates getSiderealTargetAltAzRates();
     bool updatePointingCoordinates();
-    void printSlewDriveStates();
     INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
     void updateSim(double dt);
@@ -223,3 +232,4 @@ inline bool is_file_exist(const char *fileName)
     std::ifstream infile(fileName);
     return infile.good();
 }
+

@@ -15,7 +15,7 @@ namespace LFAST_CONSTANTS
     // const double SiderealRate_radpersec = (0.000072921); //(15.041067 / 3600.0 * M_PI / 180.0)
     // #define SIDEREAL_RATE_DPS 0.004166667
 
-    const double slewspeeds[] = {1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0, 400.0};
+    const double slewspeeds[] = {1.0, 10.0, 25.0, 50.0, 100.0, 200.0, 300, 400.0};
     constexpr unsigned int NUM_SLEW_SPEEDS = sizeof(slewspeeds) / sizeof(double);
     constexpr unsigned int DEFAULT_SLEW_IDX = NUM_SLEW_SPEEDS - 1;
 

@@ -225,7 +225,6 @@ void SlewDrive::syncPosition(double sync_posn)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool SlewDrive::isSlewComplete()
 {
-    double posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
     while (std::abs(posnError) > 180.0)
     {
@@ -329,7 +328,7 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     {
         throw std::runtime_error("updateControlLoops called while homing");
     }
-    double posnError = positionCommand_deg - positionFeedback_deg;
+    posnError = positionCommand_deg - positionFeedback_deg;
     int errSign = sign(posnError);
     while (std::abs(posnError) > 180.0)
     {
@@ -469,7 +468,10 @@ double SlewDrive::getPositionFeedback()
         return positionFeedback_deg;
     }
 }
-
+double SlewDrive::getPositionState()
+{
+    return positionFeedback_deg;
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -566,7 +568,10 @@ double SlewDrive::getVelocityFeedback()
     }
     return rateFeedback_dps;
 }
-
+double SlewDrive::getVelocityState()
+{
+    return rateFeedback_dps;
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
