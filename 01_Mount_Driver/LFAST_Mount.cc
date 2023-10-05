@@ -161,9 +161,9 @@ bool LFAST_Mount::initProperties()
     ScopeParametersN[1].value = 2667;
 
     // Guider aperture and focal length
-    // The celestron is an F/10 8" telescope
-    ScopeParametersN[2].value = 203.0;
-    ScopeParametersN[3].value = 2032;
+    // The celestron is an F/10 6" telescope
+    ScopeParametersN[2].value = 152.40;
+    ScopeParametersN[3].value = 1524;
 
     TrackState = SCOPE_IDLE;
 
@@ -1363,28 +1363,40 @@ void LFAST_Mount::TimerHit()
             }
             else
             {
-                m_SkyGuideOffset = {0, 0};
-                altAzPosn = getTrackingTargetAltAzPosition();
-                AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
-                AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
-                try
+                bool azSlewComplete = AzimuthAxis->isSlewComplete();
+                bool elSlewComplete = AltitudeAxis->isSlewComplete();
+
+                if(azSlewComplete && elSlewComplete)
                 {
-                    AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
-                    AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                    TrackState = SCOPE_TRACKING;
                 }
-                catch (const std::exception &e)
+                else
                 {
-                    LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
-                    TrackState = SCOPE_IDLE;
+                    m_SkyGuideOffset = {0, 0};
+                    altAzPosn = getTrackingTargetAltAzPosition();
+                    AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
+                    AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
+                    try
+                    {
+                        AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                        AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        LOGF_ERROR("TimerHit Error (SCOPE_SLEWING):  %s", e.what());
+                        TrackState = SCOPE_IDLE;
+                    }
                 }
             }
         }
         break;
     case SCOPE_TRACKING:
         altAzPosn = getTrackingTargetAltAzPosition();
-        altAzRates = getSiderealTargetAltAzRates();
-        AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
-        AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
+        // altAzRates = getSiderealTargetAltAzRates();
+                            AltitudeAxis->updateTrackCommands(altAzPosn.altitude);
+                    AzimuthAxis->updateTrackCommands(altAzPosn.azimuth);
+        // AltitudeAxis->updateTrackCommands(altAzPosn.altitude, altAzRates.altitude);
+        // AzimuthAxis->updateTrackCommands(altAzPosn.azimuth, altAzRates.azimuth);
         try
         {
             AltitudeAxis->updateControlLoops(dt, TRACKING_COMMAND);
