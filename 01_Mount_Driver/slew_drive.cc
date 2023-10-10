@@ -387,11 +387,6 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
         combinedRateCmd_dps = saturate(rateRef_dps, -1 * rateLim, rateLim) + rateCommandFeedforward_dps;
     }
 
-#if SIM_MODE_ENABLED
-    combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps,
-                                            -1 * FAKE_SLEW_DRIVE_MAX_SPEED_DPS,
-                                            FAKE_SLEW_DRIVE_MAX_SPEED_DPS);
-#else
     combinedRateCmdSaturated_dps = saturate(combinedRateCmd_dps,
                                             -1 * SLEWDRIVE::SLEW_DRIVE_MAX_SPEED_DPS,
                                             SLEWDRIVE::SLEW_DRIVE_MAX_SPEED_DPS);
@@ -426,7 +421,6 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
         simulate(dt);
         return;
     }
-#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////

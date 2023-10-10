@@ -175,10 +175,6 @@ bool LFAST_Mount::initProperties()
     TelemetryDownsampleNP.fill(getDeviceName(), "TELEMETRY_DOWNSAMPLE", "Telemetry Downsample", OPTIONS_TAB, IP_RW, 0, IPS_IDLE);
     defineProperty(TelemetryDownsampleNP);
 
-    SavePosnSP[SAVE_POSN_DISABLED].fill("SAVE_ALT_AZ_DIS", "Disable", ISS_ON);
-    SavePosnSP[SAVE_POSN_ENABLED].fill("SAVE_ALT_AZ_EN", "Enable", ISS_OFF);
-    SavePosnSP.fill(getDeviceName(), "SAVE_ALT_AZ", "Save Alt/Az on Disconnect", OPTIONS_TAB, IP_RW, ISR_ATMOST1, 0, IPS_OK);
-    // defineProperty(SavePosnSP);
 
     // Set up parking info
     SetParkDataType(PARK_AZ_ALT);
@@ -296,8 +292,8 @@ bool LFAST_Mount::initProperties()
     // NOTE:
     // For some reason this needs to be ISS_ON on some computers, and IPS_OK on others.
     // If it won't compile, switch which line is commented out;
-    sw[0].s = ISS_ON;
-    // sw[0].s = IPS_OK;
+    // sw[0].s = ISS_ON;
+    sw[0].s = IPS_OK;
 
     INDI::PropertySwitch
         SetApproximateMountAlignmentFromMountType(ALTAZ);
@@ -371,10 +367,6 @@ bool LFAST_Mount::Connect()
 bool LFAST_Mount::Disconnect()
 {
     LOG_INFO("Disconnect()");
-    if (SavePosnSP.findOnSwitchIndex() == SAVE_POSN_ENABLED)
-    {
-        // Need to figure out how to do this. In the meantime, the switch is hidden in initProperties.
-    }
     return INDI::Telescope::Disconnect();
     // return true;
 }
@@ -764,14 +756,6 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
             HomeSP.apply();
             return startHomingRoutine();
         }
-
-        if (SavePosnSP.isNameMatch(name))
-        {
-            SavePosnSP.update(states, names, n);
-            SavePosnSP.setState(IPS_OK);
-            SavePosnSP.apply();
-            return true;
-        }
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
@@ -907,7 +891,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     {
         double speedMult = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
         double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
-        if (TraceThisTick)
+        // if (TraceThisTick)
             LOGF_TM("MoveNS: %.6f", speed);
 
         switch (TrackState)
@@ -962,7 +946,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     {
         double speedMult = (dir == DIRECTION_EAST) ? GetSlewRate() : -1 * GetSlewRate();
         double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
-        if (TraceThisTick)
+        // if (TraceThisTick)
             LOGF_TM("MoveWE: %.6f", speed);
 
         switch (TrackState)
@@ -1376,16 +1360,19 @@ bool LFAST_Mount::ReadScopeStatus()
         }
         else
         {
-            if (AltitudeAxis->isSlewComplete() && AzimuthAxis->isSlewComplete())
+            if(!manualMotionActive)
             {
-                LOG_INFO("Slew Maneuver Complete.");
-                if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
+                if (AltitudeAxis->isSlewComplete() && AzimuthAxis->isSlewComplete())
                 {
-                    TrackState = SCOPE_TRACKING;
-                }
-                else
-                {
-                    TrackState = SCOPE_IDLE;
+                    LOG_INFO("Slew Maneuver Complete.");
+                    if (ISS_ON == IUFindSwitch(&CoordSP, "TRACK")->s)
+                    {
+                        TrackState = SCOPE_TRACKING;
+                    }
+                    else
+                    {
+                        TrackState = SCOPE_IDLE;
+                    }
                 }
             }
         }

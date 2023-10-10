@@ -177,8 +177,6 @@ private:
 
     INDI::PropertyNumber TelemetryDownsampleNP{1};
 
-
-    INDI::PropertySwitch SavePosnSP{2};
     enum
     {
         SAVE_POSN_DISABLED,
