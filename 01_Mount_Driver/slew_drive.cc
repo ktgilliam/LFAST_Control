@@ -102,6 +102,8 @@ void SlewDrive::initializeStates()
     rateFeedback_dps = 0.0;
     rateRef_dps = 0.0;
     combinedRateCmdSaturated_dps = 0.0;
+    posnError = 0.0;
+    rateError = 0.0;
     if (!simModeEnabled)
     {
         try
@@ -139,6 +141,15 @@ void SlewDrive::abortSlew()
     positionCommand_deg = positionFeedback_deg;
     rateRef_dps = 0.0;
     rateCommandFeedforward_dps = 0.0;
+    if(simModeEnabled)
+    {
+        positionCommand_deg = positionFeedback_deg;
+        posnError = 0;
+        combinedRateCmdSaturated_dps = 0.0;
+        rateError = 0;
+        return;
+    }
+
     try
     {
         pDriveA->setDriverState(KINCO::ESTOP_VOLTAGE_OFF);
@@ -152,7 +163,6 @@ void SlewDrive::abortSlew()
         throw std::runtime_error(ss.str().c_str());
     }
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -212,11 +222,20 @@ void SlewDrive::checkDriveStatus()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void SlewDrive::syncPosition(double sync_posn)
 {
-    pid->resetIntegrator();
+    pid->reset();
     rateCommandFeedforward_dps = 0.0;
     positionOffset_deg = 0.0;
-    positionOffset_deg = sync_posn - getPositionFeedback();
-    positionCommand_deg = getPositionFeedback();
+    if (!simModeEnabled)
+    {
+        positionOffset_deg = sync_posn - getPositionFeedback();
+        positionCommand_deg = getPositionFeedback();
+    }
+    else
+    {
+        positionFeedback_deg = sync_posn;
+        positionCommand_deg = sync_posn;
+        positionOffset_deg = 0.0;
+    }
     // positionFeedback_deg = sync_posn;
 }
 
@@ -225,11 +244,7 @@ void SlewDrive::syncPosition(double sync_posn)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool SlewDrive::isSlewComplete()
 {
-    int errSign = sign(posnError);
-    while (std::abs(posnError) > 180.0)
-    {
-        posnError -= 360.0 * errSign;
-    }
+    updatePositionError();
     bool isComplete = (std::abs(posnError) <= SLEW_COMPLETE_THRESH_POSN) &&
                       (std::abs(combinedRateCmdSaturated_dps) < SLEW_COMPLETE_THRESH_RATE);
     return isComplete;
@@ -318,7 +333,19 @@ void SlewDrive::disable()
     }
     isEnabled = false;
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///
+//////////////////////////////////////////////////////////////////////////////////////////////////
+void SlewDrive::updatePositionError()
+{
 
+    posnError = positionCommand_deg - positionFeedback_deg;
+    int errSign = sign(posnError);
+    while (std::abs(posnError) > 180.0)
+    {
+        posnError -= 360.0 * errSign;
+    }
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -328,12 +355,9 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     {
         throw std::runtime_error("updateControlLoops called while homing");
     }
-    posnError = positionCommand_deg - positionFeedback_deg;
-    int errSign = sign(posnError);
-    while (std::abs(posnError) > 180.0)
-    {
-        posnError -= 360.0 * errSign;
-    }
+    updatePositionError();
+
+
     if (std::abs(posnError) < SLEWDRIVE::POSN_PID_ENABLE_THRESH_DEG)
     {
         pid->update(posnError, dt, &rateRef_dps);
@@ -356,7 +380,7 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
     }
     else if (mode == MANUAL_SLEW)
     {
-        combinedRateCmd_dps = manualRateCommand_dps; //saturate(manualRateCommand_dps, -1 * rateLim, rateLim);
+        combinedRateCmd_dps = manualRateCommand_dps; // saturate(manualRateCommand_dps, -1 * rateLim, rateLim);
     }
     else if (mode == TRACKING_COMMAND)
     {
@@ -396,6 +420,11 @@ void SlewDrive::updateControlLoops(double dt, ControlMode_t mode)
                 throw std::runtime_error(msg.c_str());
             }
         }
+    }
+    else
+    {
+        simulate(dt);
+        return;
     }
 #endif
 }
@@ -588,6 +617,10 @@ void SlewDrive::simulate(double dt)
     }
 }
 
+void SlewDrive::setSimulationMode(bool en)
+{
+    simModeEnabled = en;
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////

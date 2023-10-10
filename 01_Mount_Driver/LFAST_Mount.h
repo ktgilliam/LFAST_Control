@@ -48,12 +48,14 @@ public:
     virtual const char *getDefaultName() override;
     virtual void TimerHit() override;
 
+    virtual bool SetCurrentPark() override;
+    virtual bool SetDefaultPark() override;
 protected:
     /** \brief Called to initialize basic properties required all the time */
     virtual bool initProperties() override;
     /** \brief Called when connected state changes, to add/remove properties */
     virtual bool updateProperties() override;
-
+    virtual void simulationTriggered(bool enable) override;
     ///////////////////////////////////////////////////////////////////////////////
     /// Communication Commands
     ///////////////////////////////////////////////////////////////////////////////
@@ -140,10 +142,10 @@ private:
     // Tracking
     INDI::IEquatorialCoordinates m_SkyTrackingTarget{0, 0};
     INDI::IEquatorialCoordinates m_SkyGuideOffset{0, 0};
+    INDI::IEquatorialCoordinates m_EqSkyGuideDelta{0, 0};
     INDI::IEquatorialCoordinates m_SkyCurrentRADE{0, 0};
     INDI::IHorizontalCoordinates m_MountAltAz{0, 0};
 
-    INDI::IEquatorialCoordinates m_EqSkyGuideDelta{0, 0};
     // INDI::IHorizontalCoordinates m_HzSkyGuideRate{0, 0};
 
     // Tracing in timer tick
@@ -175,6 +177,13 @@ private:
 
     INDI::PropertyNumber TelemetryDownsampleNP{1};
 
+
+    INDI::PropertySwitch SavePosnSP{2};
+    enum
+    {
+        SAVE_POSN_DISABLED,
+        SAVE_POSN_ENABLED
+    };
     // enum
     // {
     //     FULL_STOP,
@@ -203,7 +212,6 @@ private:
     bool updatePointingCoordinates();
     INDI::IHorizontalCoordinates getHorizontalRates();
     double GetSlewRate();
-    void updateSim(double dt);
     bool startHomingRoutine();
 };
 

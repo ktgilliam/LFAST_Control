@@ -8,7 +8,7 @@
 #include "../00_Utils/df2_filter.h"
 #include "../00_Utils/KincoDriver.h"
 
-#define SLEW_COMPLETE_THRESH_POSN 0.08
+#define SLEW_COMPLETE_THRESH_POSN 1.5//0.08
 #define SLEW_COMPLETE_THRESH_RATE 0.003
 // #define SIDEREAL_RATE_DPS 0.004166667
 #define DEFAULT_SLEW_MULT 64
@@ -30,17 +30,17 @@ private:
     double positionFeedback_deg;
     double positionCommand_deg;
     double positionOffset_deg;
+    double posnError;
     double rateFeedback_dps;
     double rateCommandFeedforward_dps;
     double manualRateCommand_dps;
     double rateRef_dps;
+    double rateError;
     double combinedRateCmdSaturated_dps;
     bool isEnabled;
     double rateLim;
     bool drvAConnected;
     bool drvBConnected;
-    double posnError;
-    double rateError;
     // const PID_Controller *pid;
     std::unique_ptr<PID_Controller> pid;
     std::unique_ptr<DF2_IIR<double>> driveModelPtr;
@@ -66,7 +66,7 @@ private:
 
     bool updateAlignment();
     bool prepForHoming();
-
+    void updatePositionError();
 public:
     SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, bool simMode = false);
     static bool initializeDriverBus(const char *devPath);
@@ -83,7 +83,7 @@ public:
     double getVelocityCommand() { return rateCommandFeedforward_dps + rateRef_dps; }
     double getVelocityFeedback();
     double getVelocityState();
-    
+
     void updateTrackCommands(double pcmd, double rcmd = 0.0);
 
     void abortSlew();
@@ -105,6 +105,9 @@ public:
     bool isHomingComplete();
     void resetHomingRoutine();
     void checkDriveStatus();
+
+    void setSimulationMode(bool);
+    bool getSimulationMode(){return simModeEnabled;}
     void simulate(double dt);
 
     std::vector<std::string> debugStrings;

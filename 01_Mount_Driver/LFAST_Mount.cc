@@ -22,7 +22,7 @@
 #include "slew_drive.h"
 #include "lfast_constants.h"
 
-#define SIM_MODE 1
+// #define SIM_MODE 1
 #define PRINT_DEBUG_STUFF 1
 
 // http://docs.indilib.org/drivers/
@@ -59,11 +59,8 @@ std::unique_ptr<LFAST_Mount> lfast_mount(new LFAST_Mount());
 const char azLabel[] = "Azimuth";
 const char altLabel[] = "Altitutde";
 
-#ifndef SIM_MODE
-#define SIM_MODE false
-#endif
-const bool ALT_SIMULATED = SIM_MODE;
-const bool AZ_SIMULATED = SIM_MODE;
+// const bool ALT_SIMULATED = SIM_MODE;
+// const bool AZ_SIMULATED = SIM_MODE;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -77,20 +74,17 @@ LFAST_Mount::LFAST_Mount()
     setTelescopeConnection(CONNECTION_TCP);
     SetTelescopeCapability(SCOPE_CAPABILITIES, LFAST_CONSTANTS::NUM_SLEW_SPEEDS);
 
-
     AzimuthAxis = std::unique_ptr<SlewDrive>(
         new SlewDrive(
             azLabel,
             LFAST_CONSTANTS::AZIMUTH_MOTOR_A_ID,
-            LFAST_CONSTANTS::AZIMUTH_MOTOR_B_ID,
-            AZ_SIMULATED));
+            LFAST_CONSTANTS::AZIMUTH_MOTOR_B_ID));
 
     AltitudeAxis = std::unique_ptr<SlewDrive>(
         new SlewDrive(
             altLabel,
             LFAST_CONSTANTS::ALTITUDE_MOTOR_A_ID,
-            LFAST_CONSTANTS::ALTITUDE_MOTOR_B_ID,
-            ALT_SIMULATED));
+            LFAST_CONSTANTS::ALTITUDE_MOTOR_B_ID));
 
     initializeTimers();
 
@@ -98,7 +92,6 @@ LFAST_Mount::LFAST_Mount()
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
     // gotoPending = false;
 }
-
 
 // void LFAST_Mount::logfTelemetry(const char* format, ...)
 // {
@@ -178,8 +171,15 @@ bool LFAST_Mount::initProperties()
 
     TrackState = SCOPE_IDLE;
 
-    TelemetryDownsampleNP[0].fill("TELEMETRY_DOWNSAMPLE_NUM", "Telemetry Downsample", "%d",1,100, 1, DEFAULT_TM_TICKS_PER_UPDATE );
-    TelemetryDownsampleNP.fill(getDeviceName(),"TELEMETRY_DOWNSAMPLE", "Telemetry Downsample", OPTIONS_TAB, IP_RW,0,IPS_IDLE);
+    TelemetryDownsampleNP[0].fill("TELEMETRY_DOWNSAMPLE_NUM", "Telemetry Downsample", "%d", 1, 100, 1, DEFAULT_TM_TICKS_PER_UPDATE);
+    TelemetryDownsampleNP.fill(getDeviceName(), "TELEMETRY_DOWNSAMPLE", "Telemetry Downsample", OPTIONS_TAB, IP_RW, 0, IPS_IDLE);
+    defineProperty(TelemetryDownsampleNP);
+
+    SavePosnSP[SAVE_POSN_DISABLED].fill("SAVE_ALT_AZ_DIS", "Disable", ISS_ON);
+    SavePosnSP[SAVE_POSN_ENABLED].fill("SAVE_ALT_AZ_EN", "Enable", ISS_OFF);
+    SavePosnSP.fill(getDeviceName(), "SAVE_ALT_AZ", "Save Alt/Az on Disconnect", OPTIONS_TAB, IP_RW, ISR_ATMOST1, 0, IPS_OK);
+    // defineProperty(SavePosnSP);
+
     // Set up parking info
     SetParkDataType(PARK_AZ_ALT);
     if (InitPark())
@@ -329,7 +329,6 @@ bool LFAST_Mount::updateProperties()
         defineProperty(&GuideWENP);
         defineProperty(GuideRateNP);
 
-        defineProperty(TelemetryDownsampleNP);
         // defineProperty(&AxisOneStateSP);
     }
     else
@@ -341,7 +340,6 @@ bool LFAST_Mount::updateProperties()
         // deleteProperty(TrackStateSP.getName());
         deleteProperty(HomeSP.getName());
         deleteProperty(AzAltCoordsNP.getName());
-        deleteProperty(TelemetryDownsampleNP.getName());
     }
     return true;
 }
@@ -351,12 +349,18 @@ bool LFAST_Mount::updateProperties()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Connect()
 {
-    if (ALT_SIMULATED)
-        LOG_WARN("ALTITUDE AXIS IN SIMULATED MODE.");
-    if (AZ_SIMULATED)
-        LOG_WARN("AZIMUTH AXIS IN SIMULATED MODE.");
+    LOG_INFO("Connect()");
     SetTimer(getCurrentPollingPeriod());
-    LOG_INFO("Connection established.");
+
+    if (isSimulation())
+    {
+        AzimuthAxis->setSimulationMode(true);
+        AltitudeAxis->setSimulationMode(true);
+        AltitudeAxis->syncPosition(m_MountAltAz.altitude);
+        AzimuthAxis->syncPosition(m_MountAltAz.azimuth);
+        LOG_INFO("Fake connection established.");
+        return true;
+    }
     return INDI::Telescope::Connect();
     // return true;
 }
@@ -366,31 +370,33 @@ bool LFAST_Mount::Connect()
 //////////////////////////////////////////////////////////////////////////////////////////////////
 bool LFAST_Mount::Disconnect()
 {
-
-    LOG_INFO("Disconnecting.");
+    LOG_INFO("Disconnect()");
+    if (SavePosnSP.findOnSwitchIndex() == SAVE_POSN_ENABLED)
+    {
+        // Need to figure out how to do this. In the meantime, the switch is hidden in initProperties.
+    }
     return INDI::Telescope::Disconnect();
     // return true;
 }
 
 bool LFAST_Mount::Handshake()
 {
+    LOG_INFO("Handshake()");
     // LOG_WARN("Handshake not implemented yet.");
+
     auto devPath = ModbusCommPortTP[0].getText();
     LOGF_INFO("Connecting to modbus comm port: %s...", devPath);
     try
     {
-        if (!SIM_MODE)
-        {
-            SlewDrive::initializeDriverBus(devPath);
-            AltitudeAxis->connectToDrivers();
-            AzimuthAxis->connectToDrivers();
-            // Zeros the encoders (probably will need to remove this!!)
-            AltitudeAxis->initializeStates();
-            AzimuthAxis->initializeStates();
-            AltitudeAxis->syncPosition(m_MountAltAz.altitude);
-            AzimuthAxis->syncPosition(m_MountAltAz.azimuth);
-            LOG_INFO("Modbus connection successful");
-        }
+        SlewDrive::initializeDriverBus(devPath);
+        AltitudeAxis->connectToDrivers();
+        AzimuthAxis->connectToDrivers();
+        // Zeros the encoders (probably will need to remove this!!)
+        // AltitudeAxis->initializeStates();
+        // AzimuthAxis->initializeStates();
+        AltitudeAxis->syncPosition(m_MountAltAz.altitude);
+        AzimuthAxis->syncPosition(m_MountAltAz.azimuth);
+        LOG_INFO("Modbus connection established");
         return true;
     }
     catch (const std::exception &e)
@@ -411,6 +417,11 @@ bool LFAST_Mount::Goto(double ra, double dec)
 
     updateTrackingTarget(ra, dec);
 
+    INDI::IHorizontalCoordinates altAzTgtPosn{0, 0};
+    altAzTgtPosn = getTrackingTargetAltAzPosition();
+    AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
+    AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
+
     if (TrackState == SCOPE_IDLE)
     {
         try
@@ -426,7 +437,7 @@ bool LFAST_Mount::Goto(double ra, double dec)
             success = false;
         }
     }
-    else if(TrackState == SCOPE_TRACKING)
+    else if (TrackState == SCOPE_TRACKING)
     {
         TrackState = SCOPE_SLEWING;
     }
@@ -439,8 +450,8 @@ bool LFAST_Mount::Goto(double ra, double dec)
 void LFAST_Mount::updateTrackingTarget(double ra, double dec)
 {
     // DEBUGF(DBG_SIMULATOR, "Goto - Celestial reference frame target right ascension %lf(%lf) declination %lf",
-        //    ra * 360.0 / 24.0, ra, dec);
-    
+    //    ra * 360.0 / 24.0, ra, dec);
+
     m_SkyGuideOffset = {0, 0};
     if (IUFindSwitch(&CoordSP, "TRACK")->s == ISS_ON || IUFindSwitch(&CoordSP, "SLEW")->s == ISS_ON)
     {
@@ -449,7 +460,6 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
         fs_sexa(DecStr, dec, 2, 3600);
         m_SkyTrackingTarget.rightascension = ra;
         m_SkyTrackingTarget.declination = dec;
-
     }
 }
 
@@ -458,13 +468,13 @@ void LFAST_Mount::updateTrackingTarget(double ra, double dec)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
 {
-    if(TraceThisTick)
-        LOGF_TM("getTrackingTargetAltAzPosition: [Target RA: %.6f], [Target DEC: %.6f]", m_SkyTrackingTarget.rightascension ,m_SkyTrackingTarget.declination);
+    if (TraceThisTick)
+        LOGF_TM("getTrackingTargetAltAzPosition: [Target RA: %.6f], [Target DEC: %.6f]", m_SkyTrackingTarget.rightascension, m_SkyTrackingTarget.declination);
 
     if (guideManeuverActive)
-    {    
-        if(TraceThisTick)
-            LOGF_TM("getTrackingTargetAltAzPosition: [Guide dRA: %.6f], [Guide dDEC: %.6f]", m_SkyGuideOffset.rightascension ,m_SkyGuideOffset.declination);
+    {
+        if (TraceThisTick)
+            LOGF_TM("getTrackingTargetAltAzPosition: [Guide dRA: %.6f], [Guide dDEC: %.6f]", m_SkyGuideOffset.rightascension, m_SkyGuideOffset.declination);
         m_SkyGuideOffset.rightascension += m_EqSkyGuideDelta.rightascension;
         m_SkyGuideOffset.declination += m_EqSkyGuideDelta.declination;
     }
@@ -528,8 +538,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
         horizCoords.azimuth = 360.0 + horizCoords.azimuth;
     }
 
-    if(TraceThisTick)
-        LOGF_TM("getTrackingTargetAltAzPosition: [Target ALT: %.6f], [Target AZ: %.6f]", horizCoords.altitude ,horizCoords.azimuth);
+    if (TraceThisTick)
+        LOGF_TM("getTrackingTargetAltAzPosition: [Target ALT: %.6f], [Target AZ: %.6f]", horizCoords.altitude, horizCoords.azimuth);
 
     return horizCoords;
 }
@@ -550,7 +560,7 @@ bool LFAST_Mount::SetSlewRate(int index)
     azVal = slewRateTmp;
     altVal = slewRateTmp;
 
-    LOGF_INFO("SetSlewRate: %.3fx Sidereal (%6.4f deg/s).", mult, slewRateTmp);
+    LOGF_TM("SetSlewRate: %.3fx Sidereal (%6.4f deg/s).", mult, slewRateTmp);
 
     AzimuthAxis->updateSlewRate(azVal);
     AltitudeAxis->updateSlewRate(altVal);
@@ -605,7 +615,8 @@ INDI::IHorizontalCoordinates LFAST_Mount::getHorizontalRates()
     INDI::IHorizontalCoordinates vHz{0, 0};
     vHz.altitude = altRate_dps;
     vHz.azimuth = azRate_dps;
-    LOGF_DEBUG("ALT_RATE: %6.4f, AZ_RATE: %6.4f", altRate_dps, azRate_dps);
+    if (TraceThisTick)
+        LOGF_TM("ALT_RATE: %6.4f, AZ_RATE: %6.4f", altRate_dps, azRate_dps);
     return vHz;
 }
 // //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -629,10 +640,11 @@ INDI::IHorizontalCoordinates LFAST_Mount::getSiderealTargetAltAzRates()
 bool LFAST_Mount::Abort()
 {
     // gotoPending = false;
-    LOG_INFO("Abort");
+    LOG_WARN("Abort()");
     AltitudeAxis->abortSlew();
     AzimuthAxis->abortSlew();
     m_SkyGuideOffset = {0, 0};
+    m_EqSkyGuideDelta = {0, 0};
 
     if (MovementNSSP.s == IPS_BUSY)
     {
@@ -680,7 +692,6 @@ bool LFAST_Mount::Abort()
     AbortSP.s = IPS_OK;
     IUResetSwitch(&AbortSP);
     IDSetSwitch(&AbortSP, nullptr);
-    LOG_INFO("Telescope aborted.");
 
     return true;
 }
@@ -694,7 +705,7 @@ bool LFAST_Mount::ISNewBLOB(const char *dev, const char *name, int sizes[], int 
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // Process alignment properties
-        AlignmentSubsystemForDrivers::ProcessAlignmentBLOBProperties(this, name, sizes, blobsizes, blobs, formats, names, n)        ;
+        AlignmentSubsystemForDrivers::ProcessAlignmentBLOBProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewBLOB(dev, name, sizes, blobsizes, blobs, formats, names, n);
@@ -706,61 +717,38 @@ bool LFAST_Mount::ISNewBLOB(const char *dev, const char *name, int sizes[], int 
 bool LFAST_Mount::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     //  first check if it's for our device
-
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
+        // Guiding Rate
+        if (GuideRateNP.isNameMatch(name))
+        {
+            GuideRateNP.update(values, names, n);
+            GuideRateNP.setState(IPS_OK);
+            GuideRateNP.apply();
+            return true;
+        }
+        if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
+        {
+            processGuiderProperties(name, values, names, n);
+            return true;
+        }
+        if (TelemetryDownsampleNP.isNameMatch(name))
+        {
+            TelemetryDownsampleNP.update(values, names, n);
+            TelemetryDownsampleNP.setState(IPS_OK);
+            TelemetryDownsampleNP.apply();
+            TraceThisTick = false;
+            TraceThisTickCount = 0;
+            return true;
+        }
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentNumberProperties(this, name, values, names, n);
     }
 
-    // Guiding Rate
-    if (GuideRateNP.isNameMatch(name))
-    {
-        GuideRateNP.update(values, names, n);
-        GuideRateNP.setState(IPS_OK);
-        GuideRateNP.apply();
-        return true;
-    }
-    if (strcmp(name, GuideNSNP.name) == 0 || strcmp(name, GuideWENP.name) == 0)
-    {
-        processGuiderProperties(name, values, names, n);
-        return true;
-    }
-    if(TelemetryDownsampleNP.isNameMatch(name))
-    {
-        TelemetryDownsampleNP.update(values, names, n);
-        TelemetryDownsampleNP.setState(IPS_OK);
-        TelemetryDownsampleNP.apply();
-        TraceThisTick = false;
-        TraceThisTickCount = 0;
-        return true;   
-    }
     //  if we didn't process it, continue up the chain, let somebody else
     //  give it a shot
     return INDI::Telescope::ISNewNumber(dev, name, values, names, n);
 }
-
-bool LFAST_Mount::saveConfigItems(FILE *fp)
-{
-    INDI::DefaultDevice::saveConfigItems(fp);
-    // Can't compile this at the moment.
-    // Submitted a bug report to indi devs:
-    // https://github.com/indilib/indi/issues/1947
-    // IUSaveConfigNumber(fp, &TelemetryDownsampleNP);
-    // IUSaveConfigText(fp, &ModbusCommPortTP);
-
-    return true;
-}
-
-void LFAST_Mount::ISGetProperties(const char *dev)
-{
-    DefaultDevice::ISGetProperties(dev);
-    
-    // This would simulate a client sending a new value using the value stored in the config file.    
-    loadConfig(true, TelemetryDownsampleNP.getName());      
-    loadConfig(true, ModbusCommPortTP.getName());    
-}
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
@@ -769,17 +757,25 @@ bool LFAST_Mount::ISNewSwitch(const char *dev, const char *name, ISState *states
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
+        if (HomeSP.isNameMatch(name))
+        {
+            HomeSP.setState(IPS_BUSY);
+            // HomeSP.reset();
+            HomeSP.apply();
+            return startHomingRoutine();
+        }
+
+        if (SavePosnSP.isNameMatch(name))
+        {
+            SavePosnSP.update(states, names, n);
+            SavePosnSP.setState(IPS_OK);
+            SavePosnSP.apply();
+            return true;
+        }
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
 
-    if (HomeSP.isNameMatch(name))
-    {
-        HomeSP.setState(IPS_BUSY);
-        // HomeSP.reset();
-        HomeSP.apply();
-        return startHomingRoutine();
-    }
     //  Nobody has claimed this, so, ignore it
     return INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
 }
@@ -791,19 +787,69 @@ bool LFAST_Mount::ISNewText(const char *dev, const char *name, char *texts[], ch
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
+        if (ModbusCommPortTP.isNameMatch(name))
+        {
+            ModbusCommPortTP.setState(IPS_OK);
+            ModbusCommPortTP.update(texts, names, n);
+            //  Update client display
+            ModbusCommPortTP.apply();
+            return true;
+        }
         // Process alignment properties
         AlignmentSubsystemForDrivers::ProcessAlignmentTextProperties(this, name, texts, names, n);
     }
-    if (ModbusCommPortTP.isNameMatch(name))
-    {
-        ModbusCommPortTP.setState(IPS_OK);
-        ModbusCommPortTP.update(texts, names, n);
-        //  Update client display
-        ModbusCommPortTP.apply();
-        return true;
-    }
+
     // Pass it up the chain
     return INDI::Telescope::ISNewText(dev, name, texts, names, n);
+}
+
+bool LFAST_Mount::saveConfigItems(FILE *fp)
+{
+    INDI::DefaultDevice::saveConfigItems(fp);
+    // Can't compile this at the moment.
+    // Submitted a bug report to indi devs:
+    // https://github.com/indilib/indi/issues/1947
+    // IUSaveConfigNumber(fp, &TelemetryDownsampleNP);
+    // IUSaveConfigText(fp, &ModbusCommPortTP);
+    TelemetryDownsampleNP.save(fp);
+    ModbusCommPortTP.save(fp);
+    return true;
+}
+
+void LFAST_Mount::ISGetProperties(const char *dev)
+{
+    DefaultDevice::ISGetProperties(dev);
+
+    // This would simulate a client sending a new value using the value stored in the config file.
+    loadConfig(true, TelemetryDownsampleNP.getName());
+    loadConfig(true, ModbusCommPortTP.getName());
+}
+
+void LFAST_Mount::simulationTriggered(bool enable)
+{
+    if (enable)
+    {
+        AltitudeAxis->setSimulationMode(true);
+        AzimuthAxis->setSimulationMode(true);
+        LOG_WARN("MOUNT IS IN SIMULATION MODE.");
+    }
+    else
+    {
+        bool connection_result = Handshake();
+        if (connection_result)
+        {
+            AltitudeAxis->setSimulationMode(false);
+            AzimuthAxis->setSimulationMode(false);
+            // LOG_INFO("Succesfully exited simulation mode.");
+            LOG_WARN("Warning: Exiting sim mode while connected may act weird. Recommend Powercycle.");
+        }
+        else
+        {
+            // Disconnect();
+            LOG_ERROR("FAILED TO CONNECT - CANNOT DISABLE SIM MODE.");
+            setSimulation(true);
+        }
+    }
 }
 
 bool LFAST_Mount::startHomingRoutine()
@@ -861,7 +907,7 @@ bool LFAST_Mount::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     {
         double speedMult = (dir == DIRECTION_NORTH) ? GetSlewRate() : -1 * GetSlewRate();
         double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
-        if(TraceThisTick)
+        if (TraceThisTick)
             LOGF_TM("MoveNS: %.6f", speed);
 
         switch (TrackState)
@@ -916,7 +962,7 @@ bool LFAST_Mount::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     {
         double speedMult = (dir == DIRECTION_EAST) ? GetSlewRate() : -1 * GetSlewRate();
         double speed = speedMult * LFAST_CONSTANTS::SiderealRate_degpersec;
-        if(TraceThisTick)
+        if (TraceThisTick)
             LOGF_TM("MoveWE: %.6f", speed);
 
         switch (TrackState)
@@ -955,23 +1001,26 @@ bool LFAST_Mount::Sync(double ra, double dec)
     bool success = true;
     double azFb, altFb;
     LOGF_TM("Sync: [RA: %.6f], [DEC: %.6f]", ra, dec);
-    try
+    if (!isSimulation())
     {
-        azFb = AzimuthAxis->getPositionFeedback();
-        altFb = AltitudeAxis->getPositionFeedback();
-    }
-    catch (const std::exception &e)
-    {
-        LOGF_ERROR("Sync Error: %s", e.what());
-        success = false;
-    }
-    // TODO: This is bad do better:
-    if (!success)
-        return false;
+        try
+        {
+            azFb = AzimuthAxis->getPositionFeedback();
+            altFb = AltitudeAxis->getPositionFeedback();
+        }
+        catch (const std::exception &e)
+        {
+            LOGF_ERROR("Sync Error: %s", e.what());
+            success = false;
+        }
 
-    m_MountAltAz.azimuth = azFb;
-    m_MountAltAz.altitude = altFb;
+        // TODO: This is bad do better:
+        if (!success)
+            return false;
 
+        m_MountAltAz.azimuth = azFb;
+        m_MountAltAz.altitude = altFb;
+    }
     INDI::IHorizontalCoordinates newAltAz{0, 0};
     INDI::IEquatorialCoordinates syncRaDec{0, 0};
     syncRaDec.rightascension = ra;
@@ -980,8 +1029,8 @@ bool LFAST_Mount::Sync(double ra, double dec)
     AltitudeAxis->syncPosition(newAltAz.altitude);
     AzimuthAxis->syncPosition(newAltAz.azimuth);
     LOGF_TM("Sync: [ALT: %.6f], [AZ: %.6f]", newAltAz.altitude, newAltAz.azimuth);
-
-
+    
+    ReadScopeStatus();
     // Syncing is treated specially when the telescope position is known in park position to spare
     // "a huge-jump point" in the alignment model.
     if (isParked())
@@ -1032,9 +1081,9 @@ bool LFAST_Mount::Park()
     if (TrackState != SCOPE_PARKED && TrackState != SCOPE_PARKING)
     {
         m_SkyGuideOffset = {0, 0};
-        AltitudeAxis->updateTrackCommands(default_park_posn_alt);
-        AzimuthAxis->updateTrackCommands(default_park_posn_az);
-
+        m_EqSkyGuideDelta = {0, 0};
+        AltitudeAxis->updateTrackCommands(ParkPositionN[AXIS_ALT].value);
+        AzimuthAxis->updateTrackCommands(ParkPositionN[AXIS_AZ].value);
         // NewRaDec(EquatorialCoordinates.rightascension, EquatorialCoordinates.declination);
         TrackState = SCOPE_PARKING;
     }
@@ -1042,6 +1091,19 @@ bool LFAST_Mount::Park()
     return true;
 }
 
+bool LFAST_Mount::SetCurrentPark()
+{
+    SetAxis1Park(m_MountAltAz.azimuth);
+    SetAxis2Park(m_MountAltAz.altitude);
+    return true;
+}
+
+bool LFAST_Mount::SetDefaultPark()
+{
+    SetAxis1Park(default_park_posn_az);
+    SetAxis2Park(default_park_posn_alt);
+    return true;
+}
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1203,7 +1265,6 @@ IPState LFAST_Mount::GuideEast(uint32_t ms)
     return GuideWE(-static_cast<int>(ms));
 }
 
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1221,7 +1282,7 @@ IPState LFAST_Mount::GuideNS(int32_t guideDuration_ms)
     double guideRate = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec;
     double guideManeuverTotalDistanceDeg = guideRate * guideDuration_ms / 1000.0;
     double guideStepSizeDeg = guideManeuverTotalDistanceDeg / numGuideSteps;
-    m_EqSkyGuideDelta.declination =  guideStepSizeDeg;
+    m_EqSkyGuideDelta.declination = guideStepSizeDeg;
     guideManeuverActive = true;
     m_NSTimer.start(abs(guideDuration_ms));
 
@@ -1245,7 +1306,7 @@ IPState LFAST_Mount::GuideWE(int32_t guideDuration_ms)
     double guideRate = GuideRateNP[AXIS_DE].getValue() * LFAST_CONSTANTS::SiderealRate_degpersec;
     double guideManeuverTotalDistanceDeg = guideRate * guideDuration_ms / 1000.0;
     double guideStepSizeDeg = guideManeuverTotalDistanceDeg / numGuideSteps;
-    m_EqSkyGuideDelta.rightascension =  guideStepSizeDeg;
+    m_EqSkyGuideDelta.rightascension = guideStepSizeDeg;
     guideManeuverActive = true;
     m_WETimer.start(abs(guideDuration_ms));
 
@@ -1280,8 +1341,9 @@ bool LFAST_Mount::ReadScopeStatus()
     {
         AzAltCoordsNP.apply();
     }
-    if (TrackState == SCOPE_SLEWING)
+    switch (TrackState)
     {
+    case SCOPE_SLEWING:
         if (homingRoutineActive)
         {
             if (!altHomingComplete)
@@ -1327,7 +1389,19 @@ bool LFAST_Mount::ReadScopeStatus()
                 }
             }
         }
+        break;
+    case SCOPE_PARKING:
+    {
+        bool azParked = AzimuthAxis->isSlewComplete();
+        bool altParked = AltitudeAxis->isSlewComplete();
+        if (azParked && altParked)
+            TrackState = SCOPE_PARKED;
     }
+    break;
+    default:
+        break;
+    }
+
     return true;
 }
 
@@ -1353,6 +1427,9 @@ void LFAST_Mount::TimerHit()
     double dt; // Elapsed time in seconds since last tick
     dt = currTime.tv_sec - prevTime.tv_sec + (currTime.tv_usec - prevTime.tv_usec) * 1e-6;
     prevTime = currTime;
+
+    // This calls ReadScopeStatus()
+    INDI::Telescope::TimerHit();
 
     if (TelemetryDownsampleNP[0].value >= TraceThisTickCount++)
     {
@@ -1400,7 +1477,7 @@ void LFAST_Mount::TimerHit()
     case SCOPE_SLEWING:
         if (PrevTrackState != SCOPE_SLEWING)
         {
-            if(manualMotionActive)
+            if (manualMotionActive)
                 LOG_INFO("TimerHit: SCOPE_SLEWING (Manual)");
             else
                 LOG_INFO("TimerHit: SCOPE_SLEWING (Goto)");
@@ -1477,27 +1554,22 @@ void LFAST_Mount::TimerHit()
             LOG_INFO("TimerHit: SCOPE_PARKING");
             PrevTrackState = SCOPE_PARKING;
         }
-        bool azParked = AzimuthAxis->isSlewComplete();
-        bool altParked = AltitudeAxis->isSlewComplete();
+
         try
         {
-            if (!azParked)
-            {
-                AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
-            }
-            if (!altParked)
-            {
-                AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
-            }
+            AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
+            AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
         }
         catch (const std::exception &e)
         {
             LOGF_ERROR("TimerHit Error (SCOPE_PARKING:  %s", e.what());
             TrackState = SCOPE_IDLE;
         }
-        if (azParked && altParked)
+        break;
+    }
+    case SCOPE_PARKED:
+        if (PrevTrackState == SCOPE_PARKING)
         {
-            SetParked(true);
             try
             {
                 AzimuthAxis->slowStop();
@@ -1507,28 +1579,18 @@ void LFAST_Mount::TimerHit()
             }
             catch (const std::exception &e)
             {
-                LOGF_ERROR("TimerHit Error (SCOPE_PARKING):  %s", e.what());
+                LOGF_ERROR("TimerHit Error (SCOPE_PARKED):  %s", e.what());
                 TrackState = SCOPE_IDLE;
             }
+            SetParked(true);
+            PrevTrackState = SCOPE_PARKED;
         }
         break;
     }
-    case SCOPE_PARKED:
-        break;
-    }
 
-    if (ALT_SIMULATED || AZ_SIMULATED)
+    if (TrackState == SCOPE_SLEWING || TrackState == SCOPE_TRACKING)
     {
-        // Simulate mount movement
-        updateSim(dt);
-    }
-
-
-    INDI::Telescope::TimerHit();
-
-    if(TrackState == SCOPE_SLEWING || TrackState == SCOPE_TRACKING)
-    {
-        if(TraceThisTick)
+        if (TraceThisTick)
             tmLogMountStates();
     }
     TraceThisTick = false;
@@ -1543,44 +1605,34 @@ void LFAST_Mount::hexDump(char *buf, const char *data, int size)
         buf[3 * size - 1] = '\0';
 }
 
-void LFAST_Mount::updateSim(double dt)
-{
-    LOG_DEBUG("updateSim");
-    // AltitudeAxis->simulate(dt);
-    if (AZ_SIMULATED)
-        AzimuthAxis->simulate(dt);
-    if (ALT_SIMULATED)
-        AltitudeAxis->simulate(dt);
-}
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 void LFAST_Mount::tmLogMountStates()
 {
-        double azPosnFb, altPosnFb, azRateFb, altRateFb, azPosnCmd, altPosnCmd;
-        try
-        {
-            altPosnCmd = AltitudeAxis->getPositionCommand();
-            azPosnCmd = AzimuthAxis->getPositionCommand();
+    double azPosnFb, altPosnFb, azRateFb, altRateFb, azPosnCmd, altPosnCmd;
+    try
+    {
+        altPosnCmd = AltitudeAxis->getPositionCommand();
+        azPosnCmd = AzimuthAxis->getPositionCommand();
 
-            altPosnFb = AltitudeAxis->getPositionState();
-            azPosnFb = AzimuthAxis->getPositionState();
+        altPosnFb = AltitudeAxis->getPositionState();
+        azPosnFb = AzimuthAxis->getPositionState();
 
-            altRateFb = AltitudeAxis->getVelocityState();
-            azRateFb = AzimuthAxis->getVelocityState();
-        }
-        catch (const std::exception &e)
-        {
-            LOGF_ERROR("tmLogMountStates Error: %s", e.what());
-        }
+        altRateFb = AltitudeAxis->getVelocityState();
+        azRateFb = AzimuthAxis->getVelocityState();
+    }
+    catch (const std::exception &e)
+    {
+        LOGF_ERROR("tmLogMountStates Error: %s", e.what());
+    }
 
-        // double altPosnErr = altPosnCmd - altPosnFb;
-        // double azPosnErr = azPosnCmd - azPosnFb;
+    // double altPosnErr = altPosnCmd - altPosnFb;
+    // double azPosnErr = azPosnCmd - azPosnFb;
 
-        LOGF_TM("POSN CMD: [ALT: %6.4f], [AZ: %6.4f]", altPosnCmd, azPosnCmd);
-        LOGF_TM("POSN FB: [ALT: %6.4f], [AZ: %6.4f]", altPosnFb, azPosnFb);
-        // LOGF_TM("POSN ERR: [ALT: %6.4f], [AZ: %6.4f]", altPosnErr, azPosnErr);
-        LOGF_TM("RATE CMD: [ALT: %6.4f], [AZ: %6.4f]", AltitudeAxis->getVelocityCommand(), AzimuthAxis->getVelocityCommand());
-        LOGF_TM("RATE FB: [ALT: %6.4f], [AZ: %6.4f]", altRateFb, azRateFb);
+    LOGF_TM("POSN CMD: [ALT: %6.4f], [AZ: %6.4f]", altPosnCmd, azPosnCmd);
+    LOGF_TM("POSN FB: [ALT: %6.4f], [AZ: %6.4f]", altPosnFb, azPosnFb);
+    // LOGF_TM("POSN ERR: [ALT: %6.4f], [AZ: %6.4f]", altPosnErr, azPosnErr);
+    LOGF_TM("RATE CMD: [ALT: %6.4f], [AZ: %6.4f]", AltitudeAxis->getVelocityCommand(), AzimuthAxis->getVelocityCommand());
+    LOGF_TM("RATE FB: [ALT: %6.4f], [AZ: %6.4f]", altRateFb, azRateFb);
 }
