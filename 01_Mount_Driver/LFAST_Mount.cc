@@ -384,8 +384,8 @@ bool LFAST_Mount::Handshake()
         AltitudeAxis->connectToDrivers();
         AzimuthAxis->connectToDrivers();
         // Zeros the encoders (probably will need to remove this!!)
-        // AltitudeAxis->initializeStates();
-        // AzimuthAxis->initializeStates();
+        AltitudeAxis->initializeStates();
+        AzimuthAxis->initializeStates();
         AltitudeAxis->syncPosition(m_MountAltAz.altitude);
         AzimuthAxis->syncPosition(m_MountAltAz.azimuth);
         LOG_INFO("Modbus connection established");
@@ -410,11 +410,22 @@ bool LFAST_Mount::Goto(double ra, double dec)
     updateTrackingTarget(ra, dec);
 
     INDI::IHorizontalCoordinates altAzTgtPosn{0, 0};
-    altAzTgtPosn = getTrackingTargetAltAzPosition();
-    AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
-    AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
+    try
+    {
+        altAzTgtPosn = getTrackingTargetAltAzPosition();
+        AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
+        AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
+    }
+    catch(const std::exception& e)
+    {
+        LOGF_ERROR("Goto Error:  %s", e.what());
+        TrackState = SCOPE_IDLE;
+        success = false;
+    }
+    
 
-    if (TrackState == SCOPE_IDLE)
+
+    if ((TrackState == SCOPE_IDLE) && success)
     {
         try
         {
@@ -509,6 +520,14 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
         }
         AltitudeAzimuthFromTelescopeDirectionVector(TDVCommand, horizCoords);
     }
+    if (isnan(horizCoords.altitude) || isnan(horizCoords.altitude))
+    {
+        TrackState = SCOPE_IDLE;
+        m_SkyGuideOffset = {0.0, 0.0};
+        terminateNSGuide();
+        terminateEWGuide();
+        throw std::runtime_error("getTrackingTargetAltAzPosition: horizCoords are complex.");
+    }
 
     if ((horizCoords.altitude > 90.0) || (horizCoords.altitude < -90.0))
     {
@@ -524,7 +543,7 @@ INDI::IHorizontalCoordinates LFAST_Mount::getTrackingTargetAltAzPosition()
         // return false;
     }
 
-    if (horizCoords.azimuth < 0.0)
+    while (horizCoords.azimuth < 0.0)
     {
         LOG_INFO("Goto - Azimuth negative");
         horizCoords.azimuth = 360.0 + horizCoords.azimuth;
@@ -1495,11 +1514,11 @@ void LFAST_Mount::TimerHit()
             else
             {
                 m_SkyGuideOffset = {0, 0};
-                altAzTgtPosn = getTrackingTargetAltAzPosition();
-                AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
-                AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
                 try
                 {
+                    altAzTgtPosn = getTrackingTargetAltAzPosition();
+                    AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
+                    AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
                     AltitudeAxis->updateControlLoops(dt, SLEWING_TO_POSN);
                     AzimuthAxis->updateControlLoops(dt, SLEWING_TO_POSN);
                 }
@@ -1517,14 +1536,14 @@ void LFAST_Mount::TimerHit()
             LOG_INFO("TimerHit: SCOPE_TRACKING");
             PrevTrackState = SCOPE_TRACKING;
         }
-        altAzTgtPosn = getTrackingTargetAltAzPosition();
-        altAzTgtRate = getSiderealTargetAltAzRates();
-        // AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
-        // AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
-        AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude, altAzTgtRate.altitude);
-        AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth, altAzTgtRate.azimuth);
         try
         {
+            altAzTgtPosn = getTrackingTargetAltAzPosition();
+            altAzTgtRate = getSiderealTargetAltAzRates();
+            // AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
+            // AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
+            AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude, altAzTgtRate.altitude);
+            AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth, altAzTgtRate.azimuth);
             AltitudeAxis->updateControlLoops(dt, TRACKING_COMMAND);
             AzimuthAxis->updateControlLoops(dt, TRACKING_COMMAND);
         }

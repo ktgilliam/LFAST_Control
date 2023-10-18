@@ -53,7 +53,7 @@ SlewDrive::SlewDrive(const char *label, unsigned DriveA_ID, unsigned DriveB_ID, 
             2));
 
     pDriveA = std::unique_ptr<KincoDriver>(new KincoDriver(DriveA_ID));
-    pDriveB = std::unique_ptr<KincoDriver>(new KincoDriver(DriveB_ID));
+    pDriveB = std::unique_ptr<KincoDriver>(new KincoDriver(DriveB_ID));    
 
     updateSlewRate(MAX_RATE_CMD);
     pid->reset();
@@ -85,6 +85,23 @@ bool SlewDrive::connectToDrivers()
                << e.what();
             throw std::runtime_error(ss.str().c_str());
         }
+        if(result)
+        {
+            try
+            {
+                pDriveA->setDirectionMode(KINCO::CW_IS_POSITIVE);
+                pDriveB->setDirectionMode(KINCO::CCW_IS_POSITIVE);
+                pDriveA->zeroPositionOffset();
+                pDriveB->zeroPositionOffset();
+            }
+            catch (const std::exception &e)
+            {
+                std::stringstream ss;
+                ss << "SlewDrive::SlewDrive() Error [" << axisLabel << "]\n"
+                    << e.what();
+                throw std::runtime_error(ss.str().c_str());
+            } 
+        }
     }
     else
     {
@@ -104,24 +121,6 @@ void SlewDrive::initializeStates()
     combinedRateCmdSaturated_dps = 0.0;
     posnError = 0.0;
     rateError = 0.0;
-    if (!simModeEnabled)
-    {
-        try
-        {
-            pDriveA->setDirectionMode(KINCO::CW_IS_POSITIVE);
-            pDriveB->setDirectionMode(KINCO::CCW_IS_POSITIVE);
-
-            pDriveA->zeroPositionOffset();
-            pDriveB->zeroPositionOffset();
-        }
-        catch (const std::exception &e)
-        {
-            std::stringstream ss;
-            ss << "SlewDrive::initializeStates() Error [" << axisLabel << "]\n"
-               << e.what();
-            throw std::runtime_error(ss.str().c_str());
-        }
-    }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 ///
