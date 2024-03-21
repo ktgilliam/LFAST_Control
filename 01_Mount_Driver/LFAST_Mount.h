@@ -18,6 +18,8 @@
 #define LOG_TM(txt)   DEBUG(telemetryLogger, (txt))
 #define DEFAULT_TM_TICKS_PER_UPDATE 60
 // #include "indielapsedtimer.h"
+            
+#define MAX_ALTITUDE_DEG 85
 namespace LFAST
 {
 

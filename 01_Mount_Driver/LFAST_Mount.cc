@@ -413,6 +413,10 @@ bool LFAST_Mount::Goto(double ra, double dec)
     try
     {
         altAzTgtPosn = getTrackingTargetAltAzPosition();
+        if (altAzTgtPosn.altitude > MAX_ALTITUDE_DEG)
+        {
+            throw std::runtime_error("Zenith SHENANIGANS!!!");
+        }
         AltitudeAxis->updateTrackCommands(altAzTgtPosn.altitude);
         AzimuthAxis->updateTrackCommands(altAzTgtPosn.azimuth);
     }
